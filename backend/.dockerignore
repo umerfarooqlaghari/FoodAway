@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+takeaway.db
+tests
+.env
+.git
+.gitignore
+Dockerfile
+.dockerignore

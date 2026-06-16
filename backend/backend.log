@@ -1,0 +1,246 @@
+◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT DEFAULT 'Customers',
+      refresh_token TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+CREATE TABLE IF NOT EXISTS stores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      address TEXT,
+      lat REAL DEFAULT 0,
+      lng REAL DEFAULT 0,
+      is_active BOOLEAN DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+CREATE TABLE IF NOT EXISTS surprise_bags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id INTEGER,
+      price REAL NOT NULL,
+      original_price REAL,
+      description TEXT,
+      images TEXT,
+      quantity INTEGER DEFAULT 1,
+      pickup_time TEXT,
+      FOREIGN KEY (store_id) REFERENCES stores (id)
+    );
+CREATE TABLE IF NOT EXISTS food_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id INTEGER,
+      name TEXT NOT NULL,
+      description TEXT,
+      price REAL NOT NULL,
+      original_price REAL,
+      images TEXT,
+      quantity INTEGER DEFAULT 1,
+      category TEXT DEFAULT 'Other',
+      is_available BOOLEAN DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (store_id) REFERENCES stores (id)
+    );
+CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bag_id INTEGER,
+      food_item_id INTEGER,
+      type TEXT DEFAULT 'bag',
+      quantity INTEGER DEFAULT 1,
+      store_id INTEGER,
+      customer_id INTEGER,
+      price REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (bag_id) REFERENCES surprise_bags (id),
+      FOREIGN KEY (food_item_id) REFERENCES food_items (id),
+      FOREIGN KEY (store_id) REFERENCES stores (id),
+      FOREIGN KEY (customer_id) REFERENCES users (id)
+    );
+CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id INTEGER,
+      customer_id INTEGER,
+      rating INTEGER NOT NULL,
+      comment TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (store_id) REFERENCES stores (id),
+      FOREIGN KEY (customer_id) REFERENCES users (id)
+    );
+UPDATE stores 
+    SET lat = 51.5074 + (RANDOM() / 9223372036854775807.0) * 0.1, 
+        lng = -0.1278 + (RANDOM() / 9223372036854775807.0) * 0.1 
+    WHERE lat = 0 AND lng = 0
+  
+Database initialized successfully.
+Server running on port 3000
+INSERT INTO stores (name, address) VALUES ('Green Bakery', '123 Main St')
+INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (30.0, 4.99, 5, 'Today, 18:00 - 19:00')
+INSERT INTO stores (name, address) VALUES ('Daily Roast', '456 Oak Ave')
+INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (31.0, 3.50, 2, 'Today, 15:00 - 16:30')
+
+      SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+             s.name as store_name, s.address, s.image as store_image,
+             COALESCE(b.description, f.name) as item_name
+      FROM orders o
+      JOIN stores s ON o.store_id = s.id
+      LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
+      LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
+      WHERE o.customer_id = 2.0
+      ORDER BY o.created_at DESC
+    
+
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image
+      FROM surprise_bags b
+      JOIN stores s ON b.store_id = s.id
+     WHERE b.quantity > 0 AND s.is_active = 1
+
+      SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
+             f.quantity, f.category, f.is_available, f.store_id, f.created_at,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image
+      FROM food_items f
+      JOIN stores s ON f.store_id = s.id
+     WHERE f.is_available = 1 AND f.quantity > 0 ORDER BY f.created_at DESC
+SELECT * FROM stores
+
+      SELECT r.*, u.name as customer_name, s.name as store_name
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      JOIN stores s ON r.store_id = s.id
+      ORDER BY r.created_at DESC
+    
+
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image
+      FROM surprise_bags b
+      JOIN stores s ON b.store_id = s.id
+     WHERE b.quantity > 0 AND s.is_active = 1
+
+      SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
+             f.quantity, f.category, f.is_available, f.store_id, f.created_at,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image
+      FROM food_items f
+      JOIN stores s ON f.store_id = s.id
+     WHERE f.is_available = 1 AND f.quantity > 0 ORDER BY f.created_at DESC
+SELECT * FROM stores
+
+      SELECT r.*, u.name as customer_name, s.name as store_name
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      JOIN stores s ON r.store_id = s.id
+      ORDER BY r.created_at DESC
+    
+
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image
+      FROM surprise_bags b
+      JOIN stores s ON b.store_id = s.id
+     WHERE b.quantity > 0 AND s.is_active = 1
+
+      SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
+             f.quantity, f.category, f.is_available, f.store_id, f.created_at,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image
+      FROM food_items f
+      JOIN stores s ON f.store_id = s.id
+     WHERE f.is_available = 1 AND f.quantity > 0 ORDER BY f.created_at DESC
+SELECT * FROM stores
+
+      SELECT r.*, u.name as customer_name, s.name as store_name
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      JOIN stores s ON r.store_id = s.id
+      ORDER BY r.created_at DESC
+    
+
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image
+      FROM surprise_bags b
+      JOIN stores s ON b.store_id = s.id
+     WHERE b.quantity > 0 AND s.is_active = 1
+
+      SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
+             f.quantity, f.category, f.is_available, f.store_id, f.created_at,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image
+      FROM food_items f
+      JOIN stores s ON f.store_id = s.id
+     WHERE f.is_available = 1 AND f.quantity > 0 ORDER BY f.created_at DESC
+SELECT * FROM stores
+
+      SELECT r.*, u.name as customer_name, s.name as store_name
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      JOIN stores s ON r.store_id = s.id
+      ORDER BY r.created_at DESC
+    
+
+      SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
+             f.quantity, f.category, f.is_available, f.store_id, f.created_at,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image
+      FROM food_items f
+      JOIN stores s ON f.store_id = s.id
+     WHERE f.is_available = 1 AND f.quantity > 0 ORDER BY f.created_at DESC
+
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image
+      FROM surprise_bags b
+      JOIN stores s ON b.store_id = s.id
+     WHERE b.quantity > 0 AND s.is_active = 1
+SELECT * FROM stores
+
+      SELECT r.*, u.name as customer_name, s.name as store_name
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      JOIN stores s ON r.store_id = s.id
+      ORDER BY r.created_at DESC
+    
+INSERT INTO stores (name, address) VALUES ('Green Bakery', '123 Main St')
+INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (32.0, 4.99, 5, 'Today, 18:00 - 19:00')
+INSERT INTO stores (name, address) VALUES ('Daily Roast', '456 Oak Ave')
+INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (33.0, 3.50, 2, 'Today, 15:00 - 16:30')
+
+      SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+             s.name as store_name, s.address, s.image as store_image,
+             COALESCE(b.description, f.name) as item_name
+      FROM orders o
+      JOIN stores s ON o.store_id = s.id
+      LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
+      LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
+      WHERE o.customer_id = 2.0
+      ORDER BY o.created_at DESC
+    
+
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image
+      FROM surprise_bags b
+      JOIN stores s ON b.store_id = s.id
+     WHERE b.quantity > 0 AND s.is_active = 1
+
+      SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
+             f.quantity, f.category, f.is_available, f.store_id, f.created_at,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image
+      FROM food_items f
+      JOIN stores s ON f.store_id = s.id
+     WHERE f.is_available = 1 AND f.quantity > 0 ORDER BY f.created_at DESC
+SELECT * FROM stores
+
+      SELECT r.*, u.name as customer_name, s.name as store_name
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      JOIN stores s ON r.store_id = s.id
+      ORDER BY r.created_at DESC
+    
+
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image
+      FROM surprise_bags b
+      JOIN stores s ON b.store_id = s.id
+     WHERE b.quantity > 0 AND s.is_active = 1
+
+      SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
+             f.quantity, f.category, f.is_available, f.store_id, f.created_at,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image
+      FROM food_items f
+      JOIN stores s ON f.store_id = s.id
+     WHERE f.is_available = 1 AND f.quantity > 0 ORDER BY f.created_at DESC
+SELECT * FROM stores
+
+      SELECT r.*, u.name as customer_name, s.name as store_name
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      JOIN stores s ON r.store_id = s.id
+      ORDER BY r.created_at DESC
+    
