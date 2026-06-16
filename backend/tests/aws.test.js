@@ -6,7 +6,7 @@ const { uploadImageToS3, sendEmail } = require('../src/aws');
 let adminToken;
 
 beforeAll(async () => {
-  db.exec('PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS favorites; DROP TABLE IF EXISTS chat_messages; DROP TABLE IF EXISTS reviews; DROP TABLE IF EXISTS orders; DROP TABLE IF EXISTS food_items; DROP TABLE IF EXISTS surprise_bags; DROP TABLE IF EXISTS stores; DROP TABLE IF EXISTS users; PRAGMA foreign_keys = ON;');
+  await db.exec('PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS favorites; DROP TABLE IF EXISTS chat_messages; DROP TABLE IF EXISTS reviews; DROP TABLE IF EXISTS orders; DROP TABLE IF EXISTS food_items; DROP TABLE IF EXISTS surprise_bags; DROP TABLE IF EXISTS stores; DROP TABLE IF EXISTS users; PRAGMA foreign_keys = ON;');
   initDB();
 
   // Create standard admin user for route testing
@@ -61,7 +61,7 @@ describe('AWS S3 Integration via Endpoints', () => {
     expect(res.body.image).toMatch(/^https:\/\/goodtogo-assets\.s3\.us-east-1\.amazonaws\.com\/uploads\/[a-f0-9-]+\.jpeg$/);
 
     // Verify database record
-    const storeRecord = db.prepare('SELECT image FROM stores WHERE id = ?').get(res.body.id);
+    const storeRecord = await db.prepare('SELECT image FROM stores WHERE id = ?').get(res.body.id);
     expect(storeRecord.image).toBe(res.body.image);
     expect(storeRecord.image).not.toBe(base64Jpeg);
   });

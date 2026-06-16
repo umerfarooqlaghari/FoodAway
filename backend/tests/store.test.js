@@ -8,7 +8,7 @@ describe('Store Location Features API', () => {
 
   beforeAll(async () => {
     // Register superadmin to get token for tests
-    db.prepare('DELETE FROM users WHERE email = ?').run('testadmin@alpha-devs.cloud');
+    await db.prepare('DELETE FROM users WHERE email = ?').run('testadmin@alpha-devs.cloud');
     const res = await request(app)
       .post('/api/auth/register')
       .send({ name: 'Test Admin', email: 'testadmin@alpha-devs.cloud', password: 'password', role: 'SuperAdmin' });
@@ -20,11 +20,11 @@ describe('Store Location Features API', () => {
     adminToken = loginRes.body.token;
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     if (testStoreId) {
-      db.prepare('DELETE FROM stores WHERE id = ?').run(testStoreId);
+      await db.prepare('DELETE FROM stores WHERE id = ?').run(testStoreId);
     }
-    db.prepare('DELETE FROM users WHERE email = ?').run('testadmin@alpha-devs.cloud');
+    await db.prepare('DELETE FROM users WHERE email = ?').run('testadmin@alpha-devs.cloud');
   });
 
   it('should fail to create a store without latitude and longitude', async () => {
@@ -59,7 +59,7 @@ describe('Store Location Features API', () => {
     
     expect(res.statusCode).toEqual(200);
 
-    const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(testStoreId);
+    const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(testStoreId);
     expect(store.is_active).toEqual(0);
     expect(store.lat).toEqual(41.0);
     expect(store.lng).toEqual(-75.0);

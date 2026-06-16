@@ -13,14 +13,20 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize SQLite DB
-initDB();
+(async () => {
+  try {
+    await initDB();
+  } catch (err) {
+    console.error("Database initialization failed:", err.message);
+  }
+})();
 
 // Routes
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   res.json({ message: 'Welcome to the TakeAway API!' });
 });
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
   res.json({ status: 'ok' });
 });
 
@@ -34,7 +40,7 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const assignedRole = role || 'Customers'; // Default role
-    const info = db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(name, email, hashedPassword, assignedRole);
+    const info = await db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(name, email, hashedPassword, assignedRole);
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -47,7 +53,7 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   try {
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const validPassword = await bcrypt.compare(password, user.password);
@@ -58,7 +64,7 @@ app.post('/api/auth/login', async (req, res) => {
     const refreshToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '14d' });
 
     // Store refresh token
-    db.prepare('UPDATE users SET refresh_token = ? WHERE id = ?').run(refreshToken, user.id);
+    await db.prepare('UPDATE users SET refresh_token = ? WHERE id = ?').run(refreshToken, user.id);
 
     res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, logo: user.logo, tenant_id: user.tenant_id } });
   } catch (err) {
@@ -66,13 +72,13 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/refresh', (req, res) => {
+app.post('/api/auth/refresh', async (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) return res.status(401).json({ error: 'Refresh token required' });
 
   try {
     const decoded = jwt.verify(refreshToken, JWT_SECRET);
-    const user = db.prepare('SELECT * FROM users WHERE id = ? AND refresh_token = ?').get(decoded.id, refreshToken);
+    const user = await db.prepare('SELECT * FROM users WHERE id = ? AND refresh_token = ?').get(decoded.id, refreshToken);
     
     if (!user) return res.status(403).json({ error: 'Invalid refresh token' });
 
@@ -84,7 +90,7 @@ app.post('/api/auth/refresh', (req, res) => {
 });
 
 // API Routes (Protected)
-app.get('/api/bags', verifyToken, requireRole('bags', 'read'), (req, res) => {
+app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) => {
   const { all, tenant_id } = req.query;
   try {
     let query = `
@@ -114,14 +120,14 @@ app.get('/api/bags', verifyToken, requireRole('bags', 'read'), (req, res) => {
       query += ` WHERE ` + conditions.join(' AND ');
     }
 
-    const bags = db.prepare(query).all(...params);
+    const bags = await db.prepare(query).all(...params);
     res.json(bags);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/stores', verifyToken, requireRole('stores', 'read'), (req, res) => {
+app.get('/api/stores', verifyToken, requireRole('stores', 'read'), async (req, res) => {
   try {
     const { tenant_id } = req.query;
     let query = `
@@ -145,16 +151,16 @@ app.get('/api/stores', verifyToken, requireRole('stores', 'read'), (req, res) =>
       query += ` WHERE ` + conditions.join(' AND ');
     }
 
-    const stores = db.prepare(query).all(...params);
+    const stores = await db.prepare(query).all(...params);
     res.json(stores);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/users', verifyToken, requireRole('users', 'read'), (req, res) => {
+app.get('/api/users', verifyToken, requireRole('users', 'read'), async (req, res) => {
   try {
-    const users = db.prepare('SELECT id, name, email, role, logo, created_at FROM users').all();
+    const users = await db.prepare('SELECT id, name, email, role, logo, created_at FROM users').all();
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -168,8 +174,8 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
   const { logo, name } = req.body;
   try {
     const logoUrl = logo ? await uploadImageToS3(logo) : logo;
-    db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name) WHERE id = ?').run(logoUrl, name, req.params.id);
-    const updatedUser = db.prepare('SELECT id, name, email, role, logo FROM users WHERE id = ?').get(req.params.id);
+    await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name) WHERE id = ?').run(logoUrl, name, req.params.id);
+    const updatedUser = await db.prepare('SELECT id, name, email, role, logo FROM users WHERE id = ?').get(req.params.id);
     res.json({ message: 'User updated successfully', user: updatedUser });
   } catch(err) {
     res.status(500).json({ error: err.message });
@@ -186,7 +192,7 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
   try {
     const targetTenantId = req.user.tenant_id || req.user.id;
     const imageUrl = image ? await uploadImageToS3(image) : null;
-    const info = db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image) VALUES (?, ?, ?, ?, ?, 1, ?)').run(targetTenantId, name, address, lat, lng, imageUrl);
+    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image) VALUES (?, ?, ?, ?, ?, 1, ?)').run(targetTenantId, name, address, lat, lng, imageUrl);
     res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: 1, image: imageUrl });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -197,22 +203,22 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
   const { id } = req.params;
   const { lat, lng, is_active, name, address, image } = req.body;
   try {
-    const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(id);
+    const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(id);
     if (!store) return res.status(404).json({ error: 'Store not found' });
     
     const imageUrl = image ? await uploadImageToS3(image) : image;
-    db.prepare('UPDATE stores SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), is_active = COALESCE(?, is_active), name = COALESCE(?, name), address = COALESCE(?, address), image = COALESCE(?, image) WHERE id = ?').run(lat, lng, is_active, name, address, imageUrl, id);
+    await db.prepare('UPDATE stores SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), is_active = COALESCE(?, is_active), name = COALESCE(?, name), address = COALESCE(?, address), image = COALESCE(?, image) WHERE id = ?').run(lat, lng, is_active, name, address, imageUrl, id);
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/stores/:id', verifyToken, requireRole('stores', 'write'), (req, res) => {
+app.delete('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('DELETE FROM surprise_bags WHERE store_id = ?').run(id);
-    const info = db.prepare('DELETE FROM stores WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM surprise_bags WHERE store_id = ?').run(id);
+    const info = await db.prepare('DELETE FROM stores WHERE id = ?').run(id);
     if (info.changes === 0) return res.status(404).json({ error: 'Store not found' });
     res.json({ message: 'Store deleted successfully' });
   } catch (err) {
@@ -231,13 +237,13 @@ app.post('/api/bags', verifyToken, requireRole('bags', 'write'), async (req, res
         s3Images = JSON.stringify(uploaded);
       }
     }
-    const info = db.prepare('INSERT INTO surprise_bags (store_id, price, original_price, description, images, quantity, pickup_time) VALUES (?, ?, ?, ?, ?, ?, ?)').run(store_id, price, original_price, description, s3Images, quantity, pickup_time);
+    const info = await db.prepare('INSERT INTO surprise_bags (store_id, price, original_price, description, images, quantity, pickup_time) VALUES (?, ?, ?, ?, ?, ?, ?)').run(store_id, price, original_price, description, s3Images, quantity, pickup_time);
     
     // Notify users who have favorited this store
-    const store = db.prepare('SELECT name FROM stores WHERE id = ?').get(store_id);
+    const store = await db.prepare('SELECT name FROM stores WHERE id = ?').get(store_id);
     if (store) {
       const isFlashDeal = original_price && price && ((original_price - price) / original_price) >= 0.70;
-      const favoritedUsers = db.prepare('SELECT user_id FROM favorites WHERE store_id = ?').all(store_id);
+      const favoritedUsers = await db.prepare('SELECT user_id FROM favorites WHERE store_id = ?').all(store_id);
       for (const fav of favoritedUsers) {
         sendToUser(fav.user_id, {
           type: 'new_bag',
@@ -261,24 +267,24 @@ app.post('/api/bags', verifyToken, requireRole('bags', 'write'), async (req, res
   }
 });
 
-app.put('/api/bags/:id', verifyToken, requireRole('bags', 'write'), (req, res) => {
+app.put('/api/bags/:id', verifyToken, requireRole('bags', 'write'), async (req, res) => {
   const { id } = req.params;
   const { price, original_price, description, quantity, pickup_time } = req.body;
   try {
-    const bag = db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
+    const bag = await db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
     if (!bag) return res.status(404).json({ error: 'Bag not found' });
     
-    db.prepare('UPDATE surprise_bags SET price = COALESCE(?, price), original_price = COALESCE(?, original_price), description = COALESCE(?, description), quantity = COALESCE(?, quantity), pickup_time = COALESCE(?, pickup_time) WHERE id = ?').run(price, original_price, description, quantity, pickup_time, id);
+    await db.prepare('UPDATE surprise_bags SET price = COALESCE(?, price), original_price = COALESCE(?, original_price), description = COALESCE(?, description), quantity = COALESCE(?, quantity), pickup_time = COALESCE(?, pickup_time) WHERE id = ?').run(price, original_price, description, quantity, pickup_time, id);
     res.json({ message: 'Bag updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/bags/:id', verifyToken, requireRole('bags', 'write'), (req, res) => {
+app.delete('/api/bags/:id', verifyToken, requireRole('bags', 'write'), async (req, res) => {
   const { id } = req.params;
   try {
-    const info = db.prepare('DELETE FROM surprise_bags WHERE id = ?').run(id);
+    const info = await db.prepare('DELETE FROM surprise_bags WHERE id = ?').run(id);
     if (info.changes === 0) return res.status(404).json({ error: 'Bag not found' });
     res.json({ message: 'Bag deleted successfully' });
   } catch (err) {
@@ -288,7 +294,7 @@ app.delete('/api/bags/:id', verifyToken, requireRole('bags', 'write'), (req, res
 
 // ─── Food Items CRUD ───────────────────────────────────────────────────────
 
-app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), (req, res) => {
+app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async (req, res) => {
   const { all, store_id } = req.query;
   try {
     let query = `
@@ -305,7 +311,7 @@ app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), (req,
     if (store_id) conditions.push(`f.store_id = ${parseInt(store_id)}`);
     if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
     query += ' ORDER BY f.created_at DESC';
-    res.json(db.prepare(query).all(req.user.id));
+    res.json(await db.prepare(query).all(req.user.id));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -323,7 +329,7 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
         s3Images = JSON.stringify(uploaded);
       }
     }
-    const info = db.prepare(
+    const info = await db.prepare(
       'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(store_id, name, description, price, original_price || null, s3Images, quantity || 1, category || 'Other');
     res.json({ id: info.lastInsertRowid, store_id, name, price, quantity, category });
@@ -336,7 +342,7 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
   const { id } = req.params;
   const { name, description, price, original_price, images, quantity, category, is_available } = req.body;
   try {
-    const item = db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
+    const item = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
     if (!item) return res.status(404).json({ error: 'Food item not found' });
     
     let s3Images = undefined;
@@ -352,7 +358,7 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
       }
     }
 
-    db.prepare(
+    await db.prepare(
       `UPDATE food_items SET
         name = COALESCE(?, name),
         description = COALESCE(?, description),
@@ -370,10 +376,10 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
   }
 });
 
-app.delete('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), (req, res) => {
+app.delete('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
   const { id } = req.params;
   try {
-    const info = db.prepare('DELETE FROM food_items WHERE id = ?').run(id);
+    const info = await db.prepare('DELETE FROM food_items WHERE id = ?').run(id);
     if (info.changes === 0) return res.status(404).json({ error: 'Food item not found' });
     res.json({ message: 'Food item deleted successfully' });
   } catch (err) {
@@ -384,7 +390,7 @@ app.delete('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'
 // ──────────────────────────────────────────────────────────────────────────
 
 // Create an order (checkout cart)
-app.post('/api/orders', verifyToken, (req, res) => {
+app.post('/api/orders', verifyToken, async (req, res) => {
   const { items, paymentMethod } = req.body;
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Cart is empty' });
   const method = paymentMethod || 'Card';
@@ -393,23 +399,23 @@ app.post('/api/orders', verifyToken, (req, res) => {
     const orderIds = [];
     
     // Start transaction
-    const processOrder = db.transaction((orderItems, userId) => {
+    const processOrder = db.transaction(async (orderItems, userId) => {
       for (const item of orderItems) {
         const { id, type, quantity, price } = item;
         
         if (type === 'bag') {
-          const bag = db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
+          const bag = await db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
           if (!bag || bag.quantity < quantity) throw new Error(`Bag ${id} not available in requested quantity`);
           
-          db.prepare('UPDATE surprise_bags SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
-          const info = db.prepare('INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, bag.store_id, userId, price, method);
+          await db.prepare('UPDATE surprise_bags SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
+          const info = await db.prepare('INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, bag.store_id, userId, price, method);
           orderIds.push(info.lastInsertRowid);
         } else if (type === 'food') {
-          const food = db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
+          const food = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
           if (!food || food.quantity < quantity || !food.is_available) throw new Error(`Food item ${id} not available in requested quantity`);
           
-          db.prepare('UPDATE food_items SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
-          const info = db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method);
+          await db.prepare('UPDATE food_items SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
+          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method);
           orderIds.push(info.lastInsertRowid);
         } else {
           throw new Error(`Invalid item type: ${type}`);
@@ -417,12 +423,12 @@ app.post('/api/orders', verifyToken, (req, res) => {
       }
     });
 
-    processOrder(items, req.user.id);
+    await processOrder(items, req.user.id);
 
     // Retrieve order details to trigger notifications
     const placedOrders = [];
     for (const orderId of orderIds) {
-      const order = db.prepare(`
+      const order = await db.prepare(`
         SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
                s.name as store_name, s.tenant_id,
                u.name as customer_name,
@@ -461,7 +467,7 @@ app.post('/api/orders', verifyToken, (req, res) => {
     }
 
     // Send order confirmation email asynchronously
-    const customer = db.prepare('SELECT email, name FROM users WHERE id = ?').get(req.user.id);
+    const customer = await db.prepare('SELECT email, name FROM users WHERE id = ?').get(req.user.id);
     if (customer && customer.email) {
       const total = placedOrders.reduce((sum, o) => sum + (o.price * o.quantity), 0);
       const itemsList = placedOrders.map(o => `<li>${o.quantity}x ${o.item_name} from <strong>${o.store_name}</strong> - £${o.price.toFixed(2)} each (Pickup: ${o.pickup_time})</li>`).join('');
@@ -487,7 +493,7 @@ app.post('/api/orders', verifyToken, (req, res) => {
   }
 });
 
-app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), (req, res) => {
+app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), async (req, res) => {
   try {
     const { tenant_id } = req.query;
     let queryFilter = '';
@@ -502,10 +508,10 @@ app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), (req, r
       params.push(tenant_id);
     }
 
-    const totalRevenueRow = db.prepare(`SELECT SUM(o.price * o.quantity) as total_revenue FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
-    const totalBagsSoldRow = db.prepare(`SELECT SUM(o.quantity) as bags_sold FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
+    const totalRevenueRow = await db.prepare(`SELECT SUM(o.price * o.quantity) as total_revenue FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
+    const totalBagsSoldRow = await db.prepare(`SELECT SUM(o.quantity) as bags_sold FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
     
-    const dailySales = db.prepare(`
+    const dailySales = await db.prepare(`
       SELECT date(o.created_at) as date, SUM(o.price * o.quantity) as revenue, SUM(o.quantity) as bags 
       FROM orders o
       JOIN stores s ON o.store_id = s.id
@@ -526,13 +532,13 @@ app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), (req, r
 });
 
 // Seed data route for testing (Unprotected for ease of use)
-app.post('/api/seed', (req, res) => {
+app.post('/api/seed', async (req, res) => {
   try {
-    const storeInfo = db.prepare("INSERT INTO stores (name, address) VALUES ('Green Bakery', '123 Main St')").run();
-    db.prepare("INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (?, 4.99, 5, 'Today, 18:00 - 19:00')").run(storeInfo.lastInsertRowid);
+    const storeInfo = await db.prepare("INSERT INTO stores (name, address) VALUES ('Green Bakery', '123 Main St')").run();
+    await db.prepare("INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (?, 4.99, 5, 'Today, 18:00 - 19:00')").run(storeInfo.lastInsertRowid);
     
-    const storeInfo2 = db.prepare("INSERT INTO stores (name, address) VALUES ('Daily Roast', '456 Oak Ave')").run();
-    db.prepare("INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (?, 3.50, 2, 'Today, 15:00 - 16:30')").run(storeInfo2.lastInsertRowid);
+    const storeInfo2 = await db.prepare("INSERT INTO stores (name, address) VALUES ('Daily Roast', '456 Oak Ave')").run();
+    await db.prepare("INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (?, 3.50, 2, 'Today, 15:00 - 16:30')").run(storeInfo2.lastInsertRowid);
     
     res.json({ message: 'Seed data inserted' });
   } catch (err) {
@@ -543,7 +549,7 @@ app.post('/api/seed', (req, res) => {
 app.post('/api/seed/superadmin', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash('superadmin123', 10);
-    db.prepare("INSERT INTO users (name, email, password, role) VALUES ('Super Admin', 'superadmin@alpha-devs.cloud', ?, 'SuperAdmin')").run(hashedPassword);
+    await db.prepare("INSERT INTO users (name, email, password, role) VALUES ('Super Admin', 'superadmin@alpha-devs.cloud', ?, 'SuperAdmin')").run(hashedPassword);
     res.json({ message: 'SuperAdmin created. Email: superadmin@alpha-devs.cloud, Pass: superadmin123' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -552,9 +558,9 @@ app.post('/api/seed/superadmin', async (req, res) => {
 // --- Additional Endpoints for Bookings & Reviews ---
 
 // Get customer's orders
-app.get('/api/orders/me', verifyToken, (req, res) => {
+app.get('/api/orders/me', verifyToken, async (req, res) => {
   try {
-    const orders = db.prepare(`
+    const orders = await db.prepare(`
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
              s.name as store_name, s.address, s.image as store_image,
              COALESCE(b.description, f.name) as item_name
@@ -572,7 +578,7 @@ app.get('/api/orders/me', verifyToken, (req, res) => {
 });
 
 // Get all orders (for Sellers/Admins)
-app.get('/api/seller/orders', verifyToken, (req, res) => {
+app.get('/api/seller/orders', verifyToken, async (req, res) => {
   try {
     if (req.user.role !== 'SuperAdmin' && req.user.role !== 'SellersAdmin' && req.user.role !== 'SellersStaff') {
       return res.status(403).json({ error: 'Forbidden' });
@@ -591,7 +597,7 @@ app.get('/api/seller/orders', verifyToken, (req, res) => {
       params.push(tenant_id);
     }
 
-    const orders = db.prepare(`
+    const orders = await db.prepare(`
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
              u.name as customer_name, u.email as customer_email,
              s.name as store_name,
@@ -619,7 +625,7 @@ app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const finalName = brand_name || name;
     const logoUrl = logo ? await uploadImageToS3(logo) : logo;
-    const info = db.prepare('INSERT INTO users (name, email, password, logo, role) VALUES (?, ?, ?, ?, ?)').run(finalName, email, hashedPassword, logoUrl || null, 'SellersAdmin');
+    const info = await db.prepare('INSERT INTO users (name, email, password, logo, role) VALUES (?, ?, ?, ?, ?)').run(finalName, email, hashedPassword, logoUrl || null, 'SellersAdmin');
     res.status(201).json({ id: info.lastInsertRowid, message: 'Tenant created successfully' });
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(400).json({ error: 'Email already exists' });
@@ -627,10 +633,10 @@ app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
   }
 });
 
-app.get('/api/superadmin/tenants', verifyToken, (req, res) => {
+app.get('/api/superadmin/tenants', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   try {
-    const tenants = db.prepare("SELECT id, name, email, logo, created_at FROM users WHERE role = 'SellersAdmin'").all();
+    const tenants = await db.prepare("SELECT id, name, email, logo, created_at FROM users WHERE role = 'SellersAdmin'").all();
     res.json(tenants);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -641,7 +647,7 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   
   try {
-    const inactiveUsers = db.prepare(`
+    const inactiveUsers = await db.prepare(`
       SELECT u.id, u.name, u.email, MAX(o.created_at) as last_order
       FROM users u
       LEFT JOIN orders o ON o.customer_id = u.id
@@ -691,7 +697,7 @@ app.post('/api/seller/staff', verifyToken, async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const tenantId = req.user.tenant_id || req.user.id;
-    const info = db.prepare('INSERT INTO users (name, email, password, role, tenant_id) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'SellersStaff', tenantId);
+    const info = await db.prepare('INSERT INTO users (name, email, password, role, tenant_id) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'SellersStaff', tenantId);
     res.status(201).json({ id: info.lastInsertRowid, message: 'Staff created successfully' });
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(400).json({ error: 'Email already exists' });
@@ -699,32 +705,32 @@ app.post('/api/seller/staff', verifyToken, async (req, res) => {
   }
 });
 
-app.get('/api/seller/staff', verifyToken, (req, res) => {
+app.get('/api/seller/staff', verifyToken, async (req, res) => {
   if (req.user.role !== 'SellersAdmin') return res.status(403).json({ error: 'Forbidden' });
   const tenantId = req.user.tenant_id || req.user.id;
   try {
-    const staff = db.prepare('SELECT id, name, email, role, created_at FROM users WHERE tenant_id = ? AND role = ?').all(tenantId, 'SellersStaff');
+    const staff = await db.prepare('SELECT id, name, email, role, created_at FROM users WHERE tenant_id = ? AND role = ?').all(tenantId, 'SellersStaff');
     res.json(staff);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/app-reviews', verifyToken, (req, res) => {
+app.post('/api/app-reviews', verifyToken, async (req, res) => {
   const { rating, comment } = req.body;
   if (!rating) return res.status(400).json({ error: 'Rating is required' });
   try {
-    const info = db.prepare('INSERT INTO app_reviews (customer_id, rating, comment) VALUES (?, ?, ?)').run(req.user.id, rating, comment);
+    const info = await db.prepare('INSERT INTO app_reviews (customer_id, rating, comment) VALUES (?, ?, ?)').run(req.user.id, rating, comment);
     res.status(201).json({ id: info.lastInsertRowid });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/app-reviews', verifyToken, (req, res) => {
+app.get('/api/app-reviews', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   try {
-    const reviews = db.prepare(`
+    const reviews = await db.prepare(`
       SELECT a.*, u.name as customer_name 
       FROM app_reviews a 
       JOIN users u ON a.customer_id = u.id 
@@ -737,16 +743,16 @@ app.get('/api/app-reviews', verifyToken, (req, res) => {
 });
 
 // Toggle favorite store
-app.post('/api/favorites/toggle', verifyToken, (req, res) => {
+app.post('/api/favorites/toggle', verifyToken, async (req, res) => {
   const { store_id } = req.body;
   if (!store_id) return res.status(400).json({ error: 'store_id is required' });
   try {
-    const existing = db.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND store_id = ?').get(req.user.id, store_id);
+    const existing = await db.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND store_id = ?').get(req.user.id, store_id);
     if (existing) {
-      db.prepare('DELETE FROM favorites WHERE user_id = ? AND store_id = ?').run(req.user.id, store_id);
+      await db.prepare('DELETE FROM favorites WHERE user_id = ? AND store_id = ?').run(req.user.id, store_id);
       res.json({ message: 'Store removed from favorites', is_favorited: 0 });
     } else {
-      db.prepare('INSERT INTO favorites (user_id, store_id) VALUES (?, ?)').run(req.user.id, store_id);
+      await db.prepare('INSERT INTO favorites (user_id, store_id) VALUES (?, ?)').run(req.user.id, store_id);
       res.json({ message: 'Store added to favorites', is_favorited: 1 });
     }
   } catch (err) {
@@ -755,9 +761,9 @@ app.post('/api/favorites/toggle', verifyToken, (req, res) => {
 });
 
 // Get all favorites
-app.get('/api/favorites', verifyToken, (req, res) => {
+app.get('/api/favorites', verifyToken, async (req, res) => {
   try {
-    const favorites = db.prepare(`
+    const favorites = await db.prepare(`
       SELECT s.id, s.name, s.address, s.lat, s.lng, s.is_active, s.image
       FROM favorites f
       JOIN stores s ON f.store_id = s.id
@@ -770,12 +776,12 @@ app.get('/api/favorites', verifyToken, (req, res) => {
 });
 
 // Post a review
-app.post('/api/reviews', verifyToken, (req, res) => {
+app.post('/api/reviews', verifyToken, async (req, res) => {
   const { store_id, rating, comment, tags } = req.body;
   if (!store_id || !rating) return res.status(400).json({ error: 'Store ID and rating are required' });
   try {
     const tagsStr = JSON.stringify(tags || []);
-    const info = db.prepare('INSERT INTO reviews (store_id, customer_id, rating, comment, tags) VALUES (?, ?, ?, ?, ?)').run(store_id, req.user.id, rating, comment, tagsStr);
+    const info = await db.prepare('INSERT INTO reviews (store_id, customer_id, rating, comment, tags) VALUES (?, ?, ?, ?, ?)').run(store_id, req.user.id, rating, comment, tagsStr);
     res.status(201).json({ id: info.lastInsertRowid });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -783,9 +789,9 @@ app.post('/api/reviews', verifyToken, (req, res) => {
 });
 
 // Get all reviews
-app.get('/api/reviews', (req, res) => {
+app.get('/api/reviews', async (req, res) => {
   try {
-    const reviews = db.prepare(`
+    const reviews = await db.prepare(`
       SELECT r.*, u.name as customer_name, s.name as store_name
       FROM reviews r
       JOIN users u ON r.customer_id = u.id
@@ -801,7 +807,7 @@ app.get('/api/reviews', (req, res) => {
 // Chat support endpoints
 
 // Get chat history between a customer and a store
-app.get('/api/chat/history', verifyToken, (req, res) => {
+app.get('/api/chat/history', verifyToken, async (req, res) => {
   const { store_id, customer_id } = req.query;
   if (!store_id) return res.status(400).json({ error: 'store_id is required' });
 
@@ -813,7 +819,7 @@ app.get('/api/chat/history', verifyToken, (req, res) => {
   }
 
   try {
-    const messages = db.prepare(`
+    const messages = await db.prepare(`
       SELECT m.*, u.name as customer_name, s.name as store_name
       FROM chat_messages m
       JOIN users u ON m.customer_id = u.id
@@ -828,12 +834,12 @@ app.get('/api/chat/history', verifyToken, (req, res) => {
 });
 
 // Get active chats list for sellers
-app.get('/api/seller/chats', verifyToken, requireRole('stores', 'read'), (req, res) => {
+app.get('/api/seller/chats', verifyToken, requireRole('stores', 'read'), async (req, res) => {
   try {
     if (req.user.role !== 'SuperAdmin' && req.user.role !== 'SellersAdmin') {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    const chats = db.prepare(`
+    const chats = await db.prepare(`
       SELECT DISTINCT m.store_id, m.customer_id, u.name as customer_name, u.email as customer_email, s.name as store_name,
              (SELECT message FROM chat_messages WHERE store_id = m.store_id AND customer_id = m.customer_id ORDER BY created_at DESC LIMIT 1) as last_message,
              (SELECT created_at FROM chat_messages WHERE store_id = m.store_id AND customer_id = m.customer_id ORDER BY created_at DESC LIMIT 1) as last_message_time,
@@ -850,7 +856,7 @@ app.get('/api/seller/chats', verifyToken, requireRole('stores', 'read'), (req, r
 });
 
 // Mark messages in a chat as read
-app.post('/api/chat/read', verifyToken, (req, res) => {
+app.post('/api/chat/read', verifyToken, async (req, res) => {
   const { store_id, customer_id } = req.body;
   if (!store_id) return res.status(400).json({ error: 'store_id is required' });
 
@@ -864,7 +870,7 @@ app.post('/api/chat/read', verifyToken, (req, res) => {
   const unreadRole = req.user.role === 'Customers' ? 'Seller' : 'Customer';
 
   try {
-    db.prepare(`
+    await db.prepare(`
       UPDATE chat_messages
       SET is_read = 1
       WHERE store_id = ? AND customer_id = ? AND sender_role = ? AND is_read = 0
@@ -975,7 +981,7 @@ const initWebSockets = (httpServer) => {
           const senderRole = currentUser.role === 'Customers' ? 'Customer' : 'Seller';
 
           // Persist message to database
-          const info = db.prepare(`
+          const info = await db.prepare(`
             INSERT INTO chat_messages (store_id, customer_id, sender_role, message)
             VALUES (?, ?, ?, ?)
           `).run(storeId, resolvedCustomerId, senderRole, text);
