@@ -1,4 +1,5 @@
-const { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const crypto = require('crypto');
 
@@ -89,12 +90,7 @@ async function uploadImageToS3(base64OrUrl) {
       ContentType: `image/${ext}`
     };
 
-    try {
-      await s3Client.send(new PutObjectCommand({ ...commandParams, ACL: 'public-read' }));
-    } catch (aclError) {
-      console.warn('PutObject with ACL public-read failed, retrying without ACL:', aclError.message);
-      await s3Client.send(new PutObjectCommand(commandParams));
-    }
+    await s3Client.send(new PutObjectCommand(commandParams));
 
     console.log(`Uploaded image to S3: ${s3Url}`);
     return s3Url;
@@ -160,7 +156,58 @@ async function sendEmail({ to, subject, html, text }) {
   }
 }
 
+/**
+ * Converts a raw S3 URL to a presigned URL valid for 7 days.
+ * If the URL is not an S3 URL for this bucket, returns it unchanged.
+ * If S3 is not configured, returns the original URL.
+ */
+async function getPresignedUrl(url, expiresIn = 604800) {
+  if (!s3Client || !url || typeof url !== 'string') return url;
+
+  const bucketPrefix = `https://${bucketName}.s3.${region}.amazonaws.com/`;
+  const altPrefix = `https://s3.${region}.amazonaws.com/${bucketName}/`;
+
+  let key = null;
+  if (url.startsWith(bucketPrefix)) {
+    key = url.slice(bucketPrefix.length);
+  } else if (url.startsWith(altPrefix)) {
+    key = url.slice(altPrefix.length);
+  }
+
+  if (!key) return url;
+
+  try {
+    const command = new GetObjectCommand({ Bucket: bucketName, Key: key });
+    return await getSignedUrl(s3Client, command, { expiresIn });
+  } catch (err) {
+    console.warn('Failed to generate presigned URL for', key, err.message);
+    return url;
+  }
+}
+
+/**
+ * Converts a JSON-encoded array of S3 URLs (or a single URL string) to presigned URLs.
+ * Returns a JSON string if input was a JSON string, or a plain string if input was a plain URL.
+ */
+async function presignImages(images) {
+  if (!images || !s3Client) return images;
+
+  try {
+    const parsed = JSON.parse(images);
+    if (Array.isArray(parsed)) {
+      const signed = await Promise.all(parsed.map(url => getPresignedUrl(url)));
+      return JSON.stringify(signed);
+    }
+  } catch {
+    // Not JSON — treat as a plain URL
+  }
+
+  return getPresignedUrl(images);
+}
+
 module.exports = {
   uploadImageToS3,
-  sendEmail
+  sendEmail,
+  getPresignedUrl,
+  presignImages
 };

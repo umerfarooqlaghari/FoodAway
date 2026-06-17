@@ -136,6 +136,7 @@ const initDB = async () => {
         refresh_token TEXT,
         tenant_id INTEGER,
         logo TEXT,
+        push_token TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (tenant_id) REFERENCES users (id)
       );
@@ -237,6 +238,13 @@ const initDB = async () => {
         PRIMARY KEY (user_id, store_id),
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
         FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS otps (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        otp TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL
       );
     `);
 
@@ -342,7 +350,7 @@ const initDB = async () => {
         customer_id INTEGER,
         sender_role TEXT NOT NULL,
         message TEXT NOT NULL,
-        is_read BOOLEAN DEFAULT 0,
+        is_read BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (store_id) REFERENCES stores (id),
         FOREIGN KEY (customer_id) REFERENCES users (id)
@@ -356,6 +364,13 @@ const initDB = async () => {
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
         FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS otps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        otp TEXT NOT NULL,
+        expires_at DATETIME NOT NULL
+      );
     `);
 
     // SQLite Migrations
@@ -366,6 +381,7 @@ const initDB = async () => {
     try { await dbInstance.exec("ALTER TABLE stores ADD COLUMN lng REAL DEFAULT 0"); } catch(e) {}
     try { await dbInstance.exec("ALTER TABLE stores ADD COLUMN is_active BOOLEAN DEFAULT 1"); } catch(e) {}
     try { await dbInstance.exec("ALTER TABLE users ADD COLUMN logo TEXT"); } catch(e) {}
+    try { await dbInstance.exec("ALTER TABLE users ADD COLUMN push_token TEXT"); } catch(e) {}
     try { await dbInstance.exec("ALTER TABLE users ADD COLUMN tenant_id INTEGER REFERENCES users(id)"); } catch(e) {}
     try { await dbInstance.exec("ALTER TABLE stores ADD COLUMN image TEXT"); } catch(e) {}
     try { await dbInstance.exec("ALTER TABLE stores ADD COLUMN tenant_id INTEGER REFERENCES users(id)"); } catch(e) {}
@@ -374,7 +390,7 @@ const initDB = async () => {
     try { await dbInstance.exec("ALTER TABLE orders ADD COLUMN quantity INTEGER DEFAULT 1"); } catch(e) {}
     try { await dbInstance.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'Card'"); } catch(e) {}
     try { await dbInstance.exec("ALTER TABLE reviews ADD COLUMN tags TEXT DEFAULT '[]'"); } catch(e) {}
-    try { await dbInstance.exec("ALTER TABLE chat_messages ADD COLUMN is_read BOOLEAN DEFAULT 0"); } catch(e) {}
+    try { await dbInstance.exec("ALTER TABLE chat_messages ADD COLUMN is_read BOOLEAN DEFAULT FALSE"); } catch(e) {}
     try { await dbInstance.exec("UPDATE stores SET tenant_id = 1 WHERE tenant_id IS NULL OR tenant_id = ''"); } catch(e) {}
 
     // Pre-populate random locations for SQLite

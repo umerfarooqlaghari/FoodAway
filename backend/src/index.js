@@ -3,14 +3,15 @@ const cors = require('cors');
 require('dotenv').config();
 
 const { initDB, db } = require('./db');
-const { uploadImageToS3, sendEmail } = require('./aws');
+const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl } = require('./aws');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Initialize SQLite DB
 (async () => {
@@ -66,6 +67,16 @@ app.post('/api/auth/login', async (req, res) => {
     // Store refresh token
     await db.prepare('UPDATE users SET refresh_token = ? WHERE id = ?').run(refreshToken, user.id);
 
+    // Send login notification email asynchronously
+    sendEmail({
+      to: user.email,
+      subject: 'New Login Alert - GoodToGo 🍩',
+      html: `<p>Hi ${user.name},</p>
+             <p>A new login was detected on your GoodToGo account at <strong>${new Date().toLocaleString()}</strong>.</p>
+             <p>If this was you, you can safely ignore this email. Otherwise, please secure your account immediately.</p>`,
+      text: `Hi ${user.name}, A new login was detected on your GoodToGo account at ${new Date().toLocaleString()}.`
+    }).catch(err => console.error('Failed to send login alert email:', err.message));
+
     res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, logo: user.logo, tenant_id: user.tenant_id } });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -89,6 +100,93 @@ app.post('/api/auth/refresh', async (req, res) => {
   }
 });
 
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+  try {
+    const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user) {
+      return res.status(404).json({ error: 'No user registered with this email address' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // 2 minutes expiry
+
+    // Delete existing OTPs for this email first
+    await db.prepare('DELETE FROM otps WHERE email = ?').run(email);
+    
+    // Save new OTP
+    await db.prepare('INSERT INTO otps (email, otp, expires_at) VALUES (?, ?, ?)').run(email, otp, expiresAt);
+
+    // Send email with OTP
+    await sendEmail({
+      to: email,
+      subject: 'GoodToGo Password Reset OTP 🔑',
+      html: `<p>Hi ${user.name || 'User'},</p>
+             <p>You requested a password reset. Your OTP verification code is:</p>
+             <h2 style="font-size: 24px; letter-spacing: 2px; color: #EA580C; font-family: monospace;">${otp}</h2>
+             <p>This code is valid for <strong>2 minutes</strong>. If you did not request this reset, please ignore this email.</p>`,
+      text: `Hi, your GoodToGo password reset OTP is ${otp}. Valid for 2 minutes.`
+    }).catch(mailErr => {
+      console.error('Mail sending failed during password reset:', mailErr.message);
+    });
+
+    res.json({ message: 'OTP sent successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ error: 'Email, OTP and new password are required' });
+  }
+  try {
+    const otpRecord = await db.prepare('SELECT * FROM otps WHERE email = ? AND otp = ?').get(email, otp.trim());
+    if (!otpRecord) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    // Check expiration timezone-safely
+    let expiresAt = otpRecord.expires_at;
+    if (typeof expiresAt === 'string') {
+      if (!expiresAt.endsWith('Z') && !expiresAt.includes('+')) {
+        expiresAt += 'Z';
+      }
+      expiresAt = new Date(expiresAt);
+    } else if (expiresAt instanceof Date) {
+      expiresAt = new Date(Date.UTC(
+        expiresAt.getFullYear(),
+        expiresAt.getMonth(),
+        expiresAt.getDate(),
+        expiresAt.getHours(),
+        expiresAt.getMinutes(),
+        expiresAt.getSeconds(),
+        expiresAt.getMilliseconds()
+      ));
+    } else {
+      expiresAt = new Date(expiresAt);
+    }
+
+    if (expiresAt < new Date()) {
+      await db.prepare('DELETE FROM otps WHERE email = ?').run(email);
+      return res.status(400).json({ error: 'Verification code has expired' });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.prepare('UPDATE users SET password = ? WHERE email = ?').run(hashedPassword, email);
+
+    // Delete used OTP
+    await db.prepare('DELETE FROM otps WHERE email = ?').run(email);
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // API Routes (Protected)
 app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) => {
   const { all, tenant_id } = req.query;
@@ -104,7 +202,7 @@ app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) 
     const conditions = [];
 
     if (all !== 'true') {
-      conditions.push('b.quantity > 0 AND s.is_active = 1');
+      conditions.push('b.quantity > 0 AND s.is_active = TRUE');
     }
 
     if (req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff') {
@@ -121,8 +219,14 @@ app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) 
     }
 
     const bags = await db.prepare(query).all(...params);
-    res.json(bags);
+    const signedBags = await Promise.all(bags.map(async bag => ({
+      ...bag,
+      images: await presignImages(bag.images),
+      store_image: await getPresignedUrl(bag.store_image),
+    })));
+    res.json(signedBags);
   } catch (err) {
+    console.error('GET /api/bags error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -152,8 +256,13 @@ app.get('/api/stores', verifyToken, requireRole('stores', 'read'), async (req, r
     }
 
     const stores = await db.prepare(query).all(...params);
-    res.json(stores);
+    const signedStores = await Promise.all(stores.map(async store => ({
+      ...store,
+      image: await getPresignedUrl(store.image),
+    })));
+    res.json(signedStores);
   } catch (err) {
+    console.error('GET /api/stores error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -161,7 +270,8 @@ app.get('/api/stores', verifyToken, requireRole('stores', 'read'), async (req, r
 app.get('/api/users', verifyToken, requireRole('users', 'read'), async (req, res) => {
   try {
     const users = await db.prepare('SELECT id, name, email, role, logo, created_at FROM users').all();
-    res.json(users);
+    const signedUsers = await Promise.all(users.map(async u => ({ ...u, logo: await getPresignedUrl(u.logo) })));
+    res.json(signedUsers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -176,8 +286,20 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
     const logoUrl = logo ? await uploadImageToS3(logo) : logo;
     await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name) WHERE id = ?').run(logoUrl, name, req.params.id);
     const updatedUser = await db.prepare('SELECT id, name, email, role, logo FROM users WHERE id = ?').get(req.params.id);
-    res.json({ message: 'User updated successfully', user: updatedUser });
+    const signedUser = { ...updatedUser, logo: await getPresignedUrl(updatedUser.logo) };
+    res.json({ message: 'User updated successfully', user: signedUser });
   } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/users/push-token', verifyToken, async (req, res) => {
+  const { pushToken } = req.body;
+  if (!pushToken) return res.status(400).json({ error: 'pushToken is required' });
+  try {
+    await db.prepare('UPDATE users SET push_token = ? WHERE id = ?').run(pushToken, req.user.id);
+    res.json({ message: 'Push token updated successfully' });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -192,8 +314,8 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
   try {
     const targetTenantId = req.user.tenant_id || req.user.id;
     const imageUrl = image ? await uploadImageToS3(image) : null;
-    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image) VALUES (?, ?, ?, ?, ?, 1, ?)').run(targetTenantId, name, address, lat, lng, imageUrl);
-    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: 1, image: imageUrl });
+    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image) VALUES (?, ?, ?, ?, ?, TRUE, ?)').run(targetTenantId, name, address, lat, lng, imageUrl);
+    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -207,7 +329,8 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
     if (!store) return res.status(404).json({ error: 'Store not found' });
     
     const imageUrl = image ? await uploadImageToS3(image) : image;
-    await db.prepare('UPDATE stores SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), is_active = COALESCE(?, is_active), name = COALESCE(?, name), address = COALESCE(?, address), image = COALESCE(?, image) WHERE id = ?').run(lat, lng, is_active, name, address, imageUrl, id);
+    const isActiveBool = is_active !== undefined && is_active !== null ? Boolean(is_active) : null;
+    await db.prepare('UPDATE stores SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), is_active = COALESCE(?, is_active), name = COALESCE(?, name), address = COALESCE(?, address), image = COALESCE(?, image) WHERE id = ?').run(lat, lng, isActiveBool, name, address, imageUrl, id);
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -269,12 +392,31 @@ app.post('/api/bags', verifyToken, requireRole('bags', 'write'), async (req, res
 
 app.put('/api/bags/:id', verifyToken, requireRole('bags', 'write'), async (req, res) => {
   const { id } = req.params;
-  const { price, original_price, description, quantity, pickup_time } = req.body;
+  const { price, original_price, description, images, quantity, pickup_time } = req.body;
   try {
     const bag = await db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
     if (!bag) return res.status(404).json({ error: 'Bag not found' });
-    
-    await db.prepare('UPDATE surprise_bags SET price = COALESCE(?, price), original_price = COALESCE(?, original_price), description = COALESCE(?, description), quantity = COALESCE(?, quantity), pickup_time = COALESCE(?, pickup_time) WHERE id = ?').run(price, original_price, description, quantity, pickup_time, id);
+
+    let s3Images = bag.images;
+    if (images !== undefined) {
+      if (images === null) {
+        s3Images = null;
+      } else {
+        const parsedImages = typeof images === 'string' ? JSON.parse(images) : images;
+        if (Array.isArray(parsedImages)) {
+          const uploaded = await Promise.all(parsedImages.map(img => uploadImageToS3(img)));
+          s3Images = JSON.stringify(uploaded);
+        }
+      }
+    }
+
+    const finalPrice = price !== undefined ? price : bag.price;
+    const finalOriginalPrice = original_price !== undefined ? original_price : bag.original_price;
+    const finalDescription = description !== undefined ? description : bag.description;
+    const finalQuantity = quantity !== undefined ? quantity : bag.quantity;
+    const finalPickupTime = pickup_time !== undefined ? pickup_time : bag.pickup_time;
+
+    await db.prepare('UPDATE surprise_bags SET price = ?, original_price = ?, description = ?, images = ?, quantity = ?, pickup_time = ? WHERE id = ?').run(finalPrice, finalOriginalPrice, finalDescription, s3Images, finalQuantity, finalPickupTime, id);
     res.json({ message: 'Bag updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -307,12 +449,19 @@ app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async
       LEFT JOIN favorites fav ON fav.store_id = f.store_id AND fav.user_id = ?
     `;
     const conditions = [];
-    if (all !== 'true') conditions.push('f.is_available = 1 AND f.quantity > 0');
+    if (all !== 'true') conditions.push('f.is_available = TRUE AND f.quantity > 0');
     if (store_id) conditions.push(`f.store_id = ${parseInt(store_id)}`);
     if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
     query += ' ORDER BY f.created_at DESC';
-    res.json(await db.prepare(query).all(req.user.id));
+    const foodItems = await db.prepare(query).all(req.user.id);
+    const signedItems = await Promise.all(foodItems.map(async item => ({
+      ...item,
+      images: await presignImages(item.images),
+      store_image: await getPresignedUrl(item.store_image),
+    })));
+    res.json(signedItems);
   } catch (err) {
+    console.error('GET /api/food-items error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -358,6 +507,7 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
       }
     }
 
+    const isAvailableBool = is_available !== undefined && is_available !== null ? Boolean(is_available) : null;
     await db.prepare(
       `UPDATE food_items SET
         name = COALESCE(?, name),
@@ -369,7 +519,7 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
         category = COALESCE(?, category),
         is_available = COALESCE(?, is_available)
        WHERE id = ?`
-    ).run(name, description, price, original_price, s3Images, quantity, category, is_available, id);
+    ).run(name, description, price, original_price, s3Images, quantity, category, isAvailableBool, id);
     res.json({ message: 'Food item updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -571,7 +721,11 @@ app.get('/api/orders/me', verifyToken, async (req, res) => {
       WHERE o.customer_id = ?
       ORDER BY o.created_at DESC
     `).all(req.user.id);
-    res.json(orders);
+    const signedOrders = await Promise.all(orders.map(async order => ({
+      ...order,
+      store_image: await getPresignedUrl(order.store_image),
+    })));
+    res.json(signedOrders);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -637,7 +791,8 @@ app.get('/api/superadmin/tenants', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const tenants = await db.prepare("SELECT id, name, email, logo, created_at FROM users WHERE role = 'SellersAdmin'").all();
-    res.json(tenants);
+    const signedTenants = await Promise.all(tenants.map(async t => ({ ...t, logo: await getPresignedUrl(t.logo) })));
+    res.json(signedTenants);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -843,7 +998,7 @@ app.get('/api/seller/chats', verifyToken, requireRole('stores', 'read'), async (
       SELECT DISTINCT m.store_id, m.customer_id, u.name as customer_name, u.email as customer_email, s.name as store_name,
              (SELECT message FROM chat_messages WHERE store_id = m.store_id AND customer_id = m.customer_id ORDER BY created_at DESC LIMIT 1) as last_message,
              (SELECT created_at FROM chat_messages WHERE store_id = m.store_id AND customer_id = m.customer_id ORDER BY created_at DESC LIMIT 1) as last_message_time,
-             (SELECT COUNT(*) FROM chat_messages WHERE store_id = m.store_id AND customer_id = m.customer_id AND sender_role = 'Customer' AND is_read = 0) as unread_count
+             (SELECT COUNT(*) FROM chat_messages WHERE store_id = m.store_id AND customer_id = m.customer_id AND sender_role = 'Customer' AND is_read = FALSE) as unread_count
       FROM chat_messages m
       JOIN users u ON m.customer_id = u.id
       JOIN stores s ON m.store_id = s.id
@@ -872,8 +1027,8 @@ app.post('/api/chat/read', verifyToken, async (req, res) => {
   try {
     await db.prepare(`
       UPDATE chat_messages
-      SET is_read = 1
-      WHERE store_id = ? AND customer_id = ? AND sender_role = ? AND is_read = 0
+      SET is_read = TRUE
+      WHERE store_id = ? AND customer_id = ? AND sender_role = ? AND is_read = FALSE
     `).run(store_id, targetCustomerId, unreadRole);
     res.json({ message: 'Messages marked as read' });
   } catch (error) {
@@ -886,6 +1041,37 @@ const { WebSocketServer } = require('ws');
 
 // Global WebSocket clients registry
 const wsClients = new Map();
+
+async function sendPushNotification(pushToken, title, body, data = {}) {
+  if (!pushToken || !pushToken.startsWith('ExponentPushToken')) {
+    console.log(`[Push Notification] Invalid or missing token: ${pushToken}`);
+    return;
+  }
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: pushToken,
+        title,
+        body,
+        sound: 'default',
+        data
+      })
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Expo API returned status ${response.status}: ${errText}`);
+    }
+    console.log(`[Push Notification] Sent successfully to token: ${pushToken}`);
+  } catch (error) {
+    console.error('[Push Notification] Failed to send to Expo:', error.message);
+  }
+}
 
 // Global WebSocket send helpers
 const sendToUser = (userId, payload) => {
@@ -986,13 +1172,48 @@ const initWebSockets = (httpServer) => {
             VALUES (?, ?, ?, ?)
           `).run(storeId, resolvedCustomerId, senderRole, text);
 
+          // Send push notification asynchronously
+          (async () => {
+            try {
+              if (senderRole === 'Customer') {
+                const store = await db.prepare('SELECT tenant_id, name FROM stores WHERE id = ?').get(storeId);
+                if (store) {
+                  const sellers = await db.prepare('SELECT id, push_token FROM users WHERE (id = ? OR tenant_id = ?) AND role IN ("SellersAdmin", "SellersStaff")').all(store.tenant_id, store.tenant_id);
+                  for (const seller of sellers) {
+                    if (seller.push_token) {
+                      await sendPushNotification(
+                        seller.push_token,
+                        `New Message - ${store.name}`,
+                        `${currentUser.name || 'Customer'}: ${text}`,
+                        { type: 'chat', storeId: Number(storeId), customerId: Number(resolvedCustomerId), storeName: store.name }
+                      );
+                    }
+                  }
+                }
+              } else {
+                const customer = await db.prepare('SELECT push_token FROM users WHERE id = ?').get(resolvedCustomerId);
+                const store = await db.prepare('SELECT name FROM stores WHERE id = ?').get(storeId);
+                if (customer && customer.push_token) {
+                  await sendPushNotification(
+                    customer.push_token,
+                    store ? store.name : 'Store Support',
+                    text,
+                    { type: 'chat', storeId: Number(storeId), storeName: store ? store.name : 'Store Support' }
+                  );
+                }
+              }
+            } catch (pushErr) {
+              console.error('Failed to trigger background push notification:', pushErr.message);
+            }
+          })();
+
           const insertedMessage = {
             id: info.lastInsertRowid,
             store_id: Number(storeId),
             customer_id: Number(resolvedCustomerId),
             sender_role: senderRole,
             message: text,
-            is_read: 0,
+            is_read: false,
             created_at: new Date().toISOString()
           };
 

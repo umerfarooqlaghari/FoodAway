@@ -1,12 +1,12 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, TextInput, Alert, ScrollView, Image, Modal, Platform, Linking, Animated } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, TextInput, Alert, ScrollView, Image, Modal, Platform, Linking, Animated, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 
 // Configure notification behavior for foreground notifications
@@ -60,6 +60,116 @@ const customTheme = {
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+
+// --- Receipt HTML Generator ---
+const generateReceiptHTML = (receiptData, currencySymbol) => {
+  const { orderIds, storeName, items, total, pickupTime, customerName, dateTime, paymentMethod } = receiptData;
+
+  const orderRef = Array.isArray(orderIds)
+    ? orderIds.map(id => `GTG-${String(id).padStart(5, '0')}`).join(' · ')
+    : `GTG-${String(orderIds).padStart(5, '0')}`;
+
+  const teeth = Array.from({ length: 20 }).map(() => `<div class="tooth"></div>`).join('');
+
+  const itemRows = (items || []).map(item => `
+    <tr>
+      <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;">
+        <div style="font-size:13px;font-weight:600;color:#111827;">${item.name || 'Item'}</div>
+        <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">${item.type === 'bag' ? 'Surprise Bag' : 'Food Item'}</div>
+      </td>
+      <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;text-align:center;color:#9CA3AF;font-size:12px;">×${item.quantity}</td>
+      <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;text-align:right;font-weight:700;font-size:13px;color:#111827;">${currencySymbol}${(item.price * item.quantity).toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  const pickupHTML = pickupTime && pickupTime !== 'N/A' ? `
+    <div style="background:#F0FDF4;border-radius:12px;padding:14px 16px;margin:16px 0;border:1px solid #BBF7D0;">
+      <div style="font-size:10px;font-weight:800;color:#15803D;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">Pickup Window</div>
+      <div style="font-size:15px;font-weight:800;color:#111827;">${pickupTime}</div>
+    </div>
+  ` : '';
+
+  const customerHTML = customerName ? `<div class="meta-row"><span class="meta-label">Customer</span><span class="meta-value">${customerName}</span></div>` : '';
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;background:#F1F5F9;padding:32px 16px;}
+  .page{max-width:400px;margin:0 auto;}
+  .receipt{background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.14);}
+  .hdr{background:linear-gradient(135deg,#EA580C,#F97316);padding:36px 28px 32px;text-align:center;}
+  .check{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.25);display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px;font-size:26px;color:white;}
+  .brand{font-size:30px;font-weight:900;color:#fff;letter-spacing:-1px;}
+  .confirmed{font-size:10px;color:rgba(255,255,255,0.75);text-transform:uppercase;letter-spacing:1.8px;margin-top:5px;}
+  .ref-pill{background:rgba(255,255,255,0.2);border-radius:12px;padding:8px 18px;display:inline-block;margin-top:14px;}
+  .ref-text{color:#fff;font-size:14px;font-weight:800;letter-spacing:0.5px;}
+  .jagged{display:flex;background:#F1F5F9;padding:0 3px;height:14px;overflow:hidden;}
+  .tooth{flex:1;height:22px;background:#fff;border-radius:50%;margin:0 1px;margin-top:-11px;}
+  .body{padding:10px 28px 28px;}
+  .meta-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;}
+  .meta-label{font-size:12px;color:#9CA3AF;font-weight:500;}
+  .meta-value{font-size:12px;color:#374151;font-weight:600;}
+  .divider-dash{border:none;border-top:1.5px dashed #E5E7EB;margin:16px 0;}
+  .divider-solid{border:none;border-top:1.5px solid #E5E7EB;margin:8px 0;}
+  .from-lbl{font-size:10px;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;}
+  .store{font-size:17px;font-weight:800;color:#111827;margin-bottom:16px;}
+  .items-table{width:100%;border-collapse:collapse;}
+  .total-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0 0;}
+  .total-lbl{font-size:16px;font-weight:800;color:#111827;}
+  .total-amt{font-size:26px;font-weight:900;color:#10B981;}
+  .cash-pill{display:inline-flex;align-items:center;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:3px 10px;}
+  .cash-txt{font-size:12px;color:#15803D;font-weight:700;}
+  .banner{background:linear-gradient(135deg,#1E293B,#0F172A);border-radius:16px;padding:22px 24px;text-align:center;margin-top:22px;}
+  .banner-t{color:#fff;font-size:15px;font-weight:800;margin-bottom:5px;}
+  .banner-s{color:rgba(255,255,255,0.55);font-size:12px;}
+  .footer-area{background:#F8FAFC;padding:20px 28px;text-align:center;border-top:1px solid #F1F5F9;}
+  .footer-txt{font-size:11px;color:#9CA3AF;line-height:1.7;}
+  .leaf{color:#10B981;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="receipt">
+    <div class="hdr">
+      <div class="check">✓</div>
+      <div class="brand">GoodToGo</div>
+      <div class="confirmed">Booking Confirmed</div>
+      <div class="ref-pill"><span class="ref-text">${orderRef}</span></div>
+    </div>
+    <div class="jagged">${teeth}</div>
+    <div class="body">
+      <div class="meta-row"><span class="meta-label">Date &amp; Time</span><span class="meta-value">${dateTime}</span></div>
+      ${customerHTML}
+      <div class="meta-row"><span class="meta-label">Payment</span><span class="cash-pill"><span class="cash-txt">Cash at Pickup</span></span></div>
+      <hr class="divider-dash">
+      <div class="from-lbl">From</div>
+      <div class="store">${storeName}</div>
+      <table class="items-table">
+        <tbody>${itemRows}</tbody>
+      </table>
+      <hr class="divider-solid">
+      <div class="total-row"><span class="total-lbl">Total</span><span class="total-amt">${currencySymbol}${(typeof total === 'number' ? total : 0).toFixed(2)}</span></div>
+      <hr class="divider-dash">
+      ${pickupHTML}
+      <div class="banner">
+        <div class="banner-t">📱 Show this receipt at the branch</div>
+        <div class="banner-s">Present to collect your rescued food</div>
+      </div>
+    </div>
+    <div class="footer-area">
+      <div class="footer-txt"><span class="leaf">🌿</span> Thank you for rescuing food &amp; reducing waste<br>GoodToGo © 2025 · Rescue Food · Save Money · Help the Planet</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>`;
+};
 
 // Local API URL (Dynamic packager host IP resolution with fallback to Mac local IP)
 const getHostIp = () => {
@@ -70,18 +180,16 @@ const getHostIp = () => {
   return '10.48.82.24';
 };
 
-const API_URL = `http://${getHostIp()}:3000/api`;
+const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${getHostIp()}:3000/api`;
 
 // Play satisfying coin sound and trigger vibration feedback
 const playSoundAndHaptic = async (type) => {
   try {
-    const { sound } = await Audio.Sound.createAsync(
-      require('./assets/sounds/coin.mp3')
-    );
-    await sound.playAsync();
-    sound.setOnPlaybackStatusUpdate((status) => {
+    const player = createAudioPlayer(require('./assets/sounds/coin.mp3'));
+    player.play();
+    player.addListener('playbackStatusUpdate', (status) => {
       if (status.didJustFinish) {
-        sound.unloadAsync();
+        player.release();
       }
     });
 
@@ -171,13 +279,48 @@ const schedulePickupReminder = async (storeName, pickupTimeStr) => {
   }
 };
 
+const registerForPushNotificationsAsync = async () => {
+  if (Platform.OS === 'web') return null;
+  let token;
+  
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+  if (finalStatus !== 'granted') {
+    console.log('Failed to get push token for push notification!');
+    return null;
+  }
+  
+  try {
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    console.log('Expo Push Token:', token);
+  } catch (e) {
+    console.log('Error getting expo push token:', e.message);
+  }
+
+  return token;
+};
+
 // Create Contexts
 const AuthContext = createContext();
 const CartContext = createContext();
 const ChatContext = createContext();
 
 function ChatProvider({ children }) {
-  const { token, user } = useContext(AuthContext);
+  const { token, user, currencySymbol } = useContext(AuthContext);
   const [chatVisible, setChatVisible] = useState(false);
   const [activeChatStore, setActiveChatStore] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -186,6 +329,8 @@ function ChatProvider({ children }) {
   const [toastNotification, setToastNotification] = useState(null);
   const [unreadStores, setUnreadStores] = useState({});
   const [isStoreTyping, setIsStoreTyping] = useState(false);
+  const [receiptModalVisible, setReceiptModalVisible] = useState(false);
+  const [receiptModalData, setReceiptModalData] = useState(null);
   const wsRef = useRef(null);
   const activeChatStoreRef = useRef(null);
   const chatVisibleRef = useRef(false);
@@ -273,7 +418,7 @@ function ChatProvider({ children }) {
           if (payload.isFlashDeal) {
             playSoundAndHaptic('success');
             const discountPct = payload.bag ? Math.round(((payload.bag.original_price - payload.bag.price) / payload.bag.original_price) * 100) : 70;
-            const priceLabel = payload.bag ? `£${payload.bag.price.toFixed(2)}` : 'surplus price';
+            const priceLabel = payload.bag ? `${currencySymbol || '£'}${payload.bag.price.toFixed(2)}` : 'surplus price';
             const pickupTime = payload.bag?.pickup_time || 'Today';
             setToastNotification({
               type: 'flash_deal',
@@ -303,18 +448,30 @@ function ChatProvider({ children }) {
           }
         } else if (payload.type === 'new_order_confirmation') {
           playSoundAndHaptic('success');
+          const wsOrder = payload.order;
+          const wsReceiptData = {
+            orderIds: [wsOrder.id],
+            storeName: wsOrder.store_name,
+            items: [{ name: wsOrder.item_name, quantity: wsOrder.quantity, price: wsOrder.price, type: 'bag' }],
+            total: wsOrder.price * wsOrder.quantity,
+            pickupTime: wsOrder.pickup_time,
+            customerName: null,
+            dateTime: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            paymentMethod: 'Cash at Pickup',
+          };
           setToastNotification({
             type: 'order_success',
-            storeName: payload.order.store_name,
-            message: `Checkout successful! Rescued ${payload.order.quantity}x ${payload.order.item_name}.`
+            storeName: wsOrder.store_name,
+            message: `Rescued ${wsOrder.quantity}x ${wsOrder.item_name}. Tap to download receipt.`,
+            receiptData: wsReceiptData,
           });
           triggerLocalPushNotification(
             `Order Confirmed!`,
-            `You successfully rescued surplus food from ${payload.order.store_name}!`,
-            { type: 'order', orderId: payload.order.id }
+            `You successfully rescued surplus food from ${wsOrder.store_name}!`,
+            { type: 'order', orderId: wsOrder.id }
           );
-          if (payload.order.pickup_time) {
-            schedulePickupReminder(payload.order.store_name, payload.order.pickup_time);
+          if (wsOrder.pickup_time) {
+            schedulePickupReminder(wsOrder.store_name, wsOrder.pickup_time);
           }
         } else if (payload.type === 'inactivity_reminder') {
           playSoundAndHaptic('success');
@@ -339,8 +496,8 @@ function ChatProvider({ children }) {
       }
     };
 
-    ws.onclose = () => {
-      console.log('Mobile WS closed');
+    ws.onclose = (e) => {
+      console.log('Mobile WS closed. Code:', e.code, 'Reason:', e.reason);
       setConnectionStatus('Disconnected');
       wsRef.current = null;
       setIsStoreTyping(false);
@@ -446,7 +603,10 @@ function ChatProvider({ children }) {
       openChatWithStore,
       handleSendChatMessage,
       sendTypingStatus,
-      markChatAsRead
+      markChatAsRead,
+      receiptModalVisible, setReceiptModalVisible,
+      receiptModalData, setReceiptModalData,
+      openReceipt: (data) => { setReceiptModalData(data); setReceiptModalVisible(true); }
     }}>
       {children}
     </ChatContext.Provider>
@@ -454,7 +614,7 @@ function ChatProvider({ children }) {
 }
 
 function GlobalToast() {
-  const { toastNotification, setToastNotification, openChatWithStore } = useContext(ChatContext);
+  const { toastNotification, setToastNotification, openChatWithStore, openReceipt } = useContext(ChatContext);
   const slideAnim = useRef(new Animated.Value(-150)).current;
 
   useEffect(() => {
@@ -491,9 +651,11 @@ function GlobalToast() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch (e) {}
-    
+
     if (toastNotification.type === 'chat') {
       openChatWithStore({ id: toastNotification.storeId, name: toastNotification.storeName });
+    } else if (toastNotification.type === 'order_success' && toastNotification.receiptData) {
+      openReceipt(toastNotification.receiptData);
     }
     hideToast();
   };
@@ -570,6 +732,12 @@ function GlobalToast() {
             <Text style={{ fontWeight: '700', color: '#FFFFFF', fontSize: 14, marginTop: 4, lineHeight: 18 }} numberOfLines={2}>
               {toastNotification.message}
             </Text>
+            {toastNotification.type === 'order_success' && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4 }}>
+                <Ionicons name="download-outline" size={12} color={badgeColor} />
+                <Text style={{ fontSize: 11, color: badgeColor, fontWeight: '800' }}>Tap to download receipt</Text>
+              </View>
+            )}
           </View>
           <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.5)" style={{ marginLeft: 8 }} />
         </LinearGradient>
@@ -722,6 +890,191 @@ function GlobalChatModal() {
   );
 }
 
+// --- Global Receipt Modal ---
+function GlobalReceiptModal() {
+  const { receiptModalVisible, setReceiptModalVisible, receiptModalData } = useContext(ChatContext);
+  const { currencySymbol } = useContext(AuthContext);
+  const [generating, setGenerating] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!receiptModalData) return;
+    setGenerating(true);
+    try {
+      const html = generateReceiptHTML(receiptModalData, currencySymbol);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save GoodToGo Receipt', UTI: 'com.adobe.pdf' });
+      } else {
+        Alert.alert('Receipt Saved', 'Your receipt has been saved to your device.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not generate PDF. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (!receiptModalData) return null;
+
+  const { orderIds, storeName, items, total, pickupTime, customerName, dateTime } = receiptModalData;
+  const orderRef = Array.isArray(orderIds)
+    ? orderIds.map(id => `GTG-${String(id).padStart(5, '0')}`).join(', ')
+    : `GTG-${String(orderIds).padStart(5, '0')}`;
+
+  return (
+    <Modal visible={receiptModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setReceiptModalVisible(false)}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F1F5F9' }}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16 }}>
+          <View>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: '#111827' }}>Your Receipt</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>Show this at the branch</Text>
+          </View>
+          <TouchableOpacity onPress={() => setReceiptModalVisible(false)} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name="close" size={18} color="#374151" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+          {/* Receipt Card */}
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.15, shadowRadius: 28, elevation: 12 }}>
+
+            {/* Gradient Header */}
+            <LinearGradient colors={['#EA580C', '#F97316']} style={{ paddingVertical: 36, paddingHorizontal: 28, alignItems: 'center' }}>
+              <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}>
+                <Ionicons name="checkmark" size={30} color="white" />
+              </View>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: 'white', letterSpacing: -0.5 }}>GoodToGo</Text>
+              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 }}>Booking Confirmed</Text>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8, marginTop: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
+                <Text style={{ color: 'white', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 }}>{orderRef}</Text>
+              </View>
+            </LinearGradient>
+
+            {/* Torn edge */}
+            <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', paddingHorizontal: 4 }}>
+              {Array.from({ length: 18 }).map((_, i) => (
+                <View key={i} style={{ flex: 1, height: 22, backgroundColor: '#FFFFFF', borderRadius: 11, marginHorizontal: 1, marginTop: -11 }} />
+              ))}
+            </View>
+
+            {/* Body */}
+            <View style={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 28 }}>
+              {/* Meta info */}
+              <View style={{ gap: 7, marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '500' }}>Date & Time</Text>
+                  <Text style={{ fontSize: 12, color: '#374151', fontWeight: '600' }}>{dateTime}</Text>
+                </View>
+                {customerName ? (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '500' }}>Customer</Text>
+                    <Text style={{ fontSize: 12, color: '#374151', fontWeight: '600' }}>{customerName}</Text>
+                  </View>
+                ) : null}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '500' }}>Payment</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                    <Ionicons name="cash-outline" size={12} color="#15803D" />
+                    <Text style={{ fontSize: 12, color: '#15803D', fontWeight: '700' }}>Cash at Pickup</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Dashed divider */}
+              <View style={{ borderTopWidth: 1.5, borderTopColor: '#E5E7EB', borderStyle: 'dashed', marginBottom: 18 }} />
+
+              {/* Store */}
+              <Text style={{ fontSize: 10, color: '#9CA3AF', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>From</Text>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827', marginBottom: 18 }}>{storeName}</Text>
+
+              {/* Items */}
+              {(items || []).map((item, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: idx < items.length - 1 ? 1 : 0, borderBottomColor: '#F3F4F6' }}>
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>{item.name}</Text>
+                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{item.type === 'bag' ? 'Surprise Bag' : 'Food Item'}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>{currencySymbol}{(item.price * item.quantity).toFixed(2)}</Text>
+                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>×{item.quantity}</Text>
+                  </View>
+                </View>
+              ))}
+
+              {/* Total */}
+              <View style={{ marginTop: 16, paddingTop: 14, borderTopWidth: 2, borderTopColor: '#111827', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827' }}>Total</Text>
+                <Text style={{ fontSize: 26, fontWeight: '900', color: '#10B981' }}>{currencySymbol}{(typeof total === 'number' ? total : 0).toFixed(2)}</Text>
+              </View>
+
+              {/* Pickup */}
+              {pickupTime && pickupTime !== 'N/A' ? (
+                <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 14, marginTop: 18, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="time-outline" size={16} color="#15803D" />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#15803D', textTransform: 'uppercase', letterSpacing: 0.5 }}>Pickup Window</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827', marginTop: 2 }}>{pickupTime}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Show at branch banner */}
+              <LinearGradient colors={['#1E293B', '#0F172A']} style={{ borderRadius: 18, padding: 22, marginTop: 22, alignItems: 'center' }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(234,88,12,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 10, borderWidth: 1.5, borderColor: '#EA580C' }}>
+                  <Ionicons name="phone-portrait-outline" size={22} color="#F97316" />
+                </View>
+                <Text style={{ color: 'white', fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 5 }}>Show this receipt at the branch</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, textAlign: 'center' }}>Present to collect your rescued food order</Text>
+              </LinearGradient>
+            </View>
+
+            {/* Bottom torn edge */}
+            <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', paddingHorizontal: 4 }}>
+              {Array.from({ length: 18 }).map((_, i) => (
+                <View key={i} style={{ flex: 1, height: 22, backgroundColor: '#FFFFFF', borderRadius: 11, marginHorizontal: 1, marginBottom: -11 }} />
+              ))}
+            </View>
+
+            {/* Footer */}
+            <View style={{ backgroundColor: '#F8FAFC', paddingVertical: 20, paddingHorizontal: 24, alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', lineHeight: 18 }}>
+                🌿 Thank you for rescuing food & reducing waste{'\n'}GoodToGo © 2025
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Action buttons */}
+        <View style={{ padding: 20, paddingBottom: 28, gap: 10 }}>
+          <TouchableOpacity
+            onPress={handleDownloadPDF}
+            disabled={generating}
+            style={{ backgroundColor: generating ? '#9CA3AF' : '#EA580C', borderRadius: 16, paddingVertical: 17, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#EA580C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}
+          >
+            {generating ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={20} color="white" />
+                <Text style={{ color: 'white', fontSize: 17, fontWeight: '800' }}>Download PDF Receipt</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setReceiptModalVisible(false)}
+            style={{ borderRadius: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F3F4F6' }}
+          >
+            <Text style={{ color: '#374151', fontSize: 16, fontWeight: '700' }}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 const Stack = createNativeStackNavigator();
 
 // --- Landing Screen ---
@@ -762,7 +1115,7 @@ function LandingScreen({ navigation }) {
             {/* Hero Image overflowing */}
             <View style={{ position: 'absolute', right: -120, top: -20, opacity: 1, zIndex: -1 }}>
               <Image
-                source={require('./assets/images/Takeaway landing.png')}
+                source={require('./assets/images/Takeaway_landing.png')}
                 style={{ width: 400, height: 500, resizeMode: 'contain' }}
               />
             </View>
@@ -860,9 +1213,26 @@ function LandingScreen({ navigation }) {
 }
 
 // --- Auth Screens ---
+const parsePickupTimeDetails = (pickupTimeStr) => {
+  if (!pickupTimeStr) return { days: [], from: '18:00', to: '20:00' };
+  const timeRegex = /(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/;
+  const match = pickupTimeStr.match(timeRegex);
+  const from = match ? match[1] : '18:00';
+  const to = match ? match[2] : '20:00';
+  const ALL_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const days = [];
+  ALL_DAYS.forEach(day => {
+    if (pickupTimeStr.includes(day)) {
+      days.push(day);
+    }
+  });
+  return { days, from, to };
+};
+
 function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useContext(AuthContext);
 
   const handleLogin = async () => {
@@ -888,14 +1258,23 @@ function LoginScreen({ navigation }) {
           onChangeText={setEmail}
           autoCapitalize="none"
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#94a3b8"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingRight: 14, marginBottom: 16 }}>
+          <TextInput
+            style={{ flex: 1, color: '#111827', padding: 16, fontSize: 16 }}
+            placeholder="Password"
+            placeholderTextColor="#94a3b8"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#64748B" />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginBottom: 20 }}>
+          <Text style={{ color: '#FF5A00', fontWeight: '700', fontSize: 14 }}>Forgot Password?</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
           <Text style={styles.primaryButtonText}>Login</Text>
@@ -913,6 +1292,7 @@ function RegisterScreen({ navigation }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleRegister = async () => {
     try {
@@ -932,7 +1312,19 @@ function RegisterScreen({ navigation }) {
 
         <TextInput style={styles.input} placeholder="Name" placeholderTextColor="#94a3b8" value={name} onChangeText={setName} />
         <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#94a3b8" value={email} onChangeText={setEmail} autoCapitalize="none" />
-        <TextInput style={styles.input} placeholder="Password" placeholderTextColor="#94a3b8" value={password} onChangeText={setPassword} secureTextEntry />
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingRight: 14, marginBottom: 16 }}>
+          <TextInput
+            style={{ flex: 1, color: '#111827', padding: 16, fontSize: 16 }}
+            placeholder="Password"
+            placeholderTextColor="#94a3b8"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#64748B" />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}>
           <Text style={styles.primaryButtonText}>Register</Text>
@@ -941,6 +1333,111 @@ function RegisterScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 20 }}>
           <Text style={{ color: '#3b82f6', textAlign: 'center' }}>Already have an account? Login</Text>
         </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function ForgotPasswordScreen({ navigation }) {
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [step, setStep] = useState(1);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSendOtp = async () => {
+    if (!email) return Alert.alert("Error", "Please enter your email address.");
+    setLoading(true);
+    try {
+      await axios.post(`${API_URL}/auth/forgot-password`, { email });
+      setStep(2);
+      Alert.alert("Success", "OTP code sent to your email!");
+    } catch (error) {
+      Alert.alert("Error", error.response?.data?.error || "Failed to send OTP.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!otp || !newPassword) return Alert.alert("Error", "Please enter the OTP and your new password.");
+    setLoading(true);
+    try {
+      await axios.post(`${API_URL}/auth/reset-password`, { email, otp, newPassword });
+      Alert.alert("Success", "Password reset successfully! Please log in.");
+      navigation.navigate('Login');
+    } catch (error) {
+      Alert.alert("Error", error.response?.data?.error || "Failed to reset password.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.authContainer}>
+        {step === 1 ? (
+          <>
+            <Text style={styles.headerTitle}>Reset Password</Text>
+            <Text style={styles.headerSubtitle}>Enter your email to receive a 6-digit OTP verification code.</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#94a3b8"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+
+            <TouchableOpacity style={styles.primaryButton} onPress={handleSendOtp} disabled={loading}>
+              {loading ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>Send OTP Code</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 20 }}>
+              <Text style={{ color: '#3b82f6', textAlign: 'center' }}>Back to Login</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <Text style={styles.headerTitle}>Verify OTP</Text>
+            <Text style={styles.headerSubtitle}>Enter the verification code and set your new password.</Text>
+
+            <TextInput
+              style={[styles.input, { letterSpacing: 2, fontWeight: '700', textAlign: 'center' }]}
+              placeholder="6-Digit OTP"
+              placeholderTextColor="#94a3b8"
+              value={otp}
+              onChangeText={setOtp}
+              keyboardType="numeric"
+              maxLength={6}
+            />
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingRight: 14, marginBottom: 16 }}>
+              <TextInput
+                style={{ flex: 1, color: '#111827', padding: 16, fontSize: 16 }}
+                placeholder="New Password"
+                placeholderTextColor="#94a3b8"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!showNewPassword}
+              />
+              <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
+                <Ionicons name={showNewPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.primaryButton} onPress={handleResetPassword} disabled={loading}>
+              {loading ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>Reset Password</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setStep(1)} style={{ marginTop: 20 }}>
+              <Text style={{ color: '#3b82f6', textAlign: 'center' }}>Back to Step 1</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -957,7 +1454,7 @@ function SplashScreen({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#EA580C', justifyContent: 'center', alignItems: 'center' }}>
       <StatusBar style="light" />
-      <Image source={require('./assets/images/Takeaway landing.png')} style={{ width: 250, height: 250, resizeMode: 'contain', marginBottom: 30 }} />
+      <Image source={require('./assets/images/Takeaway_landing.png')} style={{ width: 250, height: 250, resizeMode: 'contain', marginBottom: 30 }} />
       <Text style={{ fontSize: 40, fontWeight: '900', color: '#FFFFFF', letterSpacing: 2 }}>FoodAway</Text>
       <Text style={{ fontSize: 16, color: '#FDE68A', marginTop: 10, letterSpacing: 1 }}>Rescue Delicious Food</Text>
       <ActivityIndicator color="#FFFFFF" size="large" style={{ marginTop: 40 }} />
@@ -1070,7 +1567,7 @@ function DiscoverScreen({ navigation, route }) {
   const { openChatWithStore, unreadStores } = useContext(ChatContext);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStoreId, setSelectedStoreId] = useState(null);
-  const { token, logout, user, updateUser } = useContext(AuthContext);
+  const { token, logout, user, updateUser, currencySymbol } = useContext(AuthContext);
   const { addToCart, cartTotalCount } = useContext(CartContext);
 
   // Edit profile state
@@ -1313,7 +1810,7 @@ function DiscoverScreen({ navigation, route }) {
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
           <View style={styles.gridPriceTag}>
-            <Text style={styles.gridPriceText}>£{item.price.toFixed(2)}</Text>
+            <Text style={styles.gridPriceText}>{currencySymbol}{item.price.toFixed(2)}</Text>
           </View>
           <TouchableOpacity onPress={handleNavigate} style={styles.gridNavBtn}>
             <Ionicons name="navigate-outline" size={15} color="#6B7280" />
@@ -1394,10 +1891,10 @@ function DiscoverScreen({ navigation, route }) {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <View>
             <View style={[styles.gridPriceTag, { backgroundColor: '#9CA3AF' }]}>
-              <Text style={styles.gridPriceText}>£{item.price.toFixed(2)}</Text>
+              <Text style={styles.gridPriceText}>{currencySymbol}{item.price.toFixed(2)}</Text>
             </View>
             {item.original_price && (
-              <Text style={{ fontSize: 10, color: '#9CA3AF', textDecorationLine: 'line-through', marginTop: 2 }}>£{item.original_price.toFixed(2)}</Text>
+              <Text style={{ fontSize: 10, color: '#9CA3AF', textDecorationLine: 'line-through', marginTop: 2 }}>{currencySymbol}{item.original_price.toFixed(2)}</Text>
             )}
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -1921,84 +2418,99 @@ function DiscoverScreen({ navigation, route }) {
       </Modal>
 
       {/* Edit Profile Modal */}
-      <Modal visible={editProfileVisible} animationType="slide" transparent={true}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ 
-            backgroundColor: 'white', 
-            paddingHorizontal: 24, 
-            paddingTop: 24, 
-            paddingBottom: Math.max(insets.bottom, 24), 
-            borderTopLeftRadius: 28, 
-            borderTopRightRadius: 28, 
-            height: '78%' 
-          }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold' }}>My Profile</Text>
-              <TouchableOpacity onPress={() => setEditProfileVisible(false)}>
-                <Ionicons name="close" size={24} color="#111827" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-              {/* Avatar section */}
-              <View style={{ alignItems: 'center', marginBottom: 24 }}>
-                <TouchableOpacity onPress={pickAvatar} style={{ position: 'relative' }}>
-                  <Image source={{ uri: editAvatar || avatarUri }} style={{ width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#EA580C' }} />
-                  <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#EA580C', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' }}>
-                    <Ionicons name="camera" size={16} color="white" />
-                  </View>
+      <Modal 
+        visible={editProfileVisible} 
+        animationType="slide" 
+        transparent={true}
+        onRequestClose={() => setEditProfileVisible(false)}
+      >
+        <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setEditProfileVisible(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={{ 
+              backgroundColor: 'white', 
+              paddingHorizontal: 24, 
+              paddingTop: 24, 
+              paddingBottom: Math.max(insets.bottom, 24), 
+              borderTopLeftRadius: 28, 
+              borderTopRightRadius: 28, 
+              height: '78%' 
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <Text style={{ fontSize: 20, fontWeight: 'bold' }}>My Profile</Text>
+                <TouchableOpacity 
+                  onPress={() => setEditProfileVisible(false)}
+                  hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons name="close" size={24} color="#111827" />
                 </TouchableOpacity>
-                <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 8 }}>Tap to change photo</Text>
               </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                {/* Avatar section */}
+                <View style={{ alignItems: 'center', marginBottom: 24 }}>
+                  <TouchableOpacity onPress={pickAvatar} style={{ position: 'relative' }}>
+                    <Image source={{ uri: editAvatar || avatarUri }} style={{ width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#EA580C' }} />
+                    <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#EA580C', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' }}>
+                      <Ionicons name="camera" size={16} color="white" />
+                    </View>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 8 }}>Tap to change photo</Text>
+                </View>
 
-              {/* Account Details */}
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Email</Text>
-              <TextInput
-                style={[styles.input, { opacity: 0.6 }]}
-                value={user?.email}
-                editable={false}
-              />
+                {/* Account Details */}
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Email</Text>
+                <TextInput
+                  style={[styles.input, { opacity: 0.6 }]}
+                  value={user?.email}
+                  editable={false}
+                />
 
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your name"
-                value={editName}
-                onChangeText={setEditName}
-              />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your name"
+                  value={editName}
+                  onChangeText={setEditName}
+                />
 
-              <TouchableOpacity 
-                style={[styles.primaryButton, { marginTop: 16 }]} 
-                onPress={handleSaveProfile}
-                disabled={savingProfile}
-              >
-                {savingProfile ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>Save Changes</Text>}
-              </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.primaryButton, { marginTop: 16 }]} 
+                  onPress={handleSaveProfile}
+                  disabled={savingProfile}
+                >
+                  {savingProfile ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>Save Changes</Text>}
+                </TouchableOpacity>
 
-              
-              <TouchableOpacity 
-                style={{ paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: '#F3F4F6', borderRadius: 30 }}
-                onPress={() => {
-                  setEditProfileVisible(false);
-                  setTimeout(() => setAppReviewVisible(true), 500);
-                }}
-              >
-                <Text style={{ color: '#111827', fontWeight: '700', fontSize: 16 }}>Rate the App</Text>
-              </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={{ paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: '#F3F4F6', borderRadius: 30 }}
+                  onPress={() => {
+                    setEditProfileVisible(false);
+                    setTimeout(() => setAppReviewVisible(true), 500);
+                  }}
+                >
+                  <Text style={{ color: '#111827', fontWeight: '700', fontSize: 16 }}>Rate the App</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={{ paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: '#FEE2E2', borderRadius: 30 }}
+                <TouchableOpacity 
+                  style={{ paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: '#FEE2E2', borderRadius: 30 }}
 
-                onPress={() => {
-                  setEditProfileVisible(false);
-                  logout();
-                }}
-              >
-                <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 16 }}>Log Out</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-        </Modal>
+                  onPress={() => {
+                    setEditProfileVisible(false);
+                    logout();
+                  }}
+                >
+                  <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 16 }}>Log Out</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
 
 
       {/* App Review Modal */}
@@ -2032,8 +2544,8 @@ function DiscoverScreen({ navigation, route }) {
 function StoreDetailsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { store, userLocation } = route.params;
-  const { token, user } = useContext(AuthContext);
-  const { addToCart } = useContext(CartContext);
+  const { token, user, currencySymbol } = useContext(AuthContext);
+  const { addToCart, cartTotalCount } = useContext(CartContext);
   const { openChatWithStore } = useContext(ChatContext);
 
   const [bags, setBags] = useState([]);
@@ -2173,6 +2685,45 @@ function StoreDetailsScreen({ navigation, route }) {
           <Ionicons name="arrow-back" size={20} color="white" />
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Cart')} 
+            style={{ 
+              width: 42, 
+              height: 42, 
+              borderRadius: 21, 
+              backgroundColor: 'rgba(15, 23, 42, 0.6)', 
+              borderWidth: 1.5,
+              borderColor: 'rgba(255,255,255,0.25)',
+              justifyContent: 'center', 
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              elevation: 4,
+              position: 'relative'
+            }}
+          >
+            <Ionicons name="cart" size={20} color="white" />
+            {cartTotalCount > 0 && (
+              <View style={{ 
+                position: 'absolute', 
+                top: -4, 
+                right: -4, 
+                backgroundColor: '#EF4444', 
+                borderRadius: 9, 
+                minWidth: 18, 
+                height: 18, 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                paddingHorizontal: 4,
+                borderWidth: 1.5,
+                borderColor: '#FFFFFF'
+              }}>
+                <Text style={{ color: 'white', fontSize: 9, fontWeight: 'bold' }}>{cartTotalCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => openChatWithStore(store)} 
             style={{ 
@@ -2509,10 +3060,10 @@ function StoreDetailsScreen({ navigation, route }) {
                             
                             {/* Price Column */}
                             <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                              <Text style={{ fontSize: 18, fontWeight: '900', color: '#EA580C' }}>£{bag.price.toFixed(2)}</Text>
+                              <Text style={{ fontSize: 18, fontWeight: '900', color: '#EA580C' }}>{currencySymbol}{bag.price.toFixed(2)}</Text>
                               {bag.original_price && (
                                 <Text style={{ fontSize: 11, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 2, fontWeight: '600' }}>
-                                  £{bag.original_price.toFixed(2)}
+                                  {currencySymbol}{bag.original_price.toFixed(2)}
                                 </Text>
                               )}
                             </View>
@@ -2634,10 +3185,10 @@ function StoreDetailsScreen({ navigation, route }) {
                               
                               {/* Price Column */}
                               <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#EA580C' }}>£{item.price.toFixed(2)}</Text>
+                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#EA580C' }}>{currencySymbol}{item.price.toFixed(2)}</Text>
                                 {item.original_price && (
                                   <Text style={{ fontSize: 11, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 2, fontWeight: '600' }}>
-                                    £{item.original_price.toFixed(2)}
+                                    {currencySymbol}{item.original_price.toFixed(2)}
                                   </Text>
                                 )}
                               </View>
@@ -3061,13 +3612,22 @@ function StoreDetailsScreen({ navigation, route }) {
 // --- Cart Screen ---
 function CartScreen({ navigation }) {
   const { cartItems, updateQuantity, removeFromCart, cartTotalPrice, cartTotalCount, clearCart } = useContext(CartContext);
-  const { token } = useContext(AuthContext);
+  const { token, currencySymbol, user } = useContext(AuthContext);
+  const { openReceipt } = useContext(ChatContext);
   const [checkingOut, setCheckingOut] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('Card');
+  const insets = useSafeAreaInsets();
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
     setCheckingOut(true);
+    const cartSnapshot = cartItems.map(item => ({
+      name: item.type === 'bag' ? (item.store_name + ' Surprise Bag') : item.name,
+      quantity: item.cart_quantity,
+      price: item.price,
+      type: item.type,
+    }));
+    const storeName = cartItems[0]?.store_name || 'Store';
+    const totalPrice = cartTotalPrice;
     try {
       const payload = {
         items: cartItems.map(item => ({
@@ -3076,12 +3636,23 @@ function CartScreen({ navigation }) {
           quantity: item.cart_quantity,
           price: item.price
         })),
-        paymentMethod
+        paymentMethod: 'Cash at Pickup'
       };
-      await axios.post(`${API_URL}/orders`, payload, { headers: { Authorization: `Bearer ${token}` } });
-      Alert.alert("Success", "Booking confirmed! You can pick it up from the store.", [
-        { text: "OK", onPress: () => { clearCart(); navigation.navigate('Discover'); } }
-      ]);
+      const response = await axios.post(`${API_URL}/orders`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      const orderIds = response.data?.order_ids || [];
+      const receiptData = {
+        orderIds,
+        storeName,
+        items: cartSnapshot,
+        total: totalPrice,
+        pickupTime: null,
+        customerName: user?.name || null,
+        dateTime: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        paymentMethod: 'Cash at Pickup',
+      };
+      clearCart();
+      navigation.navigate('Discover');
+      openReceipt(receiptData);
     } catch (e) {
       Alert.alert("Checkout Failed", e.response?.data?.error || e.message);
     } finally {
@@ -3109,7 +3680,7 @@ function CartScreen({ navigation }) {
           </View>
           
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>£{(item.price * item.cart_quantity).toFixed(2)}</Text>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>{currencySymbol}{(item.price * item.cart_quantity).toFixed(2)}</Text>
             
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 20 }}>
               <TouchableOpacity onPress={() => updateQuantity(item.id, item.type, -1)} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
@@ -3153,26 +3724,40 @@ function CartScreen({ navigation }) {
             contentContainerStyle={{ padding: 20 }}
           />
           
-          <View style={{ backgroundColor: '#FFFFFF', padding: 24, borderTopLeftRadius: 32, borderTopRightRadius: 32, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 10 }}>
+          <View style={{ 
+            backgroundColor: '#FFFFFF', 
+            paddingHorizontal: 24, 
+            paddingTop: 24, 
+            paddingBottom: Math.max(insets.bottom + 12, 100), 
+            borderTopLeftRadius: 32, 
+            borderTopRightRadius: 32, 
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: -4 }, 
+            shadowOpacity: 0.05, 
+            shadowRadius: 12, 
+            elevation: 10 
+          }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
               <Text style={{ fontSize: 16, color: '#6B7280' }}>Items ({cartTotalCount})</Text>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>£{cartTotalPrice.toFixed(2)}</Text>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>{currencySymbol}{cartTotalPrice.toFixed(2)}</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
               <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>Total</Text>
-              <Text style={{ fontSize: 24, fontWeight: '800', color: '#10B981' }}>£{cartTotalPrice.toFixed(2)}</Text>
+              <Text style={{ fontSize: 24, fontWeight: '800', color: '#10B981' }}>{currencySymbol}{cartTotalPrice.toFixed(2)}</Text>
             </View>
             <View style={{ marginBottom: 20 }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity onPress={() => setPaymentMethod('Card')} style={{ flex: 1, padding: 12, borderWidth: 2, borderColor: paymentMethod === 'Card' ? '#EA580C' : '#E5E7EB', borderRadius: 12, alignItems: 'center', backgroundColor: paymentMethod === 'Card' ? '#FFF7ED' : 'white' }}>
-                  <Ionicons name="card" size={24} color={paymentMethod === 'Card' ? '#EA580C' : '#9CA3AF'} />
-                  <Text style={{ fontWeight: '600', marginTop: 4, color: paymentMethod === 'Card' ? '#EA580C' : '#6B7280' }}>Card</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setPaymentMethod('Cash at Pickup')} style={{ flex: 1, padding: 12, borderWidth: 2, borderColor: paymentMethod === 'Cash at Pickup' ? '#EA580C' : '#E5E7EB', borderRadius: 12, alignItems: 'center', backgroundColor: paymentMethod === 'Cash at Pickup' ? '#FFF7ED' : 'white' }}>
-                  <Ionicons name="cash" size={24} color={paymentMethod === 'Cash at Pickup' ? '#EA580C' : '#9CA3AF'} />
-                  <Text style={{ fontWeight: '600', marginTop: 4, color: paymentMethod === 'Cash at Pickup' ? '#EA580C' : '#6B7280' }}>Cash at Pickup</Text>
-                </TouchableOpacity>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 10 }}>Payment Method</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#BBF7D0', gap: 12 }}>
+                <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="cash" size={22} color="#15803D" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>Cash at Pickup</Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Pay when you collect your order</Text>
+                </View>
+                <View style={{ backgroundColor: '#15803D', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ color: 'white', fontSize: 10, fontWeight: '800' }}>ONLY</Text>
+                </View>
               </View>
             </View>
             <TouchableOpacity onPress={handleCheckout} disabled={checkingOut} style={[styles.primaryButton, { backgroundColor: checkingOut ? '#9CA3AF' : '#EA580C', paddingVertical: 18 }]}>
@@ -3192,9 +3777,9 @@ function CartScreen({ navigation }) {
 
 // --- Bookings Screen ---
 function BookingsScreen({ navigation }) {
-  const { token } = useContext(AuthContext);
+  const { token, currencySymbol, user } = useContext(AuthContext);
   const { cartTotalCount } = useContext(CartContext);
-  const { openChatWithStore, unreadStores } = useContext(ChatContext);
+  const { openChatWithStore, unreadStores, openReceipt } = useContext(ChatContext);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -3231,16 +3816,35 @@ function BookingsScreen({ navigation }) {
             <Text style={{ fontSize: 14, color: '#4B5563', marginTop: 2 }}>{item.quantity}x {item.item_name}</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
               <Text style={{ fontSize: 12, color: '#9CA3AF' }}>{item.type === 'bag' ? 'Surprise Bag' : 'Food Item'}</Text>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>£{(item.price * item.quantity).toFixed(2)}</Text>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>{currencySymbol}{(item.price * item.quantity).toFixed(2)}</Text>
             </View>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 8 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 10, gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => {
+              const receiptData = {
+                orderIds: [item.id],
+                storeName: item.store_name,
+                items: [{ name: item.item_name, quantity: item.quantity, price: item.price, type: item.type }],
+                total: item.price * item.quantity,
+                pickupTime: null,
+                customerName: user?.name || null,
+                dateTime: new Date(item.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                paymentMethod: item.payment_method || 'Cash at Pickup',
+              };
+              openReceipt(receiptData);
+            }}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF7ED', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#FED7AA', gap: 6 }}
+          >
+            <Ionicons name="receipt-outline" size={15} color="#EA580C" />
+            <Text style={{ color: '#EA580C', fontSize: 12, fontWeight: '700' }}>Download Receipt</Text>
+          </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => openChatWithStore({ id: item.store_id, name: item.store_name })}
-            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, position: 'relative' }}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, position: 'relative', gap: 6 }}
           >
-            <Ionicons name="chatbubble-ellipses-outline" size={16} color="#1D4ED8" style={{ marginRight: 6 }} />
+            <Ionicons name="chatbubble-ellipses-outline" size={15} color="#1D4ED8" />
             <Text style={{ color: '#1D4ED8', fontSize: 12, fontWeight: '700' }}>Chat with Store</Text>
             {unreadStores && unreadStores[item.store_id] && (
               <View style={{ 
@@ -3322,7 +3926,31 @@ function SellerDashboardScreen() {
 
   const [stats, setStats] = useState({ totalRevenue: 0, bagsSold: 0, dailySales: [] });
 
-  const FOOD_CATEGORIES = ['Bakery', 'Meals', 'Drinks', 'Snacks', 'Desserts', 'Other'];
+  // Tab & menu state
+  const [sellerTab, setSellerTab] = useState('stores');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showStoreModal, setShowStoreModal] = useState(false);
+  const [showBagModal, setShowBagModal] = useState(false);
+  const [showFoodModal, setShowFoodModal] = useState(false);
+
+  const FOOD_CATEGORIES = ['Bakery', 'Meals', 'Drinks', 'Snacks', 'Desserts', 'Coffee & Tea', 'Sandwiches', 'Pizza', 'Other'];
+
+  // Currency
+  const { currencyCode, currencySymbol, changeCurrency, CURRENCIES } = useContext(AuthContext);
+
+  // Structured pickup
+  const ALL_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const [pickupDays, setPickupDays] = useState([]);
+  const [pickupFrom, setPickupFrom] = useState('18:00');
+  const [pickupTo, setPickupTo] = useState('20:00');
+  const buildPickupTime = (days, from, to) => days.length === 0 ? `${from} - ${to}` : `${days.join(', ')} ${from} - ${to}`;
+  const togglePickupDay = (day) => {
+    setPickupDays(prev => {
+      const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
+      setPickupTime(buildPickupTime(next, pickupFrom, pickupTo));
+      return next;
+    });
+  };
 
   const fetchStores = async () => {
     try {
@@ -3398,6 +4026,7 @@ function SellerDashboardScreen() {
         Alert.alert("Success", "Store created successfully!");
       }
       setStoreName(''); setStoreAddress(''); setStoreImage(null);
+      setShowStoreModal(false);
       fetchStores();
     } catch (e) {
       Alert.alert("Error", e.response?.data?.error || e.message);
@@ -3520,297 +4149,472 @@ function SellerDashboardScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      <View style={styles.header}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {user?.logo ? (
-              <Image source={{ uri: user.logo }} style={{ width: 40, height: 40, borderRadius: 8 }} />
-            ) : (
-              <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}><Text>🏢</Text></View>
-            )}
+
+      {/* Header with Hamburger */}
+      <View style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {user?.logo ? (
+            <Image source={{ uri: user.logo }} style={{ width: 38, height: 38, borderRadius: 8 }} />
+          ) : (
+            <View style={{ width: 38, height: 38, borderRadius: 8, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}><Text>🏢</Text></View>
+          )}
+          <View>
             <Text style={styles.headerTitle}>Seller Portal</Text>
+            <Text style={{ color: '#6B7280', fontSize: 12 }}>{user?.name}</Text>
           </View>
-          <TouchableOpacity onPress={logout} style={styles.logoutButton}>
-            <Text style={{ color: '#ef4444', fontWeight: 'bold' }}>Logout</Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+          <TouchableOpacity onPress={logout} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FEE2E2', borderRadius: 10 }}>
+            <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>Logout</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setMenuOpen(!menuOpen)} style={{ width: 38, height: 38, backgroundColor: '#F3F4F6', borderRadius: 10, justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name={menuOpen ? 'close' : 'menu'} size={22} color="#111827" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.headerSubtitle}>Manage stores and bags, {user?.name}</Text>
       </View>
 
-      <FlatList
-        data={[]}
-        keyExtractor={() => 'dummy'}
-        renderItem={null}
-        ListHeaderComponent={
-          <View style={styles.listContainer}>
+      {/* Hamburger Dropdown Menu */}
+      {menuOpen && (
+        <View style={{ backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingHorizontal: 16, paddingBottom: 8 }}>
+          {[{key:'stores',icon:'🏪',label:'Stores'},{key:'bags',icon:'🛍️',label:'Surprise Bags'},{key:'food',icon:'🍽️',label:'Open Food'}].map(item => (
+            <TouchableOpacity
+              key={item.key}
+              onPress={() => { setSellerTab(item.key); setMenuOpen(false); }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 12,
+                paddingVertical: 12, paddingHorizontal: 8,
+                backgroundColor: sellerTab === item.key ? '#FFF7ED' : 'transparent',
+                borderRadius: 10, marginBottom: 2
+              }}>
+              <Text style={{ fontSize: 20 }}>{item.icon}</Text>
+              <Text style={{ fontSize: 16, fontWeight: sellerTab === item.key ? '700' : '500', color: sellerTab === item.key ? '#EA580C' : '#374151' }}>{item.label}</Text>
+              {sellerTab === item.key && <Ionicons name="checkmark" size={18} color="#EA580C" style={{ marginLeft: 'auto' }} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
-            {/* KPI Section */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-              <View style={[styles.card, { flex: 1, marginRight: 8, alignItems: 'center' }]}>
-                <Text style={{ color: '#6B7280', fontSize: 14 }}>Total Revenue</Text>
-                <Text style={{ color: '#111827', fontSize: 24, fontWeight: 'bold', marginTop: 4 }}>£{stats.totalRevenue.toFixed(2)}</Text>
-              </View>
-              <View style={[styles.card, { flex: 1, marginLeft: 8, alignItems: 'center' }]}>
-                <Text style={{ color: '#6B7280', fontSize: 14 }}>Bags Sold</Text>
-                <Text style={{ color: '#111827', fontSize: 24, fontWeight: 'bold', marginTop: 4 }}>{stats.bagsSold}</Text>
-              </View>
+      {/* Tab Pill Bar */}
+      <View style={{ flexDirection: 'row', margin: 16, backgroundColor: '#F3F4F6', borderRadius: 12, padding: 4 }}>
+        {[{key:'stores',label:'🏪 Stores'},{key:'bags',label:'🛍️ Bags'},{key:'food',label:'🍽️ Food'}].map(t => (
+          <TouchableOpacity
+            key={t.key}
+            onPress={() => setSellerTab(t.key)}
+            style={{
+              flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 10,
+              backgroundColor: sellerTab === t.key ? '#FFFFFF' : 'transparent',
+              shadowColor: sellerTab === t.key ? '#000' : 'transparent',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.1, shadowRadius: 2, elevation: sellerTab === t.key ? 2 : 0
+            }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: sellerTab === t.key ? '#EA580C' : '#6B7280' }}>{t.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* KPI Strip */}
+      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 8 }}>
+        <View style={{ flex: 1, backgroundColor: '#FFF7ED', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+          <Text style={{ color: '#EA580C', fontWeight: '800', fontSize: 18 }}>{currencySymbol}{stats.totalRevenue.toFixed(2)}</Text>
+          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>Revenue</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+          <Text style={{ color: '#059669', fontWeight: '800', fontSize: 18 }}>{stats.bagsSold}</Text>
+          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>Bags Sold</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+          <Text style={{ color: '#2563EB', fontWeight: '800', fontSize: 18 }}>{stores.length}</Text>
+          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>Stores</Text>
+        </View>
+      </View>
+
+      {/* Currency Picker Row */}
+      <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {CURRENCIES.map(c => (
+            <TouchableOpacity key={c.code} onPress={() => changeCurrency(c.code)}
+              style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, marginRight: 6, borderWidth: 1, borderColor: currencyCode === c.code ? '#EA580C' : '#E5E7EB', backgroundColor: currencyCode === c.code ? '#FFF7ED' : '#F9FAFB' }}>
+              <Text style={{ fontWeight: '700', fontSize: 12, color: currencyCode === c.code ? '#EA580C' : '#6B7280' }}>{c.symbol} {c.code}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* ── STORES TAB ── */}
+      {sellerTab === 'stores' && (
+        <FlatList
+          data={stores}
+          keyExtractor={item => item.id.toString()}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <Text style={{ fontSize: 40 }}>🏪</Text>
+              <Text style={{ color: '#9CA3AF', marginTop: 12, fontSize: 15 }}>No stores yet. Add your first!</Text>
             </View>
-
-            {stats.dailySales.length > 0 && (
-              <View style={[styles.card, { marginBottom: 16, padding: 10 }]}>
-                <Text style={{ color: '#111827', fontWeight: 'bold', marginBottom: 10, marginLeft: 10 }}>Sales Over Last 7 Days</Text>
-                <LineChart
-                  data={{
-                    labels: stats.dailySales.map(d => d.date.substring(5, 10)),
-                    datasets: [{ data: stats.dailySales.map(d => d.revenue) }]
-                  }}
-                  width={Dimensions.get('window').width - 64}
-                  height={220}
-                  yAxisLabel="£"
-                  chartConfig={{
-                    backgroundColor: '#ffffff',
-                    backgroundGradientFrom: '#ffffff',
-                    backgroundGradientTo: '#ffffff',
-                    decimalPlaces: 0,
-                    color: (opacity = 1) => `rgba(234, 88, 12, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-                    style: { borderRadius: 16 },
-                    propsForDots: { r: "4", strokeWidth: "2", stroke: "#EA580C" }
-                  }}
-                  bezier
-                  style={{ marginVertical: 8, borderRadius: 16 }}
-                />
-              </View>
-            )}
-
-            {/* STORES LIST */}
-            {stores.length > 0 && (
-              <View style={[styles.card, { backgroundColor: '#FF5A00', borderColor: '#FF5A00' }]}>
-                <Text style={[styles.storeName, { color: '#FFFFFF' }]}>Your Stores</Text>
-                {stores.map(store => (
-                  <View key={store.id} style={{ marginTop: 8, padding: 12, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      {store.image ? (
-                        <Image source={{ uri: store.image }} style={{ width: 40, height: 40, borderRadius: 8 }} />
-                      ) : (
-                        <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', alignItems: 'center' }}><Text>🏪</Text></View>
-                      )}
-                      <View>
-                        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16 }}>{store.name}</Text>
-                        <Text style={{ color: '#FFFFFF', opacity: 0.8, fontSize: 12 }}>{store.address}</Text>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                      <TouchableOpacity onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setEditingStoreId(store.id); }} style={{ backgroundColor: 'white', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ color: '#FF5A00', fontWeight: 'bold' }}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteStore(store.id)} style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ color: 'white', fontWeight: 'bold' }}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <View style={styles.card}>
-              <Text style={styles.storeName}>{editingStoreId ? 'Edit Store' : 'Add New Store'}</Text>
-              <TextInput style={[styles.input, { marginTop: 16 }]} placeholder="Store Name" placeholderTextColor="#9CA3AF" value={storeName} onChangeText={setStoreName} />
-              <TextInput style={styles.input} placeholder="Store Address" placeholderTextColor="#9CA3AF" value={storeAddress} onChangeText={setStoreAddress} />
-
-              <TouchableOpacity onPress={async () => {
-                let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.2, base64: true });
-                if (!result.canceled) setStoreImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
-              }} style={{ padding: 12, backgroundColor: '#F3F4F6', borderRadius: 12, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}>
-                <Text style={{ color: '#111827', fontWeight: '600' }}>{storeImage ? 'Store Image Selected' : 'Upload Store Image (Optional)'}</Text>
-              </TouchableOpacity>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity style={[styles.primaryButton, { flex: 1 }]} onPress={handleCreateStore}>
-                  <Text style={styles.primaryButtonText}>{editingStoreId ? 'Update Store' : 'Create Store'}</Text>
-                </TouchableOpacity>
-                {editingStoreId && (
-                  <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#9CA3AF' }]} onPress={() => { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); }}>
-                    <Text style={styles.primaryButtonText}>Cancel</Text>
-                  </TouchableOpacity>
+          }
+          renderItem={({ item: store }) => (
+            <View style={[styles.card, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {store.image ? (
+                  <Image source={{ uri: store.image }} style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0 }} />
+                ) : (
+                  <View style={{ width: 52, height: 52, borderRadius: 10, backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}><Text style={{ fontSize: 24 }}>🏪</Text></View>
                 )}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{store.name}</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{store.address}</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                <TouchableOpacity
+                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setEditingStoreId(store.id); setShowStoreModal(true); }}
+                  style={{ flex: 1, paddingVertical: 8, backgroundColor: '#EEF2FF', borderRadius: 10, alignItems: 'center' }}>
+                  <Text style={{ color: '#4338CA', fontWeight: '700', fontSize: 13 }}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDeleteStore(store.id)}
+                  style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center' }}>
+                  <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>Delete</Text>
+                </TouchableOpacity>
               </View>
             </View>
+          )}
+        />
+      )}
 
-            <View style={styles.card}>
-              <Text style={styles.storeName}>Add Surprise Bag</Text>
-
-              <Text style={{ color: '#6B7280', marginBottom: 8, marginTop: 16 }}>Select Store:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-                {stores.map(store => (
+      {/* ── SURPRISE BAGS TAB ── */}
+      {sellerTab === 'bags' && (
+        <FlatList
+          data={sellerBags}
+          keyExtractor={item => item.id.toString()}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <Text style={{ fontSize: 40 }}>🛍️</Text>
+              <Text style={{ color: '#9CA3AF', marginTop: 12, fontSize: 15 }}>No bags yet. Create your first!</Text>
+            </View>
+          }
+          renderItem={({ item: bag }) => (
+            <View style={[styles.card, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{bag.store_name}</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Pickup: {bag.pickup_time}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  {bag.original_price ? (
+                    <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{currencySymbol}{bag.original_price.toFixed(2)}</Text>
+                  ) : null}
+                  <Text style={{ color: '#EA580C', fontWeight: '800', fontSize: 18 }}>{currencySymbol}{bag.price.toFixed(2)}</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                <View style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+                  <Text style={{ color: '#EA580C', fontWeight: '700', fontSize: 12 }}>{bag.quantity} left</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
-                    key={store.id}
-                    onPress={() => setBagStoreId(store.id)}
-                    style={{
-                      paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginRight: 8,
-                      backgroundColor: bagStoreId === store.id ? '#FF5A00' : '#F3F4F6'
-                    }}>
-                    <Text style={{ color: bagStoreId === store.id ? '#FFFFFF' : '#111827', fontWeight: '600' }}>{store.name}</Text>
+                    onPress={() => {
+                      let parsedImgs = [];
+                      try {
+                        parsedImgs = bag.images ? (typeof bag.images === 'string' ? JSON.parse(bag.images) : bag.images) : [];
+                      } catch(e) {}
+                      setBagStoreId(bag.store_id);
+                      setBagPrice(bag.price.toString());
+                      setBagOriginalPrice(bag.original_price?.toString() || '');
+                      setBagQuantity(bag.quantity.toString());
+                      setPickupTime(bag.pickup_time);
+                      setBagDescription(bag.description || '');
+                      setBagImages(parsedImgs);
+                      const details = parsePickupTimeDetails(bag.pickup_time);
+                      setPickupDays(details.days);
+                      setPickupFrom(details.from);
+                      setPickupTo(details.to);
+                      setEditingBagId(bag.id);
+                      setShowBagModal(true);
+                    }}
+                    style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#EEF2FF', borderRadius: 8 }}>
+                    <Text style={{ color: '#4338CA', fontWeight: '700', fontSize: 12 }}>Edit</Text>
                   </TouchableOpacity>
-                ))}
-                {stores.length === 0 && <Text style={{ color: '#EF4444' }}>Please create a store first.</Text>}
-              </ScrollView>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteBag(bag.id)}
+                    style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
+                    <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      )}
 
-              <TextInput style={styles.input} placeholder="Original Price (e.g. 10.00)" placeholderTextColor="#9CA3AF" value={bagOriginalPrice} onChangeText={setBagOriginalPrice} keyboardType="numeric" />
-              <TextInput style={styles.input} placeholder="Discounted Price (e.g. 4.99)" placeholderTextColor="#9CA3AF" value={bagPrice} onChangeText={setBagPrice} keyboardType="numeric" />
-              <TextInput style={styles.input} placeholder="Quantity" placeholderTextColor="#9CA3AF" value={bagQuantity} onChangeText={setBagQuantity} keyboardType="numeric" />
-              <TextInput style={styles.input} placeholder="Pickup Time (e.g. 18:00 - 19:00)" placeholderTextColor="#9CA3AF" value={pickupTime} onChangeText={setPickupTime} />
-              <TextInput style={[styles.input, { height: 80 }]} placeholder="What might be present? (Optional)" placeholderTextColor="#9CA3AF" value={bagDescription} onChangeText={setBagDescription} multiline />
+      {/* ── OPEN FOOD TAB ── */}
+      {sellerTab === 'food' && (
+        <FlatList
+          data={sellerFoodItems}
+          keyExtractor={item => item.id.toString()}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <Text style={{ fontSize: 40 }}>🍽️</Text>
+              <Text style={{ color: '#9CA3AF', marginTop: 12, fontSize: 15 }}>No food items yet. Add one!</Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View style={[styles.card, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{item.name}</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{item.store_name} · {item.category}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  {item.original_price ? (
+                    <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{currencySymbol}{parseFloat(item.original_price).toFixed(2)}</Text>
+                  ) : null}
+                  <Text style={{ color: '#059669', fontWeight: '800', fontSize: 18 }}>{currencySymbol}{parseFloat(item.price).toFixed(2)}</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                    <Text style={{ color: '#059669', fontWeight: '700', fontSize: 11 }}>{item.quantity} left</Text>
+                  </View>
+                  <View style={{ backgroundColor: item.is_available ? '#D1FAE5' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                    <Text style={{ color: item.is_available ? '#065F46' : '#991B1B', fontWeight: '700', fontSize: 11 }}>{item.is_available ? 'Available' : 'Unavailable'}</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      let parsedImgs = [];
+                      try {
+                        parsedImgs = item.images ? (typeof item.images === 'string' ? JSON.parse(item.images) : item.images) : [];
+                      } catch(e) {}
+                      setFoodStoreId(item.store_id);
+                      setFoodName(item.name);
+                      setFoodDescription(item.description || '');
+                      setFoodPrice(item.price.toString());
+                      setFoodOriginalPrice(item.original_price?.toString() || '');
+                      setFoodQuantity(item.quantity.toString());
+                      setFoodCategory(item.category || 'Other');
+                      setFoodImages(parsedImgs);
+                      setEditingFoodId(item.id);
+                      setShowFoodModal(true);
+                    }}
+                    style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#ECFDF5', borderRadius: 8 }}>
+                    <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteFoodItem(item.id)}
+                    style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
+                    <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      )}
 
-              <TouchableOpacity onPress={pickImages} style={{ padding: 16, backgroundColor: '#F3F4F6', borderRadius: 16, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}>
-                <Text style={{ color: '#111827', fontWeight: '600' }}>{bagImages.length > 0 ? `Selected ${bagImages.length} Image(s)` : 'Tap to Upload Images'}</Text>
-              </TouchableOpacity>
+      {/* FAB Add Button */}
+      <TouchableOpacity
+        onPress={() => {
+          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setShowStoreModal(true); }
+          else if (sellerTab === 'bags') { setEditingBagId(null); setBagStoreId(null); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setShowBagModal(true); }
+          else { setEditingFoodId(null); setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]); setShowFoodModal(true); }
+        }}
+        style={{
+          position: 'absolute', bottom: 30, right: 20,
+          width: 56, height: 56, borderRadius: 28,
+          backgroundColor: sellerTab === 'food' ? '#059669' : '#EA580C',
+          justifyContent: 'center', alignItems: 'center',
+          shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8
+        }}>
+        <Ionicons name="add" size={28} color="white" />
+      </TouchableOpacity>
 
-              {bagImages.length > 0 && (
-                <ScrollView horizontal style={{ marginBottom: 16 }}>
-                  {bagImages.map((img, index) => (
-                    <Image key={index} source={{ uri: img }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 8 }} />
-                  ))}
-                </ScrollView>
+      {/* ── STORE MODAL ── */}
+      <Modal visible={showStoreModal} animationType="slide" transparent onRequestClose={() => setShowStoreModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>{editingStoreId ? 'Edit Store' : 'Add New Store'}</Text>
+              <TouchableOpacity onPress={() => setShowStoreModal(false)}><Ionicons name="close" size={24} color="#6B7280" /></TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Store Name *</Text>
+              <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. Green Grocer" placeholderTextColor="#9CA3AF" value={storeName} onChangeText={setStoreName} />
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Address *</Text>
+              <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. 10 Oxford Street" placeholderTextColor="#9CA3AF" value={storeAddress} onChangeText={setStoreAddress} />
+              {storeImage ? (
+                <View style={{ position: 'relative', width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+                  <Image source={{ uri: storeImage }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <TouchableOpacity onPress={() => setStoreImage(null)} style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="close" size={16} color="white" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity onPress={async () => { let r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.2, base64: true }); if (!r.canceled) setStoreImage(`data:image/jpeg;base64,${r.assets[0].base64}`); }} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}>
+                  <Ionicons name="camera-outline" size={24} color="#6B7280" style={{ marginBottom: 4 }} />
+                  <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>📷 Upload Store Image (Optional)</Text>
+                </TouchableOpacity>
               )}
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity style={[styles.primaryButton, { flex: 1 }]} onPress={handleCreateBag}>
-                  <Text style={styles.primaryButtonText}>{editingBagId ? 'Update Bag' : 'Create Bag'}</Text>
-                </TouchableOpacity>
-                {editingBagId && (
-                  <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#9CA3AF' }]} onPress={() => { setEditingBagId(null); setBagStoreId(null); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); }}>
-                    <Text style={styles.primaryButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            {/* SELLER BAGS LIST */}
-            {sellerBags.length > 0 && (
-              <View style={styles.card}>
-                <Text style={styles.storeName}>Your Active Bags</Text>
-                {sellerBags.map(bag => (
-                  <View key={bag.id} style={{ marginTop: 8, padding: 12, backgroundColor: '#F3F4F6', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
-                    <Text style={{ color: '#111827', fontWeight: '700', fontSize: 16 }}>{bag.store_name}</Text>
-                    <Text style={{ color: '#4B5563', fontSize: 14 }}>£{bag.price.toFixed(2)} - Qty: {bag.quantity}</Text>
-                    <Text style={{ color: '#6B7280', fontSize: 12 }}>Pickup: {bag.pickup_time}</Text>
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                      <TouchableOpacity onPress={() => {
-                        setBagStoreId(bag.store_id); setBagPrice(bag.price.toString()); setBagOriginalPrice(bag.original_price?.toString() || ''); setBagQuantity(bag.quantity.toString()); setPickupTime(bag.pickup_time); setBagDescription(bag.description || ''); setEditingBagId(bag.id);
-                      }} style={{ backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ color: 'white', fontWeight: 'bold' }}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteBag(bag.id)} style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ color: 'white', fontWeight: 'bold' }}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* ── ADD FOOD LISTING ── */}
-            <View style={[styles.card, { borderColor: '#10B981', borderWidth: 2 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <Text style={{ fontSize: 22 }}>🍽️</Text>
-                <Text style={[styles.storeName, { color: '#10B981' }]}>{editingFoodId ? 'Edit Food Listing' : 'Add Food Listing'}</Text>
-              </View>
-              <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 16 }}>List individual food items customers can browse and order.</Text>
-
-              {/* Store Picker */}
-              <Text style={{ color: '#6B7280', marginBottom: 8 }}>Select Store:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-                {stores.map(store => (
-                  <TouchableOpacity
-                    key={store.id}
-                    onPress={() => setFoodStoreId(store.id)}
-                    style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginRight: 8, backgroundColor: foodStoreId === store.id ? '#10B981' : '#F3F4F6' }}
-                  >
-                    <Text style={{ color: foodStoreId === store.id ? '#FFFFFF' : '#111827', fontWeight: '600' }}>{store.name}</Text>
-                  </TouchableOpacity>
-                ))}
-                {stores.length === 0 && <Text style={{ color: '#EF4444' }}>Create a store first.</Text>}
-              </ScrollView>
-
-              {/* Category Picker */}
-              <Text style={{ color: '#6B7280', marginBottom: 8 }}>Category:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-                {FOOD_CATEGORIES.map(cat => (
-                  <TouchableOpacity
-                    key={cat}
-                    onPress={() => setFoodCategory(cat)}
-                    style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: foodCategory === cat ? '#059669' : '#F3F4F6' }}
-                  >
-                    <Text style={{ color: foodCategory === cat ? '#FFFFFF' : '#374151', fontWeight: '600', fontSize: 13 }}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <TextInput style={styles.input} placeholder="Item Name *" placeholderTextColor="#9CA3AF" value={foodName} onChangeText={setFoodName} />
-              <TextInput style={styles.input} placeholder="Original Price (e.g. 8.00)" placeholderTextColor="#9CA3AF" value={foodOriginalPrice} onChangeText={setFoodOriginalPrice} keyboardType="numeric" />
-              <TextInput style={styles.input} placeholder="Selling Price *" placeholderTextColor="#9CA3AF" value={foodPrice} onChangeText={setFoodPrice} keyboardType="numeric" />
-              <TextInput style={styles.input} placeholder="Quantity *" placeholderTextColor="#9CA3AF" value={foodQuantity} onChangeText={setFoodQuantity} keyboardType="numeric" />
-              <TextInput style={[styles.input, { height: 80 }]} placeholder="Description (Optional)" placeholderTextColor="#9CA3AF" value={foodDescription} onChangeText={setFoodDescription} multiline />
-
-              <TouchableOpacity onPress={pickFoodImages} style={{ padding: 16, backgroundColor: '#F0FDF4', borderRadius: 16, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: '#10B981' }}>
-                <Text style={{ color: '#059669', fontWeight: '600' }}>{foodImages.length > 0 ? `${foodImages.length} Image(s) Selected` : '📷 Upload Images (Optional)'}</Text>
+              <TouchableOpacity onPress={handleCreateStore} style={[styles.primaryButton, { backgroundColor: '#EA580C' }]}>
+                <Text style={styles.primaryButtonText}>{editingStoreId ? 'Update Store' : 'Create Store'}</Text>
               </TouchableOpacity>
-
-              {foodImages.length > 0 && (
-                <ScrollView horizontal style={{ marginBottom: 16 }}>
-                  {foodImages.map((img, i) => (
-                    <Image key={i} source={{ uri: img }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 8 }} />
-                  ))}
-                </ScrollView>
-              )}
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#10B981' }]} onPress={handleCreateFoodItem}>
-                  <Text style={styles.primaryButtonText}>{editingFoodId ? 'Update Item' : 'Create Item'}</Text>
-                </TouchableOpacity>
-                {editingFoodId && (
-                  <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#9CA3AF' }]} onPress={() => { setEditingFoodId(null); setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]); }}>
-                    <Text style={styles.primaryButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            {/* SELLER FOOD ITEMS LIST */}
-            {sellerFoodItems.length > 0 && (
-              <View style={styles.card}>
-                <Text style={styles.storeName}>Your Food Listings</Text>
-                {sellerFoodItems.map(item => (
-                  <View key={item.id} style={{ marginTop: 8, padding: 12, backgroundColor: '#F0FDF4', borderRadius: 12, borderWidth: 1, borderColor: '#D1FAE5' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#111827', fontWeight: '700', fontSize: 15 }}>{item.name}</Text>
-                        <Text style={{ color: '#6B7280', fontSize: 12 }}>{item.store_name} · {item.category}</Text>
-                        <Text style={{ color: '#059669', fontWeight: '700', fontSize: 14, marginTop: 2 }}>£{item.price.toFixed(2)} · Qty: {item.quantity}</Text>
-                      </View>
-                      <View style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>{item.is_available ? 'Available' : 'Unavailable'}</Text>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                      <TouchableOpacity
-                        onPress={() => { setFoodStoreId(item.store_id); setFoodName(item.name); setFoodDescription(item.description || ''); setFoodPrice(item.price.toString()); setFoodOriginalPrice(item.original_price?.toString() || ''); setFoodQuantity(item.quantity.toString()); setFoodCategory(item.category || 'Other'); setEditingFoodId(item.id); }}
-                        style={{ backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}
-                      >
-                        <Text style={{ color: 'white', fontWeight: 'bold' }}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteFoodItem(item.id)} style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                        <Text style={{ color: 'white', fontWeight: 'bold' }}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
+            </ScrollView>
           </View>
-        }
-      />
+        </View>
+      </Modal>
+
+      {/* ── BAG MODAL ── */}
+      <Modal visible={showBagModal} animationType="slide" transparent onRequestClose={() => setShowBagModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>{editingBagId ? 'Edit Bag' : 'Add Surprise Bag'}</Text>
+              <TouchableOpacity onPress={() => setShowBagModal(false)}><Ionicons name="close" size={24} color="#6B7280" /></TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Select Store *</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                {stores.map(store => (
+                  <TouchableOpacity key={store.id} onPress={() => setBagStoreId(store.id)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: bagStoreId === store.id ? '#EA580C' : '#F3F4F6' }}>
+                    <Text style={{ color: bagStoreId === store.id ? '#FFFFFF' : '#374151', fontWeight: '600', fontSize: 13 }}>{store.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                 <View style={{ flex: 1 }}>
+                   <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Original Price ({currencySymbol})</Text>
+                   <TextInput style={styles.input} placeholder="10.00" placeholderTextColor="#9CA3AF" value={bagOriginalPrice} onChangeText={setBagOriginalPrice} keyboardType="numeric" />
+                 </View>
+                 <View style={{ flex: 1 }}>
+                   <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Sale Price ({currencySymbol}) *</Text>
+                   <TextInput style={styles.input} placeholder="3.99" placeholderTextColor="#9CA3AF" value={bagPrice} onChangeText={setBagPrice} keyboardType="numeric" />
+                 </View>
+              </View>
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Quantity *</Text>
+                <TextInput style={styles.input} placeholder="5" placeholderTextColor="#9CA3AF" value={bagQuantity} onChangeText={setBagQuantity} keyboardType="numeric" />
+              </View>
+              {/* Pickup Day + Time Pickers */}
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 8, fontSize: 13 }}>Pickup Days (optional)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                {ALL_DAYS.map(day => (
+                  <TouchableOpacity key={day} onPress={() => togglePickupDay(day)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginRight: 6, borderWidth: 1, borderColor: pickupDays.includes(day) ? '#EA580C' : '#D1D5DB', backgroundColor: pickupDays.includes(day) ? '#EA580C' : '#F9FAFB' }}>
+                    <Text style={{ color: pickupDays.includes(day) ? '#FFFFFF' : '#6B7280', fontWeight: '700', fontSize: 12 }}>{day}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 6 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>From</Text>
+                  <TextInput style={styles.input} placeholder="18:00" placeholderTextColor="#9CA3AF" value={pickupFrom}
+                    onChangeText={v => { setPickupFrom(v); setPickupTime(buildPickupTime(pickupDays, v, pickupTo)); }} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>To</Text>
+                  <TextInput style={styles.input} placeholder="20:00" placeholderTextColor="#9CA3AF" value={pickupTo}
+                    onChangeText={v => { setPickupTo(v); setPickupTime(buildPickupTime(pickupDays, pickupFrom, v)); }} />
+                </View>
+              </View>
+              {pickupTime ? (
+                <View style={{ backgroundColor: '#F0FDF4', borderRadius: 8, padding: 8, marginBottom: 14 }}>
+                  <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>📅 {pickupTime}</Text>
+                </View>
+              ) : <View style={{ marginBottom: 14 }} />}
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Description</Text>
+              <TextInput style={[styles.input, { height: 70, marginBottom: 14 }]} placeholder="What might be inside..." placeholderTextColor="#9CA3AF" value={bagDescription} onChangeText={setBagDescription} multiline />
+              <TouchableOpacity onPress={pickImages} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}>
+                 <Ionicons name="images-outline" size={24} color="#6B7280" style={{ marginBottom: 4 }} />
+                 <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>📷 Upload Images</Text>
+               </TouchableOpacity>
+               {bagImages.length > 0 ? (
+                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+                   {bagImages.map((img, idx) => (
+                     <View key={idx} style={{ position: 'relative', width: 60, height: 60, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
+                       <Image source={{ uri: img }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                       <TouchableOpacity onPress={() => setBagImages(prev => prev.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(239, 68, 68, 0.9)', borderRadius: 10, width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+                         <Ionicons name="close" size={12} color="white" />
+                       </TouchableOpacity>
+                     </View>
+                   ))}
+                 </View>
+               ) : null}
+              <TouchableOpacity onPress={() => { handleCreateBag(); setShowBagModal(false); }} style={[styles.primaryButton, { backgroundColor: '#EA580C' }]}>
+                <Text style={styles.primaryButtonText}>{editingBagId ? 'Update Bag' : 'Create Bag'}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── FOOD MODAL ── */}
+      <Modal visible={showFoodModal} animationType="slide" transparent onRequestClose={() => setShowFoodModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '92%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>{editingFoodId ? 'Edit Food Item' : 'Add Food Item'}</Text>
+              <TouchableOpacity onPress={() => setShowFoodModal(false)}><Ionicons name="close" size={24} color="#6B7280" /></TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Select Store *</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                {stores.map(store => (
+                  <TouchableOpacity key={store.id} onPress={() => setFoodStoreId(store.id)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: foodStoreId === store.id ? '#059669' : '#F3F4F6' }}>
+                    <Text style={{ color: foodStoreId === store.id ? '#FFFFFF' : '#374151', fontWeight: '600', fontSize: 13 }}>{store.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Item Name *</Text>
+              <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. Sourdough Loaf" placeholderTextColor="#9CA3AF" value={foodName} onChangeText={setFoodName} />
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                {FOOD_CATEGORIES.map(cat => (
+                  <TouchableOpacity key={cat} onPress={() => setFoodCategory(cat)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, marginRight: 8, backgroundColor: foodCategory === cat ? '#059669' : '#F3F4F6' }}>
+                    <Text style={{ color: foodCategory === cat ? '#FFFFFF' : '#374151', fontWeight: '600', fontSize: 12 }}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                 <View style={{ flex: 1 }}>
+                   <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Original Price ({currencySymbol})</Text>
+                   <TextInput style={styles.input} placeholder="8.00" placeholderTextColor="#9CA3AF" value={foodOriginalPrice} onChangeText={setFoodOriginalPrice} keyboardType="numeric" />
+                 </View>
+                 <View style={{ flex: 1 }}>
+                   <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Sale Price ({currencySymbol}) *</Text>
+                   <TextInput style={styles.input} placeholder="3.50" placeholderTextColor="#9CA3AF" value={foodPrice} onChangeText={setFoodPrice} keyboardType="numeric" />
+                 </View>
+              </View>
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Quantity *</Text>
+              <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="10" placeholderTextColor="#9CA3AF" value={foodQuantity} onChangeText={setFoodQuantity} keyboardType="numeric" />
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Description</Text>
+              <TextInput style={[styles.input, { height: 70, marginBottom: 14 }]} placeholder="Optional description..." placeholderTextColor="#9CA3AF" value={foodDescription} onChangeText={setFoodDescription} multiline />
+              <TouchableOpacity onPress={pickFoodImages} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#10B981' }}>
+                 <Ionicons name="images-outline" size={24} color="#10B981" style={{ marginBottom: 4 }} />
+                 <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>📷 Upload Images (Optional)</Text>
+               </TouchableOpacity>
+               {foodImages.length > 0 ? (
+                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+                   {foodImages.map((img, idx) => (
+                     <View key={idx} style={{ position: 'relative', width: 60, height: 60, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
+                       <Image source={{ uri: img }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                       <TouchableOpacity onPress={() => setFoodImages(prev => prev.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(239, 68, 68, 0.9)', borderRadius: 10, width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+                         <Ionicons name="close" size={12} color="white" />
+                       </TouchableOpacity>
+                     </View>
+                   ))}
+                 </View>
+               ) : null}
+              <TouchableOpacity onPress={() => { handleCreateFoodItem(); setShowFoodModal(false); }} style={[styles.primaryButton, { backgroundColor: '#059669' }]}>
+                <Text style={styles.primaryButtonText}>{editingFoodId ? 'Update Item' : 'Create Item'}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3825,6 +4629,27 @@ export default function App() {
   });
 
   const [cartItems, setCartItems] = useState([]);
+
+  // Global Currency State
+  const [currencyCode, setCurrencyCode] = useState('GBP');
+  
+  useEffect(() => {
+    AsyncStorage.getItem('currencyCode').then(val => {
+      if (val) setCurrencyCode(val);
+    });
+  }, []);
+
+  const changeCurrency = async (code) => {
+    setCurrencyCode(code);
+    await AsyncStorage.setItem('currencyCode', code);
+  };
+
+  const CURRENCIES = [
+    { code: 'GBP', symbol: '£' }, { code: 'USD', symbol: '$' }, { code: 'EUR', symbol: '€' },
+    { code: 'PKR', symbol: '₨' }, { code: 'AED', symbol: 'AED' }, { code: 'SAR', symbol: 'SAR' },
+    { code: 'CAD', symbol: 'C$' }, { code: 'AUD', symbol: 'A$' }, { code: 'INR', symbol: '₹' },
+  ];
+  const currencySymbol = CURRENCIES.find(c => c.code === currencyCode)?.symbol || '£';
 
   // Cart Functions
   const addToCart = (item, type) => {
@@ -3904,6 +4729,18 @@ export default function App() {
     bootstrapAsync();
   }, []);
 
+  useEffect(() => {
+    if (state.userToken) {
+      registerForPushNotificationsAsync().then(pushToken => {
+        if (pushToken) {
+          axios.post(`${API_URL}/users/push-token`, { pushToken }, {
+            headers: { Authorization: `Bearer ${state.userToken}` }
+          }).catch(err => console.log('Error registering push token on backend:', err.message));
+        }
+      });
+    }
+  }, [state.userToken]);
+
   const authContext = React.useMemo(
     () => ({
       login: async (token, user) => {
@@ -3924,8 +4761,12 @@ export default function App() {
       },
       token: state.userToken,
       user: state.user,
+      currencyCode,
+      currencySymbol,
+      changeCurrency,
+      CURRENCIES
     }),
-    [state]
+    [state, currencyCode, currencySymbol]
   );
 
   if (state.isLoading) {
@@ -3945,6 +4786,7 @@ export default function App() {
                   <Stack.Screen name="Landing" component={LandingScreen} />
                   <Stack.Screen name="Login" component={LoginScreen} />
                   <Stack.Screen name="Register" component={RegisterScreen} />
+                  <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                 </>
               ) : state.user?.role === 'SellersAdmin' ? (
                 // Seller Stack
@@ -3963,6 +4805,7 @@ export default function App() {
           </NavigationContainer>
           <GlobalToast />
           <GlobalChatModal />
+          <GlobalReceiptModal />
         </ChatProvider>
       </CartContext.Provider>
     </AuthContext.Provider>
@@ -4077,7 +4920,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 40,
@@ -4088,7 +4931,7 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: '#E2E8F0',
   },
   toastContainer: {
     position: 'absolute',
