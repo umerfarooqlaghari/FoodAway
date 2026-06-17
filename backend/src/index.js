@@ -1288,6 +1288,237 @@ const initWebSockets = (httpServer) => {
   console.log("WebSocket server initialized.");
 };
 
+// ─── Public Contact Form ──────────────────────────────────────────────────────
+app.post('/api/contact', async (req, res) => {
+  const { name, email, subject, message } = req.body;
+  if (!name || !email || !subject || !message) {
+    return res.status(400).json({ error: 'All fields (name, email, subject, message) are required.' });
+  }
+
+  const submittedAt = new Date().toLocaleString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+  });
+
+  // ── Email to admin ──────────────────────────────────────────────────────────
+  const adminHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>New Contact Enquiry — FoodAway</title>
+</head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#111111;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:36px 40px;text-align:center;">
+            <img src="https://goodtogo-assets.s3.us-east-1.amazonaws.com/brand/logo.png" alt="FoodAway" height="44" style="margin-bottom:12px;" onerror="this.style.display='none'" />
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">New Support Enquiry</h1>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Received via FoodAway Contact Form</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <!-- Alert badge -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr>
+                <td style="background:rgba(255,90,0,0.1);border:1px solid rgba(255,90,0,0.25);border-radius:10px;padding:14px 18px;">
+                  <p style="margin:0;color:#FF5A00;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Action Required</p>
+                  <p style="margin:4px 0 0;color:#e5e7eb;font-size:14px;">A customer has submitted a support request. Please respond within 24–48 hours.</p>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Sender details -->
+            <h2 style="margin:0 0 16px;color:#ffffff;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:10px;">Sender Details</h2>
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              ${[['Name', name], ['Email', email], ['Subject', subject], ['Submitted', submittedAt]].map(([k, v]) => `
+              <tr>
+                <td style="padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05);color:#9ca3af;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;width:110px;">${k}</td>
+                <td style="padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05);color:#ffffff;font-size:14px;">${v}</td>
+              </tr>`).join('')}
+            </table>
+
+            <!-- Message -->
+            <h2 style="margin:0 0 12px;color:#ffffff;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Message</h2>
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid #FF5A00;border-radius:8px;padding:20px 20px 20px 22px;">
+              <p style="margin:0;color:#d1d5db;font-size:15px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+            </div>
+
+            <!-- CTA -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
+              <tr>
+                <td align="center">
+                  <a href="mailto:${email}?subject=Re: ${encodeURIComponent(subject)}" style="display:inline-block;background:linear-gradient(135deg,#FF5A00,#FF8A00);color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 32px;border-radius:10px;">Reply to ${name} →</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#0d0d0d;padding:24px 40px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+            <p style="margin:0;color:#6b7280;font-size:12px;">FoodAway ApS · info@alpha-devs.cloud</p>
+            <p style="margin:6px 0 0;color:#4b5563;font-size:11px;">This is an automated notification. Do not reply to this email directly.</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  // ── Confirmation email to sender ───────────────────────────────────────────
+  const senderHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>We've received your message — FoodAway</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 40px rgba(0,0,0,0.1);">
+
+        <!-- Orange header with logo -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:44px 40px;text-align:center;">
+            <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:64px;text-align:center;">🍃</div>
+            <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">We've Got Your Message!</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px;">Thank you for reaching out to FoodAway.</p>
+          </td>
+        </tr>
+
+        <!-- Greeting -->
+        <tr>
+          <td style="padding:36px 40px 0;">
+            <p style="margin:0;color:#111827;font-size:17px;line-height:1.6;">Hi <strong>${name}</strong>,</p>
+            <p style="margin:14px 0 0;color:#374151;font-size:15px;line-height:1.7;">
+              Thanks for getting in touch with the FoodAway team. We've received your enquiry and our team will review it shortly.
+            </p>
+          </td>
+        </tr>
+
+        <!-- What happens next -->
+        <tr>
+          <td style="padding:28px 40px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;">
+              <tr>
+                <td style="padding:20px 24px;border-bottom:1px solid #e5e7eb;">
+                  <p style="margin:0;color:#FF5A00;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Your Submission</p>
+                </td>
+              </tr>
+              ${[['Name', name], ['Email', email], ['Subject', subject], ['Submitted', submittedAt]].map(([k, v]) => `
+              <tr>
+                <td style="padding:10px 24px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;width:100px;">${k}</td>
+                <td style="padding:10px 24px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600;">${v}</td>
+              </tr>`).join('')}
+            </table>
+          </td>
+        </tr>
+
+        <!-- Timeline -->
+        <tr>
+          <td style="padding:28px 40px 0;">
+            <h2 style="margin:0 0 18px;color:#111827;font-size:15px;font-weight:700;">What happens next?</h2>
+            ${[
+              { icon: '📬', title: 'Confirmation received', desc: 'This email confirms we got your message.', done: true },
+              { icon: '👀', title: 'Under review', desc: 'Our team will read your enquiry carefully.', done: false },
+              { icon: '💬', title: 'We\'ll respond', desc: 'Expect a reply within 24–48 business hours.', done: false },
+            ].map(({ icon, title, desc, done }) => `
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+              <tr>
+                <td valign="top" style="width:40px;padding-right:14px;">
+                  <div style="width:36px;height:36px;background:${done ? 'linear-gradient(135deg,#FF5A00,#FF8A00)' : '#f3f4f6'};border-radius:50%;text-align:center;line-height:36px;font-size:16px;">${icon}</div>
+                </td>
+                <td valign="top">
+                  <p style="margin:0;color:#111827;font-size:14px;font-weight:700;">${title}</p>
+                  <p style="margin:2px 0 0;color:#6b7280;font-size:13px;">${desc}</p>
+                </td>
+              </tr>
+            </table>`).join('')}
+          </td>
+        </tr>
+
+        <!-- Message preview -->
+        <tr>
+          <td style="padding:28px 40px 0;">
+            <p style="margin:0 0 10px;color:#6b7280;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Your message</p>
+            <div style="background:#f9fafb;border-left:3px solid #FF5A00;border-radius:4px;padding:16px 18px;">
+              <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+            </div>
+          </td>
+        </tr>
+
+        <!-- Need urgent help -->
+        <tr>
+          <td style="padding:28px 40px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,90,0,0.05);border:1px solid rgba(255,90,0,0.2);border-radius:10px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <p style="margin:0;color:#FF5A00;font-size:13px;font-weight:700;">Need urgent help?</p>
+                  <p style="margin:4px 0 0;color:#374151;font-size:13px;">Email us directly at <a href="mailto:info@alpha-devs.cloud" style="color:#FF5A00;text-decoration:none;font-weight:600;">info@alpha-devs.cloud</a></p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Sign off -->
+        <tr>
+          <td style="padding:32px 40px 36px;">
+            <p style="margin:0;color:#374151;font-size:15px;line-height:1.7;">
+              Thanks again for being part of the FoodAway family. Together we're making a difference — one rescued meal at a time. 🍃
+            </p>
+            <p style="margin:20px 0 0;color:#111827;font-size:15px;">Warm regards,<br/><strong>The FoodAway Team</strong></p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+            <p style="margin:0;color:#9ca3af;font-size:12px;">© ${new Date().getFullYear()} FoodAway ApS · All Rights Reserved</p>
+            <p style="margin:6px 0 0;color:#9ca3af;font-size:11px;">You're receiving this because you submitted a contact form on foodaway.app</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    await Promise.all([
+      sendEmail({
+        to: 'info@alpha-devs.cloud',
+        subject: `[FoodAway Support] ${subject} — from ${name}`,
+        html: adminHtml,
+        text: `New contact form submission\n\nName: ${name}\nEmail: ${email}\nSubject: ${subject}\nSubmitted: ${submittedAt}\n\nMessage:\n${message}`,
+      }),
+      sendEmail({
+        to: email,
+        subject: `We've received your message — FoodAway Support`,
+        html: senderHtml,
+        text: `Hi ${name},\n\nThanks for contacting FoodAway. We've received your message about "${subject}" and will respond within 24–48 business hours.\n\nYour message:\n${message}\n\nBest regards,\nThe FoodAway Team\ninfo@alpha-devs.cloud`,
+      }),
+    ]);
+    res.json({ success: true, message: 'Your message has been sent. Check your inbox for a confirmation.' });
+  } catch (err) {
+    console.error('Contact form email error:', err.message);
+    res.status(500).json({ error: 'Failed to send message. Please try again or email us directly at info@alpha-devs.cloud.' });
+  }
+});
+
 // Start Server only if run directly
 if (require.main === module) {
   const serverInstance = app.listen(PORT, '0.0.0.0', () => {

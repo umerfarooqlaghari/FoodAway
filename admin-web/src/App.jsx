@@ -4,6 +4,15 @@ import Map, { Marker } from 'react-map-gl';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './index.css';
+import Legal from './pages/Legal';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import CookiePolicy from './pages/CookiePolicy';
+import TermsAndConditions from './pages/TermsAndConditions';
+import ContactUs from './pages/ContactUs';
+import DsaDisclosure from './pages/DsaDisclosure';
+import DoNotSell from './pages/DoNotSell';
+import FoodWasteSources from './pages/FoodWasteSources';
+import Status from './pages/Status';
 
 // Note: Replace with actual MapBox token in production
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
@@ -934,10 +943,7 @@ function App() {
               <span>FoodAway</span>
             </div>
             <div className="footer-links-row">
-              <a href="#why-use" className="footer-link">Careers</a>
-              <a href="#why-use" className="footer-link">Press</a>
-              <a href="#why-use" className="footer-link">Support</a>
-              <span className="footer-link" style={{ cursor: 'pointer' }} onClick={() => { setForgotPasswordStep('login'); setView('login'); }}>MyStore Login</span>
+            
             </div>
             <div className="footer-badges">
               <div className="bcorp-badge">
@@ -953,15 +959,22 @@ function App() {
 
           <div className="footer-bottom">
             <div className="footer-legal-links">
-              <a href="#" className="footer-legal-link">Legal</a>
-              <a href="#" className="footer-legal-link">Privacy Policy</a>
-              <a href="#" className="footer-legal-link">Cookie Policy</a>
-              <a href="#" className="footer-legal-link">Terms & Conditions</a>
-              <a href="#" className="footer-legal-link">Contact us</a>
-              <a href="#" className="footer-legal-link">DSA Disclosure</a>
-              <a href="#" className="footer-legal-link">Do Not Sell or Share My Data</a>
-              <a href="#" className="footer-legal-link">Food Waste Sources</a>
-              <a href="#" className="footer-legal-link">Status</a>
+              {[
+                ['Legal', 'legal'],
+                ['Privacy Policy', 'privacy'],
+                ['Cookie Policy', 'cookies'],
+                ['Terms & Conditions', 'terms'],
+                ['Contact us', 'contact'],
+                ['DSA Disclosure', 'dsa'],
+                ['Do Not Sell or Share My Data', 'donotsell'],
+                ['Food Waste Sources', 'foodwaste'],
+                ['Status', 'status'],
+              ].map(([label, page]) => (
+                <span key={page} className="footer-legal-link" style={{ cursor: 'pointer' }}
+                  onClick={() => setView(page)}>
+                  {label}
+                </span>
+              ))}
             </div>
             <div>
               <p>Copyright &copy; {new Date().getFullYear()} FoodAway ApS. All Rights Reserved.</p>
@@ -971,6 +984,21 @@ function App() {
       </div>
     );
   };
+
+  // ── Footer page routing ──────────────────────────────────────────────────────
+  const goHome = () => setView(token ? 'app' : 'landing');
+  const pageRoutes = {
+    legal:      <Legal onBack={goHome} />,
+    privacy:    <PrivacyPolicy onBack={goHome} />,
+    cookies:    <CookiePolicy onBack={goHome} />,
+    terms:      <TermsAndConditions onBack={goHome} />,
+    contact:    <ContactUs onBack={goHome} />,
+    dsa:        <DsaDisclosure onBack={goHome} />,
+    donotsell:  <DoNotSell onBack={goHome} />,
+    foodwaste:  <FoodWasteSources onBack={goHome} />,
+    status:     <Status onBack={goHome} />,
+  };
+  if (pageRoutes[view]) return pageRoutes[view];
 
   if (!token) {
     if (view === 'login') {
