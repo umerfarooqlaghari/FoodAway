@@ -1178,7 +1178,7 @@ const initWebSockets = (httpServer) => {
               if (senderRole === 'Customer') {
                 const store = await db.prepare('SELECT tenant_id, name FROM stores WHERE id = ?').get(storeId);
                 if (store) {
-                  const sellers = await db.prepare('SELECT id, push_token FROM users WHERE (id = ? OR tenant_id = ?) AND role IN ("SellersAdmin", "SellersStaff")').all(store.tenant_id, store.tenant_id);
+                  const sellers = await db.prepare("SELECT id, push_token FROM users WHERE (id = ? OR tenant_id = ?) AND role IN ('SellersAdmin', 'SellersStaff')").all(store.tenant_id, store.tenant_id);
                   for (const seller of sellers) {
                     if (seller.push_token) {
                       await sendPushNotification(
@@ -1228,8 +1228,11 @@ const initWebSockets = (httpServer) => {
 
           if (senderRole === 'Customer') {
             const sellersKey = 'sellers';
-            if (wsClients.has(sellersKey)) {
-              for (const client of wsClients.get(sellersKey)) {
+            const sellerClients = wsClients.get(sellersKey);
+            const sellerCount = sellerClients ? sellerClients.size : 0;
+            console.log(`[WS] Dispatching customer message to ${sellerCount} seller client(s) (store:${storeId} customer:${resolvedCustomerId})`);
+            if (sellerClients) {
+              for (const client of sellerClients) {
                 if (client.readyState === 1) client.send(msgPayload);
               }
             }

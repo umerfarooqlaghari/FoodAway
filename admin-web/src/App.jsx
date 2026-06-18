@@ -207,6 +207,28 @@ function App() {
     activeChatRef.current = activeChat;
   }, [activeChat]);
 
+  // Polling fallback: refresh chat history every 4s when a chat is open
+  // This guarantees messages appear even if the WS real-time path has any edge-case failures
+  useEffect(() => {
+    if (!activeChat || activeTab !== 'chats' || !token) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await axios.get(
+          `${API_URL}/chat/history?store_id=${activeChat.store_id}&customer_id=${activeChat.customer_id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setChatHistory(prev => {
+          const lastPrev = prev[prev.length - 1];
+          const lastNew = res.data[res.data.length - 1];
+          // Only update if there are new messages to avoid re-render churn
+          if (prev.length === res.data.length && lastPrev?.id === lastNew?.id) return prev;
+          return res.data;
+        });
+      } catch (_) {}
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activeChat, activeTab, token]);
+
   // Auto-scroll chat to bottom whenever messages or typing indicator change
   useEffect(() => {
     if (chatEndRef.current) {
@@ -442,15 +464,24 @@ function App() {
           const msg = payload.message;
           const currentActive = activeChatRef.current;
           const currentTab = activeTabRef.current;
+
+          // Use loose == to handle number/string type mismatches from different DB drivers
+          // eslint-disable-next-line eqeqeq
           const isFromActiveChat = currentActive &&
-            msg.store_id === currentActive.store_id &&
-            msg.customer_id === currentActive.customer_id;
+            // eslint-disable-next-line eqeqeq
+            msg.store_id == currentActive.store_id &&
+            // eslint-disable-next-line eqeqeq
+            msg.customer_id == currentActive.customer_id;
+
+          console.log('[WS] Message received:', {
+            msg_store_id: msg.store_id, msg_customer_id: msg.customer_id,
+            active_store_id: currentActive?.store_id, active_customer_id: currentActive?.customer_id,
+            currentTab, isFromActiveChat
+          });
 
           if (isFromActiveChat && currentTab === 'chats') {
             setChatHistory((prev) => {
-              // If real ID already exists, skip
               if (prev.some(m => m.id === msg.id)) return prev;
-              // Replace matching optimistic message (same sender + text) with the confirmed one
               const optimisticIdx = msg.sender_role === 'Seller'
                 ? prev.findIndex(m => String(m.id).startsWith('optimistic_') && m.message === msg.message && m.sender_role === 'Seller')
                 : -1;
