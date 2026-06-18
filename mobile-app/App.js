@@ -171,16 +171,16 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
 </html>`;
 };
 
-// Local API URL (Dynamic packager host IP resolution with fallback to Mac local IP)
-const getHostIp = () => {
+// Resolve API base URL:
+// - In production/preview EAS builds: use EXPO_PUBLIC_API_URL set in eas.json env
+// - In local Expo Go / development: derive the packager host IP dynamically
+const getDevApiUrl = () => {
   const hostUri = Constants.expoConfig?.hostUri || '';
-  if (hostUri) {
-    return hostUri.split(':')[0];
-  }
-  return '10.48.82.24';
+  const ip = hostUri ? hostUri.split(':')[0] : 'localhost';
+  return `http://${ip}:3000/api`;
 };
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${getHostIp()}:3000/api`;
+const API_URL = process.env.EXPO_PUBLIC_API_URL || getDevApiUrl();
 
 // Play satisfying coin sound and trigger vibration feedback
 const playSoundAndHaptic = async (type) => {
