@@ -40,6 +40,8 @@ function App() {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('adminUser')));
   const [view, setView] = useState(token ? 'app' : 'landing');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Auth state
   const [email, setEmail] = useState('');
@@ -849,7 +851,24 @@ function App() {
             <button className="btn-landing-login" onClick={() => { setForgotPasswordStep('login'); setView('login'); }}>MyStore login</button>
             <button className="btn-landing-download" onClick={() => setShowAppDownloadModal(true)}>Download app</button>
           </div>
+          {/* Mobile hamburger */}
+          <button className="landing-hamburger" onClick={() => setMobileNavOpen(v => !v)} aria-label="Toggle menu">
+            <span className={`ham-bar ${mobileNavOpen ? 'open' : ''}`} />
+            <span className={`ham-bar ${mobileNavOpen ? 'open' : ''}`} />
+            <span className={`ham-bar ${mobileNavOpen ? 'open' : ''}`} />
+          </button>
         </header>
+
+        {/* Mobile nav drawer */}
+        {mobileNavOpen && (
+          <div className="landing-mobile-nav">
+            <a href="#why-use" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>About</a>
+            <a href="#solutions" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>Solutions</a>
+            <a href="#join" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>Impact</a>
+            <button className="btn-landing-login mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setForgotPasswordStep('login'); setView('login'); }}>MyStore login</button>
+            <button className="btn-landing-download mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setShowAppDownloadModal(true); }}>Download app</button>
+          </div>
+        )}
 
         {/* Hero Section */}
         <section className="landing-hero">
@@ -1253,7 +1272,10 @@ function App() {
 
   return (
     <div className="app-container">
-      <aside className="sidebar">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '1rem 0.5rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.2rem' }}>
             {user?.logo ? (
@@ -1261,32 +1283,33 @@ function App() {
             ) : (
               <img src="/favicon.png" alt="FoodAway Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'contain', flexShrink: 0 }} />
             )}
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <span className="sidebar-logo" style={{ fontSize: '1.35rem', fontWeight: '800', lineHeight: '1.1', margin: 0, padding: 0 }}>FoodAway</span>
               <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '2px' }}>Admin Portal</span>
             </div>
+            <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)} aria-label="Close menu">✕</button>
           </div>
           <p style={{ paddingLeft: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '2rem' }}>Role: {user?.role}</p>
         </div>
 
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>Dashboard</div>
+          <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); }}>Dashboard</div>
           {user?.role !== 'SuperAdmin' && (
             <>
-              <div className={`nav-item ${activeTab === 'stores' ? 'active' : ''}`} onClick={() => setActiveTab('stores')}>Store Management</div>
-              <div className={`nav-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => setActiveTab('orders')}>Order Management</div>
-              <div className={`nav-item ${activeTab === 'reviews' ? 'active' : ''}`} onClick={() => setActiveTab('reviews')}>Customer Reviews</div>
-              <div className={`nav-item ${activeTab === 'chats' ? 'active' : ''}`} onClick={() => setActiveTab('chats')}>Chat Support</div>
+              <div className={`nav-item ${activeTab === 'stores' ? 'active' : ''}`} onClick={() => { setActiveTab('stores'); setSidebarOpen(false); }}>Store Management</div>
+              <div className={`nav-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => { setActiveTab('orders'); setSidebarOpen(false); }}>Order Management</div>
+              <div className={`nav-item ${activeTab === 'reviews' ? 'active' : ''}`} onClick={() => { setActiveTab('reviews'); setSidebarOpen(false); }}>Customer Reviews</div>
+              <div className={`nav-item ${activeTab === 'chats' ? 'active' : ''}`} onClick={() => { setActiveTab('chats'); setSidebarOpen(false); }}>Chat Support</div>
             </>
           )}
           {user?.role === 'SellersAdmin' && (
-            <div className={`nav-item ${activeTab === 'staff' ? 'active' : ''}`} onClick={() => setActiveTab('staff')}>Staff Management</div>
+            <div className={`nav-item ${activeTab === 'staff' ? 'active' : ''}`} onClick={() => { setActiveTab('staff'); setSidebarOpen(false); }}>Staff Management</div>
           )}
           {user?.role === 'SuperAdmin' && (
             <>
-              <div className={`nav-item ${activeTab === 'superadmin' ? 'active' : ''}`} onClick={() => setActiveTab('superadmin')}>Platform Users</div>
-              <div className={`nav-item ${activeTab === 'appreviews' ? 'active' : ''}`} onClick={() => setActiveTab('appreviews')}>App Reviews</div>
+              <div className={`nav-item ${activeTab === 'superadmin' ? 'active' : ''}`} onClick={() => { setActiveTab('superadmin'); setSidebarOpen(false); }}>Platform Users</div>
+              <div className={`nav-item ${activeTab === 'appreviews' ? 'active' : ''}`} onClick={() => { setActiveTab('appreviews'); setSidebarOpen(false); }}>App Reviews</div>
             </>
           )}
           {user?.role !== 'SuperAdmin' && (
@@ -1310,6 +1333,17 @@ function App() {
       </aside>
 
       <main className="main-content">
+        {/* Mobile top bar */}
+        <div className="mobile-topbar">
+          <button className="mobile-hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+            <span className="ham-bar" />
+            <span className="ham-bar" />
+            <span className="ham-bar" />
+          </button>
+          <span style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-primary)' }}>FoodAway Admin</span>
+          <div style={{ width: 40 }} />
+        </div>
+
         {activeTab === 'dashboard' && (
           <div className="animate-fade-in">
 
@@ -1327,7 +1361,7 @@ function App() {
                   </>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <div className="portal-header-actions">
                 {user?.role === 'SuperAdmin' && (
                   <select
                     value={selectedTenantId}
@@ -1381,7 +1415,7 @@ function App() {
             </header>
 
             {/* Sub-tab nav */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', background: 'var(--bg-secondary)', padding: '6px', borderRadius: '12px', width: 'fit-content', border: '1px solid var(--border-color)' }}>
+            <div className="sub-tab-bar">
               {[
                 { key: 'stores', label: 'Stores', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg> },
                 { key: 'bags', label: 'Surprise Bags', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg> },
@@ -1408,7 +1442,7 @@ function App() {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
                   <button className="btn-primary" onClick={() => { setEditingStore(null); setNewStoreName(''); setNewStoreAddress(''); setNewStoreImage(null); setShowStoreModal(true); }}>+ Add Store</button>
                 </div>
-                <div className="glass-card" style={{ padding: '0' }}>
+                <div className="glass-card portal-table" style={{ padding: '0' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
@@ -1461,7 +1495,7 @@ function App() {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
                   <button className="btn-primary" onClick={() => { setEditingBag(null); setBagStoreId(''); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setShowBagModal(true); }}>+ Add Bag</button>
                 </div>
-                <div className="glass-card" style={{ padding: '0' }}>
+                <div className="glass-card portal-table" style={{ padding: '0' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
@@ -1518,7 +1552,7 @@ function App() {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
                   <button className="btn-primary" style={{ background: '#059669' }} onClick={() => { setEditingFood(null); setFoodForm({ store_id: '', name: '', price: '', original_price: '', quantity: '', description: '', category: 'Other', images: [] }); setShowFoodModal(true); }}>+ Add Food Item</button>
                 </div>
-                <div className="glass-card" style={{ padding: '0' }}>
+                <div className="glass-card portal-table" style={{ padding: '0' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
@@ -1575,8 +1609,8 @@ function App() {
 
             {/* ── STORE MODAL ── */}
             {showStoreModal && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-                <div className="glass-card" style={{ padding: '2rem', width: '500px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '16px' }}>
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
+                <div className="glass-card portal-modal">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3 style={{ margin: 0 }}>{editingStore ? 'Edit Store' : 'Add New Store'}</h3>
                     <button onClick={() => setShowStoreModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
@@ -1627,8 +1661,8 @@ function App() {
 
             {/* ── BAG MODAL ── */}
             {showBagModal && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-                <div className="glass-card" style={{ padding: '2rem', width: '520px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '16px' }}>
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
+                <div className="glass-card portal-modal">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3 style={{ margin: 0 }}>{editingBag ? 'Edit Surprise Bag' : 'Add Surprise Bag'}</h3>
                     <button onClick={() => setShowBagModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
@@ -1643,7 +1677,7 @@ function App() {
                         </select>
                       </div>
                     )}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                    <div className="portal-form-2col">
                       <div>
                         <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Original Price ({currencySymbol})</label>
                         <input type="number" step="0.01" value={editingBag ? editingBag.original_price || '' : bagOriginalPrice} onChange={e => editingBag ? setEditingBag({ ...editingBag, original_price: e.target.value }) : setBagOriginalPrice(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
@@ -1673,7 +1707,7 @@ function App() {
                           );
                         })}
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div className="portal-form-2col">
                         <div>
                           <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>From</label>
                           <input type="time" value={editingBag ? (editingBag._pickupFrom || '18:00') : pickupFrom}
@@ -1727,8 +1761,8 @@ function App() {
 
             {/* ── FOOD MODAL ── */}
             {showFoodModal && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-                <div className="glass-card" style={{ padding: '2rem', width: '540px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '16px' }}>
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
+                <div className="glass-card portal-modal">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3 style={{ margin: 0 }}>{editingFood ? 'Edit Food Item' : 'Add Food Item'}</h3>
                     <button onClick={() => setShowFoodModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
@@ -1821,7 +1855,7 @@ function App() {
         {activeTab === 'staff' && user?.role === 'SellersAdmin' && (
           <div className="animate-fade-in">
             <header className="header"><h1 className="header-title">Staff Management</h1></header>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
+            <div className="portal-section-grid">
               <div className="glass-card" style={{ padding: '1.5rem', height: 'fit-content' }}>
                 <h3 style={{ marginBottom: '1.5rem' }}>Add New Staff</h3>
                 <form onSubmit={async (e) => {
@@ -1861,7 +1895,7 @@ function App() {
               <h1 className="header-title">SuperAdmin Panel</h1>
             </header>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
+            <div className="portal-section-grid">
               <div className="glass-card" style={{ padding: '1.5rem', height: 'fit-content' }}>
                 <h3 style={{ marginBottom: '1.5rem' }}>Register Seller Account</h3>
                 <form onSubmit={handleCreateUser}>
@@ -1982,7 +2016,7 @@ function App() {
 
             <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
               <h3 style={{ marginBottom: '1.2rem' }}>Filters</h3>
-              <div style={{ display: 'flex', gap: '1.5rem' }}>
+              <div className="portal-filter-row">
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Filter by Store</label>
                   <select
@@ -2087,7 +2121,7 @@ function App() {
 
             <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
               <h3 style={{ marginBottom: '1.2rem' }}>Filters</h3>
-              <div style={{ display: 'flex', gap: '1.5rem' }}>
+              <div className="portal-filter-row">
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Filter by Store</label>
                   <select
@@ -2127,12 +2161,13 @@ function App() {
                   .filter(o => !orderStoreFilter || o.store_name === orderStoreFilter)
                   .filter(o => !orderPaymentFilter || o.payment_method.toLowerCase() === orderPaymentFilter.toLowerCase())
                   .map(o => (
-                    <div key={o.id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+                    <div key={o.id} className="glass-card" style={{ padding: '1.5rem' }}>
+                      <div className="portal-order-card">
                       <div style={{ width: '48px', height: '48px', borderRadius: '24px', backgroundColor: '#EFF6FF', color: '#1D4ED8', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '1.1rem', flexShrink: 0 }}>
                         #{o.id}
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.8rem' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="portal-order-header">
                           <div>
                             <strong style={{ fontSize: '1.15rem', display: 'block', color: 'var(--text-primary)' }}>{o.store_name}</strong>
                             <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
@@ -2175,6 +2210,7 @@ function App() {
                           </div>
                         </div>
                       </div>
+                      </div>
                     </div>
                   ))
               )}
@@ -2183,14 +2219,14 @@ function App() {
         )}
 
         {activeTab === 'chats' && (
-          <div className="animate-fade-in" style={{ height: 'calc(100vh - 6rem)', display: 'flex', flexDirection: 'column' }}>
+          <div className="animate-fade-in chat-page-wrapper">
             <header className="header" style={{ marginBottom: '1.5rem', flexShrink: 0 }}>
               <h1 className="header-title">Customer Live Chat Support</h1>
             </header>
 
-            <div style={{ display: 'flex', flex: 1, gap: '2rem', minHeight: 0 }}>
+            <div className="chat-split">
               {/* Left sidebar chats list */}
-              <div className="glass-card" style={{ width: '340px', display: 'flex', flexDirection: 'column', padding: '1.2rem', minHeight: 0 }}>
+              <div className="glass-card chat-sidebar">
                 <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>Active Conversations</h3>
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {chatsList.length === 0 ? (
