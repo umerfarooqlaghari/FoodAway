@@ -24,7 +24,7 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Routes
 app.get('/', async (req, res) => {
-  res.json({ message: 'Welcome to the TakeAway API!' });
+  res.json({ message: 'Welcome to the FoodAway API!' });
 });
 
 app.get('/health', async (req, res) => {
@@ -70,11 +70,11 @@ app.post('/api/auth/login', async (req, res) => {
     // Send login notification email asynchronously
     sendEmail({
       to: user.email,
-      subject: 'New Login Alert - GoodToGo 🍩',
+      subject: 'New Login Alert - FoodAway 🍩',
       html: `<p>Hi ${user.name},</p>
-             <p>A new login was detected on your GoodToGo account at <strong>${new Date().toLocaleString()}</strong>.</p>
+             <p>A new login was detected on your FoodAway account at <strong>${new Date().toLocaleString()}</strong>.</p>
              <p>If this was you, you can safely ignore this email. Otherwise, please secure your account immediately.</p>`,
-      text: `Hi ${user.name}, A new login was detected on your GoodToGo account at ${new Date().toLocaleString()}.`
+      text: `Hi ${user.name}, A new login was detected on your FoodAway account at ${new Date().toLocaleString()}.`
     }).catch(err => console.error('Failed to send login alert email:', err.message));
 
     res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, logo: user.logo, tenant_id: user.tenant_id } });
@@ -121,12 +121,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Send email with OTP
     await sendEmail({
       to: email,
-      subject: 'GoodToGo Password Reset OTP 🔑',
+      subject: 'FoodAway Password Reset OTP 🔑',
       html: `<p>Hi ${user.name || 'User'},</p>
              <p>You requested a password reset. Your OTP verification code is:</p>
              <h2 style="font-size: 24px; letter-spacing: 2px; color: #EA580C; font-family: monospace;">${otp}</h2>
              <p>This code is valid for <strong>2 minutes</strong>. If you did not request this reset, please ignore this email.</p>`,
-      text: `Hi, your GoodToGo password reset OTP is ${otp}. Valid for 2 minutes.`
+      text: `Hi, your FoodAway password reset OTP is ${otp}. Valid for 2 minutes.`
     }).catch(mailErr => {
       console.error('Mail sending failed during password reset:', mailErr.message);
     });
@@ -624,7 +624,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       
       sendEmail({
         to: customer.email,
-        subject: 'Your GoodToGo Order Confirmation 🍩',
+        subject: 'Your FoodAway Order Confirmation 🍩',
         html: `<p>Hi ${customer.name},</p>
                <p>Thank you for rescuing food! We have received your order.</p>
                <h3>Order Details:</h3>
@@ -815,7 +815,7 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
     for (const customer of inactiveUsers) {
       sendToUser(customer.id, {
         type: 'inactivity_reminder',
-        message: `We miss you, ${customer.name}! 🍩 Save 20% on your next surplus rescue bag with code GoodToGo20.`
+        message: `We miss you, ${customer.name}! 🍩 Save 20% on your next surplus rescue bag with code FoodAway20.`
       });
 
       // Send email using AWS SES
@@ -824,9 +824,9 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
           to: customer.email,
           subject: `We miss you, ${customer.name}! 🍩`,
           html: `<p>Hi ${customer.name},</p>
-                 <p>We miss you! Save 20% on your next surplus rescue bag with code <strong>GoodToGo20</strong>.</p>
+                 <p>We miss you! Save 20% on your next surplus rescue bag with code <strong>FoodAway20</strong>.</p>
                  <p>Help us reduce food waste and save delicious treats today!</p>`,
-          text: `Hi ${customer.name}, We miss you! Save 20% on your next surplus rescue bag with code GoodToGo20.`
+          text: `Hi ${customer.name}, We miss you! Save 20% on your next surplus rescue bag with code FoodAway20.`
         });
       } catch (emailErr) {
         console.error(`Failed to send inactivity email to ${customer.email}:`, emailErr.message);

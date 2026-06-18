@@ -138,7 +138,7 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
   <div class="receipt">
     <div class="hdr">
       <div class="check">✓</div>
-      <div class="brand">GoodToGo</div>
+      <div class="brand">FoodAway</div>
       <div class="confirmed">Booking Confirmed</div>
       <div class="ref-pill"><span class="ref-text">${orderRef}</span></div>
     </div>
@@ -163,7 +163,7 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
       </div>
     </div>
     <div class="footer-area">
-      <div class="footer-txt"><span class="leaf">🌿</span> Thank you for rescuing food &amp; reducing waste<br>GoodToGo © 2025 · Rescue Food · Save Money · Help the Planet</div>
+      <div class="footer-txt"><span class="leaf">🌿</span> Thank you for rescuing food &amp; reducing waste<br>FoodAway © 2025 · Rescue Food · Save Money · Help the Planet</div>
     </div>
   </div>
 </div>
@@ -477,7 +477,7 @@ function ChatProvider({ children }) {
           playSoundAndHaptic('success');
           setToastNotification({
             type: 'inactivity_reminder',
-            storeName: 'GoodToGo Rewards',
+            storeName: 'FoodAway Rewards',
             message: payload.message
           });
           triggerLocalPushNotification(
@@ -903,7 +903,7 @@ function GlobalReceiptModal() {
       const html = generateReceiptHTML(receiptModalData, currencySymbol);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save GoodToGo Receipt', UTI: 'com.adobe.pdf' });
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save FoodAway Receipt', UTI: 'com.adobe.pdf' });
       } else {
         Alert.alert('Receipt Saved', 'Your receipt has been saved to your device.');
       }
@@ -944,7 +944,7 @@ function GlobalReceiptModal() {
               <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}>
                 <Ionicons name="checkmark" size={30} color="white" />
               </View>
-              <Text style={{ fontSize: 26, fontWeight: '900', color: 'white', letterSpacing: -0.5 }}>GoodToGo</Text>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: 'white', letterSpacing: -0.5 }}>FoodAway</Text>
               <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 }}>Booking Confirmed</Text>
               <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8, marginTop: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
                 <Text style={{ color: 'white', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 }}>{orderRef}</Text>
@@ -1041,7 +1041,7 @@ function GlobalReceiptModal() {
             {/* Footer */}
             <View style={{ backgroundColor: '#F8FAFC', paddingVertical: 20, paddingHorizontal: 24, alignItems: 'center' }}>
               <Text style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', lineHeight: 18 }}>
-                🌿 Thank you for rescuing food & reducing waste{'\n'}GoodToGo © 2025
+                🌿 Thank you for rescuing food & reducing waste{'\n'}FoodAway © 2025
               </Text>
             </View>
           </View>
@@ -1191,7 +1191,7 @@ function LandingScreen({ navigation }) {
             <Text style={{ fontSize: 40, color: '#111827', fontWeight: '300' }}>×</Text>
           </TouchableOpacity>
 
-          <Text style={{ fontSize: 32, fontWeight: '800', color: '#EA580C', marginBottom: 60 }}>TakeAway Menu</Text>
+          <Text style={{ fontSize: 32, fontWeight: '800', color: '#EA580C', marginBottom: 60 }}>FoodAway Menu</Text>
 
           <TouchableOpacity
             style={{ backgroundColor: '#111827', paddingVertical: 18, paddingHorizontal: 60, borderRadius: 30, marginBottom: 20, width: 250, alignItems: 'center' }}
