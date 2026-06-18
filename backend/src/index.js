@@ -1139,7 +1139,7 @@ const initWebSockets = (httpServer) => {
             addClientConnection(userKey, ws);
             clientKeys.add(userKey);
 
-            if (currentUser.role === 'SuperAdmin' || currentUser.role === 'SellersAdmin') {
+            if (currentUser.role === 'SuperAdmin' || currentUser.role === 'SellersAdmin' || currentUser.role === 'SellersStaff') {
               const sellerKey = 'sellers';
               addClientConnection(sellerKey, ws);
               clientKeys.add(sellerKey);

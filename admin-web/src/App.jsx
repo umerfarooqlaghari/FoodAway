@@ -90,6 +90,7 @@ function App() {
   const reconnectAttemptsRef = useRef(0);
   const activeTabRef = useRef('dashboard');
   const isTypingRef = useRef(false);
+  const chatEndRef = useRef(null);
 
   // Store form state
   const [newStoreName, setNewStoreName] = useState('');
@@ -158,6 +159,7 @@ function App() {
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [showBagModal, setShowBagModal] = useState(false);
   const [showFoodModal, setShowFoodModal] = useState(false);
+  const [showAppDownloadModal, setShowAppDownloadModal] = useState(false);
 
   // Food Items state
   const [foodItems, setFoodItems] = useState([]);
@@ -204,6 +206,13 @@ function App() {
   useEffect(() => {
     activeChatRef.current = activeChat;
   }, [activeChat]);
+
+  // Auto-scroll chat to bottom whenever messages or typing indicator change
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory, isCustomerTyping]);
 
   useEffect(() => {
     activeTabRef.current = activeTab;
@@ -439,10 +448,21 @@ function App() {
 
           if (isFromActiveChat && currentTab === 'chats') {
             setChatHistory((prev) => {
+              // If real ID already exists, skip
               if (prev.some(m => m.id === msg.id)) return prev;
+              // Replace matching optimistic message (same sender + text) with the confirmed one
+              const optimisticIdx = msg.sender_role === 'Seller'
+                ? prev.findIndex(m => String(m.id).startsWith('optimistic_') && m.message === msg.message && m.sender_role === 'Seller')
+                : -1;
+              if (optimisticIdx !== -1) {
+                const updated = [...prev];
+                updated[optimisticIdx] = msg;
+                return updated;
+              }
               return [...prev, msg];
             });
             markWebChatAsRead(msg.store_id, msg.customer_id);
+            fetchActiveChats();
           } else {
             setToastNotification({
               customerName: msg.customer_name || "Customer Support",
@@ -554,6 +574,17 @@ function App() {
     };
 
     if (wsRef.current.readyState === WebSocket.OPEN) {
+      // Optimistically append the message so it shows instantly, before the WS echo
+      const optimisticMsg = {
+        id: `optimistic_${Date.now()}`,
+        store_id: activeChat.store_id,
+        customer_id: activeChat.customer_id,
+        sender_role: 'Seller',
+        message: chatInput.trim(),
+        is_read: true,
+        created_at: new Date().toISOString(),
+      };
+      setChatHistory(prev => [...prev, optimisticMsg]);
       wsRef.current.send(JSON.stringify(msgPayload));
       setChatInput('');
       sendTypingStatus(false);
@@ -785,10 +816,7 @@ function App() {
           </nav>
           <div className="landing-actions">
             <button className="btn-landing-login" onClick={() => { setForgotPasswordStep('login'); setView('login'); }}>MyStore login</button>
-            <button className="btn-landing-download" onClick={() => {
-              const element = document.getElementById("join");
-              if (element) element.scrollIntoView({ behavior: 'smooth' });
-            }}>Download app</button>
+            <button className="btn-landing-download" onClick={() => setShowAppDownloadModal(true)}>Download app</button>
           </div>
         </header>
 
@@ -811,10 +839,7 @@ function App() {
                 FoodAway connects you with local stores, cafes, and bakeries offering delicious surplus food at unbeatable prices. Rescue meals and help protect the planet.
               </p>
               <div className="landing-hero-btns">
-                <button className="btn-hero-orange" onClick={() => {
-                  const element = document.getElementById("join");
-                  if (element) element.scrollIntoView({ behavior: 'smooth' });
-                }}>Download the app</button>
+                <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Download the app</button>
                 <button className="btn-hero-outline" onClick={() => {
                   const element = document.getElementById("solutions");
                   if (element) element.scrollIntoView({ behavior: 'smooth' });
@@ -929,7 +954,7 @@ function App() {
             <h2 className="join-title">Join over 180,000 businesses fighting food waste with us</h2>
             <p className="join-subtitle">Download the FoodAway app today and start saving food or listing your surplus.</p>
             <div className="join-btns">
-              <button className="btn-hero-orange" onClick={() => alert("FoodAway app is available on iOS and Android App Stores!")}>Get the App</button>
+              <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Get the App</button>
               <button className="btn-hero-outline" onClick={() => { setForgotPasswordStep('login'); setView('login'); }}>Business Sign Up</button>
             </div>
           </div>
@@ -981,6 +1006,43 @@ function App() {
             </div>
           </div>
         </footer>
+
+        {showAppDownloadModal && (
+          <div className="app-modal-overlay" onClick={() => setShowAppDownloadModal(false)}>
+            <div className="app-modal-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="app-modal-title" aria-modal="true">
+              <button type="button" className="app-modal-close" onClick={() => setShowAppDownloadModal(false)} aria-label="Close">
+                ×
+              </button>
+
+              <div className="app-modal-header">
+                <div className="app-modal-icon-wrap">
+                  <img src="/favicon.png" alt="FoodAway" />
+                </div>
+                <span className="app-modal-badge">Coming Soon</span>
+                <h3 id="app-modal-title" className="app-modal-title">Mobile App In Development</h3>
+              </div>
+
+              <p className="app-modal-text">
+                Our mobile application is under development and will soon be available on iOS and Android. Sorry for the inconvenience.
+              </p>
+
+              <div className="app-modal-stores">
+                <div className="app-modal-store-pill">
+                  <span className="app-modal-store-label">Coming to</span>
+                  <span className="app-modal-store-name">App Store</span>
+                </div>
+                <div className="app-modal-store-pill">
+                  <span className="app-modal-store-label">Coming to</span>
+                  <span className="app-modal-store-name">Google Play</span>
+                </div>
+              </div>
+
+              <button type="button" className="app-modal-btn" onClick={() => setShowAppDownloadModal(false)}>
+                Got it
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -2197,9 +2259,7 @@ function App() {
                     </div>
 
                     {/* Messages Timeline */}
-                    <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', background: '#FAFAFA' }} ref={el => {
-                      if (el) el.scrollTop = el.scrollHeight;
-                    }}>
+                    <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', background: '#FAFAFA' }}>
                       {chatHistory.map(msg => {
                         const isSeller = msg.sender_role === 'Seller';
                         return (
@@ -2240,6 +2300,7 @@ function App() {
                           Customer is typing...
                         </div>
                       )}
+                      <div ref={chatEndRef} style={{ height: 0 }} />
                     </div>
 
                     {/* Message typing area */}
