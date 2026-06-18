@@ -13,6 +13,7 @@ import DsaDisclosure from './pages/DsaDisclosure';
 import DoNotSell from './pages/DoNotSell';
 import FoodWasteSources from './pages/FoodWasteSources';
 import Status from './pages/Status';
+import CustomerPage from './pages/CustomerPage';
 
 // Note: Replace with actual MapBox token in production
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
@@ -889,6 +890,7 @@ function App() {
                 FoodAway connects you with local stores, cafes, and bakeries offering delicious surplus food at unbeatable prices. Rescue meals and help protect the planet.
               </p>
               <div className="landing-hero-btns">
+                <button className="btn-hero-outline" onClick={() => setView('customer')}>Explore Food</button>
                 <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Download the app</button>
                 <button className="btn-hero-outline" onClick={() => {
                   const element = document.getElementById("solutions");
@@ -1109,6 +1111,7 @@ function App() {
     donotsell:  <DoNotSell onBack={goHome} />,
     foodwaste:  <FoodWasteSources onBack={goHome} />,
     status:     <Status onBack={goHome} />,
+    customer:   <CustomerPage onBack={goHome} />,
   };
   if (pageRoutes[view]) return pageRoutes[view];
 

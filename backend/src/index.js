@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl } = require('./aws');
+const { generateReceiptBuffer } = require('./receipt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,7 +14,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// Initialize SQLite DB
+// Initialize database
 (async () => {
   try {
     await initDB();
@@ -37,14 +38,14 @@ const { verifyToken, requireRole, JWT_SECRET } = require('./middleware');
 
 // Authentication Routes
 app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, phone } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const assignedRole = role || 'Customers'; // Default role
-    const info = await db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(name, email, hashedPassword, assignedRole);
+    const assignedRole = role || 'Customers';
+    const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, assignedRole, phone || null);
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === '23505') {
       return res.status(400).json({ error: 'Email already exists' });
     }
     res.status(500).json({ error: err.message });
@@ -616,25 +617,51 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       });
     }
 
-    // Send order confirmation email asynchronously
-    const customer = await db.prepare('SELECT email, name FROM users WHERE id = ?').get(req.user.id);
+    // Send order confirmation email with PDF receipt asynchronously
+    const customer = await db.prepare('SELECT email, name, phone FROM users WHERE id = ?').get(req.user.id);
     if (customer && customer.email) {
-      const total = placedOrders.reduce((sum, o) => sum + (o.price * o.quantity), 0);
-      const itemsList = placedOrders.map(o => `<li>${o.quantity}x ${o.item_name} from <strong>${o.store_name}</strong> - £${o.price.toFixed(2)} each (Pickup: ${o.pickup_time})</li>`).join('');
-      
-      sendEmail({
-        to: customer.email,
+      const total     = placedOrders.reduce((sum, o) => sum + (Number(o.price) * (o.quantity || 1)), 0);
+      const itemsList = placedOrders.map(o =>
+        `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — £${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
+      ).join('');
+
+      generateReceiptBuffer(placedOrders, {
+        name:  customer.name,
+        email: customer.email,
+        phone: customer.phone || ''
+      }).then(receiptPdf => sendEmail({
+        to:      customer.email,
         subject: 'Your FoodAway Order Confirmation 🍩',
-        html: `<p>Hi ${customer.name},</p>
-               <p>Thank you for rescuing food! We have received your order.</p>
-               <h3>Order Details:</h3>
-               <ul>
-                 ${itemsList}
-               </ul>
-               <p><strong>Total Amount:</strong> £${total.toFixed(2)}</p>
-               <p>Please present this email at the store during pickup hours to collect your order.</p>`,
-        text: `Hi ${customer.name}, Thank you for rescuing food! We have received your order for: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: £${total.toFixed(2)}.`
-      }).catch(err => console.error('Failed to send order confirmation email:', err.message));
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;">
+            <div style="background:#FF5A00;padding:24px 32px;border-radius:8px 8px 0 0;">
+              <h1 style="color:#fff;margin:0;font-size:26px;">FoodAway</h1>
+              <p style="color:#ffe0cc;margin:4px 0 0;font-size:13px;">Order Confirmed ✓</p>
+            </div>
+            <div style="background:#fff;padding:24px 32px;border:1px solid #eee;border-top:none;">
+              <p style="color:#333;">Hi <strong>${customer.name}</strong>,</p>
+              <p style="color:#555;">Thank you for rescuing food! Your order has been confirmed. Your receipt is attached to this email.</p>
+              <h3 style="color:#FF5A00;border-bottom:2px solid #FF5A00;padding-bottom:6px;">Order Summary</h3>
+              <ul style="color:#333;line-height:1.8;">${itemsList}</ul>
+              <p style="font-size:18px;font-weight:bold;color:#1a1a1a;border-top:1px solid #eee;padding-top:12px;">
+                Total: <span style="color:#FF5A00;">£${total.toFixed(2)}</span>
+              </p>
+              <div style="background:#fff8f5;border:1px solid #ffe0cc;border-radius:6px;padding:14px;margin-top:16px;">
+                <p style="margin:0;color:#FF5A00;font-weight:bold;">Payment: Cash at Pickup</p>
+                <p style="margin:6px 0 0;color:#555;font-size:13px;">Present your receipt at the store when collecting your order.</p>
+              </div>
+            </div>
+            <div style="background:#f5f5f5;padding:14px 32px;text-align:center;border-radius:0 0 8px 8px;">
+              <p style="margin:0;color:#aaa;font-size:12px;">© ${new Date().getFullYear()} FoodAway — Reducing food waste, one meal at a time.</p>
+            </div>
+          </div>`,
+        text: `Hi ${customer.name}, your FoodAway order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: £${total.toFixed(2)}. Your receipt is attached.`,
+        attachments: [{
+          filename:    'FoodAway-Receipt.pdf',
+          content:     receiptPdf,
+          contentType: 'application/pdf'
+        }]
+      })).catch(err => console.error('Failed to send order confirmation email:', err.message));
     }
 
     res.json({ message: 'Order placed successfully', order_ids: orderIds });
@@ -1521,6 +1548,265 @@ app.post('/api/contact', async (req, res) => {
     res.status(500).json({ error: 'Failed to send message. Please try again or email us directly at info@alpha-devs.cloud.' });
   }
 });
+
+// ─── Public Customer Endpoints (no auth required) ──────────────────────────
+
+app.get('/api/public/stores', async (req, res) => {
+  try {
+    const stores = await db.prepare(`
+      SELECT id, name, address, lat, lng, image
+      FROM stores WHERE is_active = TRUE
+      ORDER BY name ASC
+    `).all();
+    const signed = await Promise.all(stores.map(async s => ({
+      ...s,
+      image: s.image ? await getPresignedUrl(s.image) : null
+    })));
+    res.json(signed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/public/bags', async (req, res) => {
+  try {
+    const bags = await db.prepare(`
+      SELECT b.id, b.price, b.original_price, b.description, b.images,
+             b.quantity, b.pickup_time, b.store_id,
+             s.name as store_name, s.address, s.image as store_image
+      FROM surprise_bags b
+      JOIN stores s ON b.store_id = s.id
+      WHERE b.quantity > 0 AND s.is_active = TRUE
+      ORDER BY b.id DESC
+    `).all();
+    const signed = await Promise.all(bags.map(async bag => ({
+      ...bag,
+      images: await presignImages(bag.images),
+      store_image: bag.store_image ? await getPresignedUrl(bag.store_image) : null
+    })));
+    res.json(signed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/public/food-items', async (req, res) => {
+  try {
+    const items = await db.prepare(`
+      SELECT f.id, f.name, f.description, f.price, f.original_price,
+             f.images, f.quantity, f.category, f.store_id, f.created_at,
+             s.name as store_name, s.address, s.image as store_image
+      FROM food_items f
+      JOIN stores s ON f.store_id = s.id
+      WHERE f.is_available = TRUE AND f.quantity > 0 AND s.is_active = TRUE
+      ORDER BY f.created_at DESC
+    `).all();
+    const signed = await Promise.all(items.map(async item => ({
+      ...item,
+      images: await presignImages(item.images),
+      store_image: item.store_image ? await getPresignedUrl(item.store_image) : null
+    })));
+    res.json(signed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/public/checkout', async (req, res) => {
+  const { name, email, phone, items } = req.body;
+  if (!name || !email || !phone || !items || !items.length) {
+    return res.status(400).json({ error: 'name, email, phone, and items are required' });
+  }
+
+  try {
+    // Find or create guest customer
+    let user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user) {
+      const hashed = await bcrypt.hash(`${phone}${Date.now()}`, 8);
+      const info = await db.prepare(
+        'INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)'
+      ).run(name, email, hashed, 'Customers', phone);
+      user = { id: info.lastInsertRowid, name, email, phone };
+    } else {
+      if (!user.phone && phone) {
+        await db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, user.id);
+      }
+      if (!user.name && name) {
+        await db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, user.id);
+      }
+    }
+
+    const placedOrders = [];
+    for (const cartItem of items) {
+      const { id, type, quantity = 1 } = cartItem;
+
+      if (type === 'bag') {
+        const bag = await db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
+        if (!bag || bag.quantity < quantity) continue;
+        const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(bag.store_id);
+        const orderInfo = await db.prepare(
+          'INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(bag.id, 'bag', quantity, bag.store_id, user.id, bag.price, 'Cash at Pickup');
+        await db.prepare('UPDATE surprise_bags SET quantity = quantity - ? WHERE id = ?').run(quantity, bag.id);
+        placedOrders.push({
+          id: orderInfo.lastInsertRowid,
+          type: 'bag',
+          store_name: store?.name || '',
+          store_address: store?.address || '',
+          item_name: bag.description || 'Surprise Bag',
+          quantity,
+          price: bag.price,
+          pickup_time: bag.pickup_time || 'During opening hours'
+        });
+      } else if (type === 'food') {
+        const food = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
+        if (!food || food.quantity < quantity) continue;
+        const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(food.store_id);
+        const orderInfo = await db.prepare(
+          'INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(food.id, 'food', quantity, food.store_id, user.id, food.price, 'Cash at Pickup');
+        await db.prepare('UPDATE food_items SET quantity = quantity - ? WHERE id = ?').run(quantity, food.id);
+        placedOrders.push({
+          id: orderInfo.lastInsertRowid,
+          type: 'food',
+          store_name: store?.name || '',
+          store_address: store?.address || '',
+          item_name: food.name,
+          quantity,
+          price: food.price,
+          pickup_time: food.pickup_time || 'During opening hours'
+        });
+      }
+    }
+
+    if (placedOrders.length === 0) {
+      return res.status(400).json({ error: 'No valid items could be ordered (check stock levels)' });
+    }
+
+    const total = placedOrders.reduce((s, o) => s + o.price * o.quantity, 0);
+    const orderRows = placedOrders.map(o => `
+      <tr>
+        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.item_name}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;text-align:center;">${o.quantity}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">£${(o.price * o.quantity).toFixed(2)}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.store_name}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.pickup_time}</td>
+      </tr>`).join('');
+
+    // Generate PDF receipt and send confirmation email with attachment
+    const ordersWithPayment = placedOrders.map(o => ({ ...o, payment_method: 'Cash at Pickup' }));
+    const receiptPdf = await generateReceiptBuffer(ordersWithPayment, { name, email, phone });
+
+    await sendEmail({
+      to: email,
+      subject: `Your FoodAway Order is Confirmed! 🎉 #${placedOrders.map(o => o.id).join(', #')}`,
+      attachments: [{
+        filename:    'FoodAway-Receipt.pdf',
+        content:     receiptPdf,
+        contentType: 'application/pdf'
+      }],
+      html: `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+      <body style="margin:0;padding:0;background:#f7f7f7;font-family:'Helvetica Neue',Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f7;padding:40px 0;">
+          <tr><td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+              <tr>
+                <td style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);padding:40px 40px 30px;text-align:center;">
+                  <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:700;">FoodAway</h1>
+                  <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:15px;">Order Confirmed ✓</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:32px 40px 24px;">
+                  <p style="margin:0 0 8px;color:#1a1a1a;font-size:16px;">Hi <strong>${name}</strong>,</p>
+                  <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">
+                    Your order has been placed successfully! Your <strong>PDF receipt is attached</strong> to this email.
+                    Please pay <strong>cash at pickup</strong> and present the receipt at the store.
+                  </p>
+
+                  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #f0f0f0;border-radius:10px;overflow:hidden;">
+                    <thead>
+                      <tr style="background:#fdf5ef;">
+                        <th style="padding:10px 14px;text-align:left;font-size:12px;color:#ff6b35;text-transform:uppercase;letter-spacing:0.5px;">Item</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:12px;color:#ff6b35;text-transform:uppercase;letter-spacing:0.5px;">Qty</th>
+                        <th style="padding:10px 14px;font-size:12px;color:#ff6b35;text-transform:uppercase;letter-spacing:0.5px;">Price</th>
+                        <th style="padding:10px 14px;font-size:12px;color:#ff6b35;text-transform:uppercase;letter-spacing:0.5px;">Store</th>
+                        <th style="padding:10px 14px;font-size:12px;color:#ff6b35;text-transform:uppercase;letter-spacing:0.5px;">Pickup</th>
+                      </tr>
+                    </thead>
+                    <tbody style="font-size:14px;color:#333;">
+                      ${orderRows}
+                    </tbody>
+                    <tfoot>
+                      <tr style="background:#fdf5ef;">
+                        <td colspan="2" style="padding:12px 14px;font-weight:700;color:#1a1a1a;">Total</td>
+                        <td colspan="3" style="padding:12px 14px;font-weight:700;color:#ff6b35;font-size:16px;">£${total.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+
+                  <div style="margin-top:24px;padding:16px;background:#fdf5ef;border-radius:10px;border-left:4px solid #ff6b35;">
+                    <p style="margin:0;font-size:13px;color:#555;line-height:1.6;">
+                      <strong>Reminder:</strong> Payment is <strong>cash only at pickup</strong>. Please arrive within the pickup window. Your PDF receipt is attached — save it or show it at the store.
+                    </p>
+                  </div>
+
+                  <div style="margin-top:24px;text-align:center;">
+                    <p style="font-size:12px;color:#999;margin:0;">Order Reference: <strong style="color:#ff6b35;">#${placedOrders.map(o => o.id).join(', #')}</strong></p>
+                    <p style="font-size:12px;color:#999;margin:4px 0 0;">Ordered for: ${email} · ${phone}</p>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:#1a1a1a;padding:20px 40px;text-align:center;">
+                  <p style="color:#666;font-size:12px;margin:0;">© ${new Date().getFullYear()} FoodAway — Reducing food waste, one meal at a time.</p>
+                </td>
+              </tr>
+            </table>
+          </td></tr>
+        </table>
+      </body>
+      </html>
+      `,
+      text: `Hi ${name}, your FoodAway order is confirmed! Total: £${total.toFixed(2)}. Order refs: #${placedOrders.map(o => o.id).join(', #')}. Payment: cash at pickup. Your receipt is attached.`
+    });
+
+    res.json({ success: true, orders: placedOrders, customerId: user.id });
+  } catch (err) {
+    console.error('[Guest Checkout Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/public/orders', async (req, res) => {
+  const { email, phone } = req.query;
+  if (!email || !phone) return res.status(400).json({ error: 'email and phone are required' });
+  try {
+    const user = await db.prepare('SELECT id FROM users WHERE email = ? AND phone = ?').get(email, phone);
+    if (!user) return res.json([]);
+    const orders = await db.prepare(`
+      SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+             s.name as store_name, s.address,
+             COALESCE(b.pickup_time, 'During opening hours') as pickup_time,
+             COALESCE(b.description, f.name) as item_name
+      FROM orders o
+      JOIN stores s ON o.store_id = s.id
+      LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
+      LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
+      WHERE o.customer_id = ?
+      ORDER BY o.created_at DESC
+      LIMIT 50
+    `).all(user.id);
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── End Public Endpoints ─────────────────────────────────────────────────────
 
 // Start Server only if run directly
 if (require.main === module) {

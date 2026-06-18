@@ -1,6 +1,7 @@
 const { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const { SESClient } = require('@aws-sdk/client-ses');
+const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -100,56 +101,55 @@ async function uploadImageToS3(base64OrUrl) {
   }
 }
 
+// Nodemailer transporter backed by SES (created lazily once sesClient is ready)
+let _sesTransporter = null;
+function getSesTransporter() {
+  if (!_sesTransporter && sesClient) {
+    _sesTransporter = nodemailer.createTransport({
+      SES: { ses: sesClient, aws: require('@aws-sdk/client-ses') }
+    });
+  }
+  return _sesTransporter;
+}
+
 /**
- * Sends an email using AWS SES.
- * If AWS credentials are not set or in test mode, it falls back to logging the email details.
- * 
- * @param {object} params
- * @param {string} params.to
- * @param {string} params.subject
- * @param {string} params.html
- * @param {string} params.text
+ * Sends an email using AWS SES via nodemailer.
+ * Supports optional PDF (or any) attachments.
+ *
+ * @param {object}  params
+ * @param {string}  params.to
+ * @param {string}  params.subject
+ * @param {string}  params.html
+ * @param {string}  [params.text]
+ * @param {Array}   [params.attachments]  nodemailer attachment objects
+ *   e.g. [{ filename: 'receipt.pdf', content: Buffer, contentType: 'application/pdf' }]
  * @returns {Promise<object>}
  */
-async function sendEmail({ to, subject, html, text }) {
-  if (!sesClient) {
+async function sendEmail({ to, subject, html, text, attachments = [] }) {
+  const transporter = getSesTransporter();
+
+  if (!transporter) {
     console.log(`[MOCK AWS SES] Mock send email:
-      To:      ${to}
-      From:    ${fromEmail}
-      Subject: ${subject}
-      HTML:    ${html}
-      Text:    ${text}
+      To:          ${to}
+      From:        ${fromEmail}
+      Subject:     ${subject}
+      Attachments: ${attachments.map(a => a.filename).join(', ') || 'none'}
+      HTML:        ${html?.slice(0, 120)}...
     `);
     return { MessageId: 'mock-message-id' };
   }
 
-  const command = new SendEmailCommand({
-    Source: fromEmail,
-    Destination: {
-      ToAddresses: [to]
-    },
-    Message: {
-      Subject: {
-        Data: subject,
-        Charset: 'UTF-8'
-      },
-      Body: {
-        Html: {
-          Data: html,
-          Charset: 'UTF-8'
-        },
-        Text: {
-          Data: text,
-          Charset: 'UTF-8'
-        }
-      }
-    }
-  });
-
   try {
-    const result = await sesClient.send(command);
-    console.log(`Email sent successfully via SES. MessageId: ${result.MessageId}`);
-    return result;
+    const info = await transporter.sendMail({
+      from:        fromEmail,
+      to,
+      subject,
+      html,
+      text:        text || '',
+      attachments
+    });
+    console.log(`Email sent via SES. MessageId: ${info.messageId}`);
+    return info;
   } catch (error) {
     console.error(`Failed to send email via AWS SES to ${to}:`, error);
     throw error;

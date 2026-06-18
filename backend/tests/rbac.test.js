@@ -6,8 +6,9 @@ let customerToken;
 let adminToken;
 
 beforeAll(async () => {
-  await db.exec('PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS favorites; DROP TABLE IF EXISTS chat_messages; DROP TABLE IF EXISTS reviews; DROP TABLE IF EXISTS orders; DROP TABLE IF EXISTS food_items; DROP TABLE IF EXISTS surprise_bags; DROP TABLE IF EXISTS stores; DROP TABLE IF EXISTS users; PRAGMA foreign_keys = ON;');
-  initDB();
+  if (!process.env.TEST_DATABASE_URL) throw new Error('Set TEST_DATABASE_URL to run tests safely (never use production DATABASE_URL)');
+  await db.exec('TRUNCATE TABLE favorites, chat_messages, reviews, orders, food_items, surprise_bags, stores, users RESTART IDENTITY CASCADE');
+  await initDB();
 
   // Create Customer
   await request(app).post('/api/auth/register').send({

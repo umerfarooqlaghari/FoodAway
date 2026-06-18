@@ -1291,12 +1291,17 @@ function LoginScreen({ navigation }) {
 function RegisterScreen({ navigation }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleRegister = async () => {
+    if (!phone.trim()) {
+      Alert.alert("Required", "Please enter your phone number.");
+      return;
+    }
     try {
-      await axios.post(`${API_URL}/auth/register`, { name, email, password, role: 'Customers' });
+      await axios.post(`${API_URL}/auth/register`, { name, email, password, phone: phone.trim(), role: 'Customers' });
       Alert.alert("Success", "Registered successfully! Please login.");
       navigation.navigate('Login');
     } catch (error) {
@@ -1310,8 +1315,9 @@ function RegisterScreen({ navigation }) {
         <Text style={styles.headerTitle}>Create Account</Text>
         <Text style={styles.headerSubtitle}>Join the movement against food waste.</Text>
 
-        <TextInput style={styles.input} placeholder="Name" placeholderTextColor="#94a3b8" value={name} onChangeText={setName} />
-        <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#94a3b8" value={email} onChangeText={setEmail} autoCapitalize="none" />
+        <TextInput style={styles.input} placeholder="Full Name" placeholderTextColor="#94a3b8" value={name} onChangeText={setName} />
+        <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#94a3b8" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+        <TextInput style={styles.input} placeholder="Phone Number" placeholderTextColor="#94a3b8" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingRight: 14, marginBottom: 16 }}>
           <TextInput
             style={{ flex: 1, color: '#111827', padding: 16, fontSize: 16 }}
