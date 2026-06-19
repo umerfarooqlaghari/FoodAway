@@ -1065,7 +1065,7 @@ function App() {
                       <span className="hero-announcement-badge">Coming Soon</span>
                       <h2 className="hero-announcement-title">Supermarkets on FoodAway</h2>
                       <p className="hero-announcement-lead">
-                        We are expanding beyond surplus meals to bring leading supermarkets onto the platform — premium discounts on fast-moving consumer goods, household essentials, and fresh groceries.
+                        We are expanding beyond surplus meals to bring leading supermarkets onto the platform. Premium discounts on fast-moving consumer goods, household essentials, and fresh groceries.
                       </p>
                       <div className="hero-announcement-tags">
                         <span>FMCG</span>

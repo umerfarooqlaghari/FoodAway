@@ -49,6 +49,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Rect, Circle, Path, Text as SvgText } from 'react-native-svg';
 
 const customTheme = {
   ...DefaultTheme,
@@ -1078,9 +1079,45 @@ function GlobalReceiptModal() {
 const Stack = createNativeStackNavigator();
 
 // --- Landing Screen ---
+const LANDING_ORANGE = '#FF5A00';
+
+function SupermarketPreviewIllustration({ width = 280, height = 210 }) {
+  return (
+    <Svg width={width} height={height} viewBox="0 0 480 360">
+      <Rect width="480" height="360" rx="24" fill="#FFF7ED" />
+      <Rect x="40" y="48" width="400" height="264" rx="16" fill="#FFFFFF" stroke="#FED7AA" strokeWidth="2" />
+      <Rect x="40" y="48" width="400" height="56" rx="16" fill={LANDING_ORANGE} />
+      <Rect x="40" y="88" width="400" height="16" fill={LANDING_ORANGE} />
+      <SvgText x="240" y="84" textAnchor="middle" fill="#FFFFFF" fontSize="18" fontWeight="700">SUPERMARKET</SvgText>
+      {[72, 196, 320].map((x) => (
+        <React.Fragment key={x}>
+          <Rect x={x} y="128" width="88" height="72" rx="8" fill="#FFF7ED" stroke={LANDING_ORANGE} strokeWidth="1.5" />
+          <Rect x={x + 8} y="136" width="72" height="12" rx="3" fill={LANDING_ORANGE} opacity="0.85" />
+          <Rect x={x + 8} y="154" width="56" height="8" rx="2" fill="#FDBA74" />
+          <Rect x={x + 8} y="168" width="64" height="8" rx="2" fill="#FDBA74" />
+          <Rect x={x + 8} y="182" width="48" height="8" rx="2" fill="#FDBA74" />
+        </React.Fragment>
+      ))}
+      <Rect x="72" y="224" width="336" height="56" rx="10" fill="#FFF7ED" stroke="#FED7AA" strokeWidth="1.5" />
+      {[88, 148, 208, 268, 328].map((x, i) => (
+        <Rect key={x} x={x} y="240" width="48" height="24" rx="4" fill={LANDING_ORANGE} opacity={0.2 + i * 0.15} />
+      ))}
+      <SvgText x="240" y="258" textAnchor="middle" fill="#9A3412" fontSize="11" fontWeight="600">FMCG · HOUSEHOLD · GROCERY</SvgText>
+      <Circle cx="400" cy="280" r="28" fill={LANDING_ORANGE} />
+      <Path d="M382 280 L396 280 L396 268 L408 280 L396 292 L396 280" fill="#FFFFFF" />
+      <Rect x="56" y="296" width="120" height="28" rx="14" fill={LANDING_ORANGE} />
+      <SvgText x="116" y="315" textAnchor="middle" fill="#FFFFFF" fontSize="11" fontWeight="700">PREMIUM DISCOUNTS</SvgText>
+    </Svg>
+  );
+}
+
 function LandingScreen({ navigation }) {
   const [menuVisible, setMenuVisible] = useState(false);
+  const [showComingSoon, setShowComingSoon] = useState(false);
   const scrollRef = React.useRef(null);
+  const screenWidth = Dimensions.get('window').width;
+  const illustrationWidth = screenWidth - 48;
+  const illustrationHeight = illustrationWidth * (360 / 480);
 
   useEffect(() => {
     let scrollPos = 0;
@@ -1088,38 +1125,104 @@ function LandingScreen({ navigation }) {
       if (scrollRef.current) {
         scrollPos += 2;
         scrollRef.current.scrollTo({ x: scrollPos, animated: false });
-        // Reset to 0 if we scrolled too far (rough estimate)
         if (scrollPos > 1000) scrollPos = 0;
       }
     }, 50);
     return () => clearInterval(interval);
   }, []);
 
+  const renderHeader = () => (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 10, alignItems: 'center' }}>
+      <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 }}>Take It All Away</Text>
+      <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ padding: 8 }}>
+        <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', marginBottom: 5, borderRadius: 2 }} />
+        <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', marginBottom: 5, borderRadius: 2 }} />
+        <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', borderRadius: 2 }} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderMenuOverlay = () => menuVisible ? (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 100, justifyContent: 'center', alignItems: 'center' }}>
+      <TouchableOpacity style={{ position: 'absolute', top: 60, right: 30 }} onPress={() => setMenuVisible(false)}>
+        <Text style={{ fontSize: 40, color: '#111827', fontWeight: '300' }}>×</Text>
+      </TouchableOpacity>
+      <Text style={{ fontSize: 32, fontWeight: '800', color: '#EA580C', marginBottom: 60 }}>FoodAway Menu</Text>
+      <TouchableOpacity
+        style={{ backgroundColor: '#111827', paddingVertical: 18, paddingHorizontal: 60, borderRadius: 30, marginBottom: 20, width: 250, alignItems: 'center' }}
+        onPress={() => { setMenuVisible(false); navigation.navigate('Login'); }}>
+        <Text style={{ color: 'white', fontSize: 20, fontWeight: '700' }}>Sign In</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={{ backgroundColor: '#F3F4F6', paddingVertical: 18, paddingHorizontal: 60, borderRadius: 30, width: 250, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }}
+        onPress={() => { setMenuVisible(false); navigation.navigate('Register'); }}>
+        <Text style={{ color: '#111827', fontSize: 20, fontWeight: '700' }}>Register</Text>
+      </TouchableOpacity>
+    </View>
+  ) : null;
+
+  if (showComingSoon) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#EA580C' }}>
+        <SafeAreaView style={{ flex: 1 }}>
+          {renderHeader()}
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+            <View style={{ marginHorizontal: 16, marginTop: 12, backgroundColor: '#FFF7ED', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }}>
+              <View style={{ height: 5, backgroundColor: LANDING_ORANGE }} />
+              <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 32 }}>
+                <TouchableOpacity
+                  onPress={() => setShowComingSoon(false)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14, marginBottom: 20 }}>
+                  <Ionicons name="chevron-back" size={16} color={LANDING_ORANGE} />
+                  <Text style={{ color: LANDING_ORANGE, fontWeight: '700', fontSize: 13 }}>Back</Text>
+                </TouchableOpacity>
+                <View style={{ alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14, marginBottom: 14 }}>
+                  <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 11, letterSpacing: 1.2 }}>COMING SOON</Text>
+                </View>
+                <Text style={{ fontSize: 32, fontWeight: '900', color: '#111827', lineHeight: 38, letterSpacing: -0.5 }}>
+                  Supermarkets on FoodAway
+                </Text>
+                <Text style={{ fontSize: 15, color: '#4B5563', lineHeight: 23, marginTop: 14 }}>
+                  We are expanding beyond surplus meals to bring leading supermarkets onto the platform. Premium discounts on fast-moving consumer goods, household essentials, and fresh groceries.
+                </Text>
+                
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+                  <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 14, padding: 14 }}>
+                    <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 16 }}>Up to 50%</Text>
+                    <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 12, marginTop: 4 }}>off surplus stock</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 14, padding: 14 }}>
+                    <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 16 }}>One app</Text>
+                    <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 12, marginTop: 4 }}>food + FMCG rescue</Text>
+                  </View>
+                </View>
+                <View style={{ alignItems: 'center', marginTop: 24, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 20, padding: 12 }}>
+                  <SupermarketPreviewIllustration width={illustrationWidth - 48} height={(illustrationWidth - 48) * (360 / 480)} />
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+        {renderMenuOverlay()}
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#EA580C' }}>
-
-      {/* Header */}
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 10, alignItems: 'center' }}>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 }}>Take It All Away</Text>
-          <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ padding: 8 }}>
-            <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', marginBottom: 5, borderRadius: 2 }} />
-            <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', marginBottom: 5, borderRadius: 2 }} />
-            <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', borderRadius: 2 }} />
-          </TouchableOpacity>
-        </View>
+        {renderHeader()}
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
           {/* Hero Section */}
-          <View style={{ paddingHorizontal: 24, marginTop: 20, flexDirection: 'row', minHeight: 320 }}>
-            {/* Hero Image overflowing */}
-            <View style={{ position: 'absolute', right: -120, top: -20, opacity: 1, zIndex: -1 }}>
+          <View style={{ paddingHorizontal: 24, marginTop: 20, minHeight: 320 }}>
+            <View style={{ position: 'absolute', right: -120, top: -20, zIndex: -1 }}>
               <Image
                 source={require('./assets/images/Takeaway_landing.png')}
                 style={{ width: 400, height: 500, resizeMode: 'contain' }}
               />
             </View>
-            <View style={{ flex: 1, zIndex: 10, paddingTop: 40 }}>
+            <View style={{ paddingTop: 40 }}>
               <Text style={{ fontSize: 42, fontWeight: '800', color: '#FFFFFF', lineHeight: 50, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
                 Delicious Treats
               </Text>
@@ -1141,8 +1244,6 @@ function LandingScreen({ navigation }) {
           <View style={{ marginTop: 40 }}>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 16, paddingLeft: 24 }}>Top Brands</Text>
             <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 24 }}>
-
-              {/* Brand 1 */}
               <View style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', marginRight: 16 }}>
                 <Image source={require('./assets/images/logo_dunkin.png')} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
                 <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', justifyContent: 'flex-end', padding: 12 }}>
@@ -1150,8 +1251,6 @@ function LandingScreen({ navigation }) {
                   <Text style={{ color: '#D1D5DB', fontSize: 12 }}>1.2 km away</Text>
                 </LinearGradient>
               </View>
-
-              {/* Brand 2 */}
               <View style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', marginRight: 16 }}>
                 <Image source={require('./assets/images/logo_mcdonalds.png')} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
                 <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', justifyContent: 'flex-end', padding: 12 }}>
@@ -1159,8 +1258,6 @@ function LandingScreen({ navigation }) {
                   <Text style={{ color: '#D1D5DB', fontSize: 12 }}>0.8 km away</Text>
                 </LinearGradient>
               </View>
-
-              {/* Brand 3 */}
               <View style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', marginRight: 16 }}>
                 <Image source={require('./assets/images/logo_kfc.png')} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
                 <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', justifyContent: 'flex-end', padding: 12 }}>
@@ -1168,8 +1265,6 @@ function LandingScreen({ navigation }) {
                   <Text style={{ color: '#D1D5DB', fontSize: 12 }}>2.1 km away</Text>
                 </LinearGradient>
               </View>
-
-              {/* Brand 4 */}
               <View style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', marginRight: 16 }}>
                 <Image source={require('./assets/images/logo_pita.png')} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
                 <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', justifyContent: 'flex-end', padding: 12 }}>
@@ -1177,37 +1272,42 @@ function LandingScreen({ navigation }) {
                   <Text style={{ color: '#D1D5DB', fontSize: 12 }}>1.5 km away</Text>
                 </LinearGradient>
               </View>
-
             </ScrollView>
           </View>
 
+          {/* What's coming teaser — peeks from right edge */}
+          <View style={{ marginTop: 20, width: screenWidth, overflow: 'hidden' }}>
+            <TouchableOpacity
+              onPress={() => setShowComingSoon(true)}
+              activeOpacity={0.85}
+              style={{
+                alignSelf: 'flex-end',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                marginRight: -32,
+                paddingVertical: 8,
+                paddingLeft: 12,
+                paddingRight: 36,
+                backgroundColor: 'rgba(255,255,255,0.96)',
+                borderTopLeftRadius: 18,
+                borderBottomLeftRadius: 18,
+                borderWidth: 1,
+                borderRightWidth: 0,
+                borderColor: 'rgba(255,90,0,0.25)',
+                shadowColor: '#000',
+                shadowOffset: { width: -2, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 6,
+                elevation: 3,
+              }}>
+              <Text style={{ color: LANDING_ORANGE, fontWeight: '700', fontSize: 12 }}>What&apos;s coming</Text>
+              <Ionicons name="chevron-forward" size={13} color={LANDING_ORANGE} />
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </SafeAreaView>
-
-      {/* Full Screen Menu Overlay */}
-      {menuVisible && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 100, justifyContent: 'center', alignItems: 'center' }}>
-          <TouchableOpacity style={{ position: 'absolute', top: 60, right: 30 }} onPress={() => setMenuVisible(false)}>
-            <Text style={{ fontSize: 40, color: '#111827', fontWeight: '300' }}>×</Text>
-          </TouchableOpacity>
-
-          <Text style={{ fontSize: 32, fontWeight: '800', color: '#EA580C', marginBottom: 60 }}>FoodAway Menu</Text>
-
-          <TouchableOpacity
-            style={{ backgroundColor: '#111827', paddingVertical: 18, paddingHorizontal: 60, borderRadius: 30, marginBottom: 20, width: 250, alignItems: 'center' }}
-            onPress={() => { setMenuVisible(false); navigation.navigate('Login'); }}
-          >
-            <Text style={{ color: 'white', fontSize: 20, fontWeight: '700' }}>Sign In</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{ backgroundColor: '#F3F4F6', paddingVertical: 18, paddingHorizontal: 60, borderRadius: 30, width: 250, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }}
-            onPress={() => { setMenuVisible(false); navigation.navigate('Register'); }}
-          >
-            <Text style={{ color: '#111827', fontSize: 20, fontWeight: '700' }}>Register</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {renderMenuOverlay()}
     </View>
   );
 }
@@ -1233,14 +1333,18 @@ function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { login } = useContext(AuthContext);
 
   const handleLogin = async () => {
+    setLoading(true);
     try {
       const response = await axios.post(`${API_URL}/auth/login`, { email, password });
       login(response.data.token, response.data.user);
     } catch (error) {
       Alert.alert("Login Failed", error.response?.data?.error || "An error occurred");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1257,6 +1361,7 @@ function LoginScreen({ navigation }) {
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
+          editable={!loading}
         />
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingRight: 14, marginBottom: 16 }}>
           <TextInput
@@ -1266,21 +1371,22 @@ function LoginScreen({ navigation }) {
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
+            editable={!loading}
           />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} disabled={loading}>
             <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#64748B" />
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginBottom: 20 }}>
+        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginBottom: 20 }} disabled={loading}>
           <Text style={{ color: '#FF5A00', fontWeight: '700', fontSize: 14 }}>Forgot Password?</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
-          <Text style={styles.primaryButtonText}>Login</Text>
+        <TouchableOpacity style={[styles.primaryButton, loading && { opacity: 0.7 }]} onPress={handleLogin} disabled={loading}>
+          {loading ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>Login</Text>}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Register')} style={{ marginTop: 20 }}>
+        <TouchableOpacity onPress={() => navigation.navigate('Register')} style={{ marginTop: 20 }} disabled={loading}>
           <Text style={{ color: '#3b82f6', textAlign: 'center' }}>Don't have an account? Register</Text>
         </TouchableOpacity>
       </View>
@@ -1289,57 +1395,163 @@ function LoginScreen({ navigation }) {
 }
 
 function RegisterScreen({ navigation }) {
+  const [accountType, setAccountType] = useState('customer');
   const [name, setName] = useState('');
+  const [brandName, setBrandName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [logo, setLogo] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const pickLogo = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.2,
+      base64: true,
+    });
+    if (!result.canceled) {
+      setLogo(`data:image/jpeg;base64,${result.assets[0].base64}`);
+    }
+  };
 
   const handleRegister = async () => {
     if (!phone.trim()) {
       Alert.alert("Required", "Please enter your phone number.");
       return;
     }
+    if (accountType === 'customer' && !name.trim()) {
+      Alert.alert("Required", "Please enter your full name.");
+      return;
+    }
+    if (accountType === 'seller' && !brandName.trim()) {
+      Alert.alert("Required", "Please enter your brand name.");
+      return;
+    }
+    if (!email.trim() || !password) {
+      Alert.alert("Required", "Please enter your email and password.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      await axios.post(`${API_URL}/auth/register`, { name, email, password, phone: phone.trim(), role: 'Customers' });
-      Alert.alert("Success", "Registered successfully! Please login.");
+      if (accountType === 'customer') {
+        await axios.post(`${API_URL}/auth/register`, {
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          phone: phone.trim(),
+          role: 'Customers',
+        });
+      } else {
+        await axios.post(`${API_URL}/auth/register`, {
+          brand_name: brandName.trim(),
+          email: email.trim(),
+          password,
+          phone: phone.trim(),
+          role: 'SellersAdmin',
+          logo: logo || undefined,
+        });
+      }
+      Alert.alert("Success", accountType === 'seller'
+        ? "Seller account created! Please login to manage your stores."
+        : "Registered successfully! Please login.");
       navigation.navigate('Login');
     } catch (error) {
       Alert.alert("Registration Failed", error.response?.data?.error || "An error occurred");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.authContainer}>
-        <Text style={styles.headerTitle}>Create Account</Text>
-        <Text style={styles.headerSubtitle}>Join the movement against food waste.</Text>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        <View style={styles.authContainer}>
+          <Text style={styles.headerTitle}>Create Account</Text>
+          <Text style={styles.headerSubtitle}>Join the movement against food waste.</Text>
 
-        <TextInput style={styles.input} placeholder="Full Name" placeholderTextColor="#94a3b8" value={name} onChangeText={setName} />
-        <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#94a3b8" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <TextInput style={styles.input} placeholder="Phone Number" placeholderTextColor="#94a3b8" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingRight: 14, marginBottom: 16 }}>
-          <TextInput
-            style={{ flex: 1, color: '#111827', padding: 16, fontSize: 16 }}
-            placeholder="Password"
-            placeholderTextColor="#94a3b8"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#64748B" />
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 10, alignSelf: 'flex-start' }}>Sign up as</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20, width: '100%' }}>
+            <TouchableOpacity
+              onPress={() => setAccountType('customer')}
+              disabled={loading}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: accountType === 'customer' ? '#FF5A00' : '#E5E7EB',
+                backgroundColor: accountType === 'customer' ? '#FFF7ED' : '#F9FAFB',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontWeight: '700', color: accountType === 'customer' ? '#FF5A00' : '#64748B' }}>Customer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setAccountType('seller')}
+              disabled={loading}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: accountType === 'seller' ? '#FF5A00' : '#E5E7EB',
+                backgroundColor: accountType === 'seller' ? '#FFF7ED' : '#F9FAFB',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontWeight: '700', color: accountType === 'seller' ? '#FF5A00' : '#64748B' }}>Seller</Text>
+            </TouchableOpacity>
+          </View>
+
+          {accountType === 'customer' ? (
+            <TextInput style={styles.input} placeholder="Full Name" placeholderTextColor="#94a3b8" value={name} onChangeText={setName} editable={!loading} />
+          ) : (
+            <>
+              <TextInput style={styles.input} placeholder="Brand Name" placeholderTextColor="#94a3b8" value={brandName} onChangeText={setBrandName} editable={!loading} />
+              <TouchableOpacity
+                onPress={pickLogo}
+                disabled={loading}
+                style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 16, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}
+              >
+                {logo ? (
+                  <Image source={{ uri: logo }} style={{ width: 64, height: 64, borderRadius: 12, marginBottom: 8 }} />
+                ) : (
+                  <Ionicons name="image-outline" size={28} color="#64748B" style={{ marginBottom: 6 }} />
+                )}
+                <Text style={{ color: '#64748B', fontWeight: '600' }}>{logo ? 'Change Brand Logo' : 'Add Brand Logo (optional)'}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#94a3b8" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" editable={!loading} />
+          <TextInput style={styles.input} placeholder="Phone Number" placeholderTextColor="#94a3b8" value={phone} onChangeText={setPhone} keyboardType="phone-pad" editable={!loading} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingRight: 14, marginBottom: 16 }}>
+            <TextInput
+              style={{ flex: 1, color: '#111827', padding: 16, fontSize: 16 }}
+              placeholder="Password"
+              placeholderTextColor="#94a3b8"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              editable={!loading}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} disabled={loading}>
+              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={[styles.primaryButton, loading && { opacity: 0.7 }]} onPress={handleRegister} disabled={loading}>
+            {loading ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>{accountType === 'seller' ? 'Register as Seller' : 'Register'}</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 20, marginBottom: 24 }} disabled={loading}>
+            <Text style={{ color: '#3b82f6', textAlign: 'center' }}>Already have an account? Login</Text>
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}>
-          <Text style={styles.primaryButtonText}>Register</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 20 }}>
-          <Text style={{ color: '#3b82f6', textAlign: 'center' }}>Already have an account? Login</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -3899,11 +4111,45 @@ function BookingsScreen({ navigation }) {
 }
 
 // --- Seller Screens ---
+const SELLER_BRAND = '#FF5A00';
+const SELLER_NAV_ITEMS = (isAdmin) => [
+  { key: 'stores', icon: 'storefront-outline', label: 'Stores' },
+  { key: 'bags', icon: 'bag-handle-outline', label: 'Surprise Bags' },
+  { key: 'food', icon: 'restaurant-outline', label: 'Open Food' },
+  { key: 'orders', icon: 'receipt-outline', label: 'Orders' },
+  { key: 'reviews', icon: 'star-outline', label: 'Reviews' },
+  { key: 'chats', icon: 'chatbubbles-outline', label: 'Chat Support' },
+  ...(isAdmin ? [{ key: 'staff', icon: 'people-outline', label: 'Staff' }] : []),
+];
+
+function SellerStatCard({ label, value }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#FED7AA' }}>
+      <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 18 }}>{value}</Text>
+      <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 4, fontWeight: '600' }}>{label}</Text>
+    </View>
+  );
+}
+
+function SellerEmptyState({ icon, title, subtitle }) {
+  return (
+    <View style={{ alignItems: 'center', padding: 48 }}>
+      <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+        <Ionicons name={icon} size={34} color={SELLER_BRAND} />
+      </View>
+      <Text style={{ color: '#374151', fontWeight: '700', fontSize: 16 }}>{title}</Text>
+      {subtitle ? <Text style={{ color: '#9CA3AF', marginTop: 6, fontSize: 14, textAlign: 'center' }}>{subtitle}</Text> : null}
+    </View>
+  );
+}
+
 function SellerDashboardScreen() {
   const { token, logout, user } = useContext(AuthContext);
   const [stores, setStores] = useState([]);
   const [storeName, setStoreName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
+  const [storeLat, setStoreLat] = useState(51.5074);
+  const [storeLng, setStoreLng] = useState(-0.1278);
 
   const [bagStoreId, setBagStoreId] = useState(null);
   const [bagPrice, setBagPrice] = useState('');
@@ -3931,6 +4177,22 @@ function SellerDashboardScreen() {
   const [editingFoodId, setEditingFoodId] = useState(null);
 
   const [stats, setStats] = useState({ totalRevenue: 0, bagsSold: 0, dailySales: [] });
+  const [sellerOrders, setSellerOrders] = useState([]);
+  const [sellerReviews, setSellerReviews] = useState([]);
+  const [sellerChats, setSellerChats] = useState([]);
+  const [staffList, setStaffList] = useState([]);
+  const [activeSellerChat, setActiveSellerChat] = useState(null);
+  const [sellerChatMessages, setSellerChatMessages] = useState([]);
+  const [sellerChatInput, setSellerChatInput] = useState('');
+  const [showSellerChatModal, setShowSellerChatModal] = useState(false);
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const sellerWsRef = useRef(null);
+  const activeSellerChatRef = useRef(null);
+  const sellerChatListRef = useRef(null);
+  const storeMapRef = useRef(null);
 
   // Tab & menu state
   const [sellerTab, setSellerTab] = useState('stores');
@@ -3999,12 +4261,172 @@ function SellerDashboardScreen() {
     }
   };
 
+  const fetchSellerOrders = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/seller/orders`, { headers: { Authorization: `Bearer ${token}` } });
+      setSellerOrders(response.data || []);
+    } catch (e) {
+      console.log("Error fetching seller orders:", e.message);
+    }
+  };
+
+  const fetchSellerReviews = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/reviews`, { headers: { Authorization: `Bearer ${token}` } });
+      setSellerReviews(response.data || []);
+    } catch (e) {
+      console.log("Error fetching reviews:", e.message);
+    }
+  };
+
+  const fetchSellerChats = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/seller/chats`, { headers: { Authorization: `Bearer ${token}` } });
+      setSellerChats(response.data || []);
+    } catch (e) {
+      console.log("Error fetching seller chats:", e.message);
+    }
+  };
+
+  const fetchStaff = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/seller/staff`, { headers: { Authorization: `Bearer ${token}` } });
+      setStaffList(response.data || []);
+    } catch (e) {
+      console.log("Error fetching staff:", e.message);
+    }
+  };
+
+  const refreshSellerTab = () => {
+    fetchStats();
+    if (sellerTab === 'stores') fetchStores();
+    if (sellerTab === 'bags') fetchSellerBags();
+    if (sellerTab === 'food') fetchSellerFoodItems();
+    if (sellerTab === 'orders') fetchSellerOrders();
+    if (sellerTab === 'reviews') fetchSellerReviews();
+    if (sellerTab === 'chats') fetchSellerChats();
+    if (sellerTab === 'staff') fetchStaff();
+  };
+
+  useEffect(() => {
+    activeSellerChatRef.current = activeSellerChat;
+  }, [activeSellerChat]);
+
+  const connectSellerWs = () => {
+    if (!token || (sellerWsRef.current && sellerWsRef.current.readyState === WebSocket.OPEN)) return;
+    const wsUrl = API_URL.replace('http://', 'ws://').replace('https://', 'wss://');
+    const ws = new WebSocket(wsUrl);
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'register', token }));
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'message') {
+          const active = activeSellerChatRef.current;
+          if (active && data.message.store_id === active.store_id && data.message.customer_id === active.customer_id) {
+            setSellerChatMessages(prev => {
+              if (prev.some(m => m.id === data.message.id)) return prev;
+              return [...prev, data.message];
+            });
+          }
+          fetchSellerChats();
+        }
+      } catch (_) {}
+    };
+    sellerWsRef.current = ws;
+  };
+
+  const openSellerChat = async (chat) => {
+    setActiveSellerChat(chat);
+    setShowSellerChatModal(true);
+    setSellerChatMessages([]);
+    connectSellerWs();
+    try {
+      await axios.post(`${API_URL}/chat/read`, { store_id: chat.store_id, customer_id: chat.customer_id }, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`${API_URL}/chat/history?store_id=${chat.store_id}&customer_id=${chat.customer_id}`, { headers: { Authorization: `Bearer ${token}` } });
+      setSellerChatMessages(res.data || []);
+      fetchSellerChats();
+    } catch (e) {
+      Alert.alert('Error', 'Could not load chat history');
+    }
+  };
+
+  const sendSellerChatMessage = () => {
+    if (!sellerChatInput.trim() || !activeSellerChat) return;
+    connectSellerWs();
+    if (sellerWsRef.current?.readyState === WebSocket.OPEN) {
+      sellerWsRef.current.send(JSON.stringify({
+        type: 'message',
+        storeId: activeSellerChat.store_id,
+        customerId: activeSellerChat.customer_id,
+        text: sellerChatInput.trim()
+      }));
+      setSellerChatInput('');
+    } else {
+      Alert.alert('Offline', 'Chat connection is not ready. Please try again.');
+      connectSellerWs();
+    }
+  };
+
+  const handleCreateStaff = async () => {
+    if (!newStaffName.trim() || !newStaffEmail.trim() || !newStaffPassword) {
+      return Alert.alert('Required', 'Please fill in all staff fields.');
+    }
+    try {
+      await axios.post(`${API_URL}/seller/staff`, { name: newStaffName.trim(), email: newStaffEmail.trim(), password: newStaffPassword }, { headers: { Authorization: `Bearer ${token}` } });
+      Alert.alert('Success', 'Staff member created');
+      setNewStaffName(''); setNewStaffEmail(''); setNewStaffPassword('');
+      setShowStaffModal(false);
+      fetchStaff();
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || 'Could not create staff');
+    }
+  };
+
+  const setStoreMapLocation = (lat, lng) => {
+    setStoreLat(lat);
+    setStoreLng(lng);
+    storeMapRef.current?.animateToRegion?.({
+      latitude: lat,
+      longitude: lng,
+      latitudeDelta: 0.008,
+      longitudeDelta: 0.008,
+    }, 500);
+  };
+
+  const useCurrentStoreLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return Alert.alert('Permission needed', 'Location access is required to pin your store on the map.');
+      const loc = await Location.getCurrentPositionAsync({});
+      setStoreMapLocation(loc.coords.latitude, loc.coords.longitude);
+    } catch (e) {
+      Alert.alert('Error', 'Could not get current location');
+    }
+  };
+
   useEffect(() => {
     fetchStores();
     fetchSellerBags();
     fetchSellerFoodItems();
     fetchStats();
+    connectSellerWs();
+    return () => { if (sellerWsRef.current) sellerWsRef.current.close(); };
   }, []);
+
+  useEffect(() => {
+    refreshSellerTab();
+  }, [sellerTab]);
+
+  useEffect(() => {
+    if (!showSellerChatModal || !activeSellerChat) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await axios.get(`${API_URL}/chat/history?store_id=${activeSellerChat.store_id}&customer_id=${activeSellerChat.customer_id}`, { headers: { Authorization: `Bearer ${token}` } });
+        setSellerChatMessages(res.data || []);
+      } catch (_) {}
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [showSellerChatModal, activeSellerChat, token]);
 
   const pickImages = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -4024,16 +4446,17 @@ function SellerDashboardScreen() {
     if (!storeName || !storeAddress) return Alert.alert("Error", "Please fill all store fields.");
     try {
       if (editingStoreId) {
-        await axios.put(`${API_URL}/stores/${editingStoreId}`, { name: storeName, address: storeAddress, image: storeImage }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(`${API_URL}/stores/${editingStoreId}`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage }, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Store updated successfully!");
         setEditingStoreId(null);
       } else {
-        await axios.post(`${API_URL}/stores`, { name: storeName, address: storeAddress, lat: 51.5, lng: -0.1, image: storeImage }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post(`${API_URL}/stores`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage }, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Store created successfully!");
       }
-      setStoreName(''); setStoreAddress(''); setStoreImage(null);
+      setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278);
       setShowStoreModal(false);
       fetchStores();
+      fetchStats();
     } catch (e) {
       Alert.alert("Error", e.response?.data?.error || e.message);
     }
@@ -4152,86 +4575,91 @@ function SellerDashboardScreen() {
     }
   };
 
+  const navItems = SELLER_NAV_ITEMS(user?.role === 'SellersAdmin');
+  const inventoryTab = ['stores', 'bags', 'food'].includes(sellerTab);
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Header with Hamburger */}
-      <View style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {user?.logo ? (
-            <Image source={{ uri: user.logo }} style={{ width: 38, height: 38, borderRadius: 8 }} />
-          ) : (
-            <View style={{ width: 38, height: 38, borderRadius: 8, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }}><Text>🏢</Text></View>
-          )}
-          <View>
-            <Text style={styles.headerTitle}>Seller Portal</Text>
-            <Text style={{ color: '#6B7280', fontSize: 12 }}>{user?.name}</Text>
+      {/* Header */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', backgroundColor: '#FFFFFF' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+            {user?.logo ? (
+              <Image source={{ uri: user.logo }} style={{ width: 44, height: 44, borderRadius: 12 }} />
+            ) : (
+              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="storefront" size={22} color={SELLER_BRAND} />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }} numberOfLines={1}>{user?.name || 'Seller Portal'}</Text>
+              <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }} numberOfLines={1}>{user?.email}</Text>
+              <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 1 }}>{user?.role === 'SellersAdmin' ? 'Seller Admin' : 'Seller Staff'}</Text>
+            </View>
           </View>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-          <TouchableOpacity onPress={logout} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FEE2E2', borderRadius: 10 }}>
-            <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>Logout</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setMenuOpen(!menuOpen)} style={{ width: 38, height: 38, backgroundColor: '#F3F4F6', borderRadius: 10, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name={menuOpen ? 'close' : 'menu'} size={22} color="#111827" />
+          <TouchableOpacity onPress={() => setMenuOpen(true)} style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name="menu" size={22} color={SELLER_BRAND} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Hamburger Dropdown Menu */}
-      {menuOpen && (
-        <View style={{ backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingHorizontal: 16, paddingBottom: 8 }}>
-          {[{key:'stores',icon:'🏪',label:'Stores'},{key:'bags',icon:'🛍️',label:'Surprise Bags'},{key:'food',icon:'🍽️',label:'Open Food'}].map(item => (
+      {/* Side drawer navigation */}
+      <Modal visible={menuOpen} animationType="fade" transparent onRequestClose={() => setMenuOpen(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} activeOpacity={1} onPress={() => setMenuOpen(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '82%', maxWidth: 320, backgroundColor: '#FFFFFF', paddingTop: 56, paddingHorizontal: 16 }}>
+            <View style={{ paddingHorizontal: 8, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', marginBottom: 12 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>Seller Menu</Text>
+              <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 4 }}>{user?.email}</Text>
+            </View>
+            {navItems.map(item => (
+              <TouchableOpacity
+                key={item.key}
+                onPress={() => { setSellerTab(item.key); setMenuOpen(false); }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 12,
+                  paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4,
+                  backgroundColor: sellerTab === item.key ? '#FFF7ED' : 'transparent',
+                }}>
+                <Ionicons name={item.icon} size={20} color={sellerTab === item.key ? SELLER_BRAND : '#6B7280'} />
+                <Text style={{ fontSize: 15, fontWeight: sellerTab === item.key ? '700' : '500', color: sellerTab === item.key ? SELLER_BRAND : '#374151', flex: 1 }}>{item.label}</Text>
+                {sellerTab === item.key && <Ionicons name="chevron-forward" size={16} color={SELLER_BRAND} />}
+              </TouchableOpacity>
+            ))}
             <TouchableOpacity
-              key={item.key}
-              onPress={() => { setSellerTab(item.key); setMenuOpen(false); }}
-              style={{
-                flexDirection: 'row', alignItems: 'center', gap: 12,
-                paddingVertical: 12, paddingHorizontal: 8,
-                backgroundColor: sellerTab === item.key ? '#FFF7ED' : 'transparent',
-                borderRadius: 10, marginBottom: 2
-              }}>
-              <Text style={{ fontSize: 20 }}>{item.icon}</Text>
-              <Text style={{ fontSize: 16, fontWeight: sellerTab === item.key ? '700' : '500', color: sellerTab === item.key ? '#EA580C' : '#374151' }}>{item.label}</Text>
-              {sellerTab === item.key && <Ionicons name="checkmark" size={18} color="#EA580C" style={{ marginLeft: 'auto' }} />}
+              onPress={() => { setMenuOpen(false); logout(); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginTop: 16, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+              <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#DC2626' }}>Logout</Text>
             </TouchableOpacity>
-          ))}
-        </View>
-      )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
-      {/* Tab Pill Bar */}
-      <View style={{ flexDirection: 'row', margin: 16, backgroundColor: '#F3F4F6', borderRadius: 12, padding: 4 }}>
-        {[{key:'stores',label:'🏪 Stores'},{key:'bags',label:'🛍️ Bags'},{key:'food',label:'🍽️ Food'}].map(t => (
+      {/* Quick nav chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 52, marginTop: 12 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+        {navItems.map(item => (
           <TouchableOpacity
-            key={t.key}
-            onPress={() => setSellerTab(t.key)}
+            key={item.key}
+            onPress={() => setSellerTab(item.key)}
             style={{
-              flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 10,
-              backgroundColor: sellerTab === t.key ? '#FFFFFF' : 'transparent',
-              shadowColor: sellerTab === t.key ? '#000' : 'transparent',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.1, shadowRadius: 2, elevation: sellerTab === t.key ? 2 : 0
+              flexDirection: 'row', alignItems: 'center', gap: 6,
+              paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+              backgroundColor: sellerTab === item.key ? SELLER_BRAND : '#FFFFFF',
+              borderWidth: 1, borderColor: sellerTab === item.key ? SELLER_BRAND : '#E5E7EB',
             }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: sellerTab === t.key ? '#EA580C' : '#6B7280' }}>{t.label}</Text>
+            <Ionicons name={item.icon} size={16} color={sellerTab === item.key ? '#FFFFFF' : '#6B7280'} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: sellerTab === item.key ? '#FFFFFF' : '#6B7280' }}>{item.label}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {/* KPI Strip */}
-      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 8 }}>
-        <View style={{ flex: 1, backgroundColor: '#FFF7ED', borderRadius: 12, padding: 12, alignItems: 'center' }}>
-          <Text style={{ color: '#EA580C', fontWeight: '800', fontSize: 18 }}>{currencySymbol}{stats.totalRevenue.toFixed(2)}</Text>
-          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>Revenue</Text>
-        </View>
-        <View style={{ flex: 1, backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12, alignItems: 'center' }}>
-          <Text style={{ color: '#059669', fontWeight: '800', fontSize: 18 }}>{stats.bagsSold}</Text>
-          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>Bags Sold</Text>
-        </View>
-        <View style={{ flex: 1, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, alignItems: 'center' }}>
-          <Text style={{ color: '#2563EB', fontWeight: '800', fontSize: 18 }}>{stores.length}</Text>
-          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>Stores</Text>
-        </View>
+      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 12, marginBottom: 8 }}>
+        <SellerStatCard label="Revenue" value={`${currencySymbol}${stats.totalRevenue.toFixed(2)}`} />
+        <SellerStatCard label="Bags Sold" value={String(stats.bagsSold)} />
+        <SellerStatCard label="Stores" value={String(stores.length)} />
       </View>
 
       {/* Currency Picker Row */}
@@ -4252,19 +4680,16 @@ function SellerDashboardScreen() {
           data={stores}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', padding: 40 }}>
-              <Text style={{ fontSize: 40 }}>🏪</Text>
-              <Text style={{ color: '#9CA3AF', marginTop: 12, fontSize: 15 }}>No stores yet. Add your first!</Text>
-            </View>
-          }
+          ListEmptyComponent={<SellerEmptyState icon="storefront-outline" title="No stores yet" subtitle="Tap + to add your first store location" />}
           renderItem={({ item: store }) => (
             <View style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 {store.image ? (
                   <Image source={{ uri: store.image }} style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0 }} />
                 ) : (
-                  <View style={{ width: 52, height: 52, borderRadius: 10, backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}><Text style={{ fontSize: 24 }}>🏪</Text></View>
+                  <View style={{ width: 52, height: 52, borderRadius: 10, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                    <Ionicons name="storefront-outline" size={24} color={SELLER_BRAND} />
+                  </View>
                 )}
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{store.name}</Text>
@@ -4273,9 +4698,9 @@ function SellerDashboardScreen() {
               </View>
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                 <TouchableOpacity
-                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setEditingStoreId(store.id); setShowStoreModal(true); }}
-                  style={{ flex: 1, paddingVertical: 8, backgroundColor: '#EEF2FF', borderRadius: 10, alignItems: 'center' }}>
-                  <Text style={{ color: '#4338CA', fontWeight: '700', fontSize: 13 }}>Edit</Text>
+                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setEditingStoreId(store.id); setShowStoreModal(true); }}
+                  style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FFF7ED', borderRadius: 10, alignItems: 'center' }}>
+                  <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 13 }}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => handleDeleteStore(store.id)}
@@ -4294,12 +4719,7 @@ function SellerDashboardScreen() {
           data={sellerBags}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', padding: 40 }}>
-              <Text style={{ fontSize: 40 }}>🛍️</Text>
-              <Text style={{ color: '#9CA3AF', marginTop: 12, fontSize: 15 }}>No bags yet. Create your first!</Text>
-            </View>
-          }
+          ListEmptyComponent={<SellerEmptyState icon="bag-handle-outline" title="No surprise bags yet" subtitle="Create your first surprise bag listing" />}
           renderItem={({ item: bag }) => (
             <View style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -4360,12 +4780,7 @@ function SellerDashboardScreen() {
           data={sellerFoodItems}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', padding: 40 }}>
-              <Text style={{ fontSize: 40 }}>🍽️</Text>
-              <Text style={{ color: '#9CA3AF', marginTop: 12, fontSize: 15 }}>No food items yet. Add one!</Text>
-            </View>
-          }
+          ListEmptyComponent={<SellerEmptyState icon="restaurant-outline" title="No food items yet" subtitle="Add open food items to sell surplus stock" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -4422,22 +4837,123 @@ function SellerDashboardScreen() {
         />
       )}
 
+      {sellerTab === 'orders' && (
+        <FlatList
+          data={sellerOrders}
+          keyExtractor={item => String(item.id)}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          ListEmptyComponent={<SellerEmptyState icon="receipt-outline" title="No orders yet" subtitle="Customer orders will appear here" />}
+          renderItem={({ item: order }) => (
+            <View style={[styles.card, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '800', fontSize: 15, color: '#111827' }}>{order.item_name || 'Order Item'}</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{order.store_name} · Ref #{order.id}</Text>
+                  <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>{order.customer_name || order.customer_email || 'Customer'}</Text>
+                </View>
+                <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 17 }}>{currencySymbol}{(order.price * (order.quantity || 1)).toFixed(2)}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                <Text style={{ color: '#6B7280', fontSize: 12 }}>Qty: {order.quantity || 1} · {order.payment_method || 'Cash at Pickup'}</Text>
+                <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{order.pickup_time || 'Pickup window TBC'}</Text>
+              </View>
+            </View>
+          )}
+        />
+      )}
+
+      {sellerTab === 'reviews' && (
+        <FlatList
+          data={sellerReviews}
+          keyExtractor={item => String(item.id)}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          ListEmptyComponent={<SellerEmptyState icon="star-outline" title="No reviews yet" subtitle="Customer reviews will show here" />}
+          renderItem={({ item: review }) => (
+            <View style={[styles.card, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{review.customer_name || 'Customer'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="star" size={14} color={SELLER_BRAND} />
+                  <Text style={{ color: SELLER_BRAND, fontWeight: '800' }}>{review.rating}</Text>
+                </View>
+              </View>
+              <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{review.store_name}</Text>
+              {review.comment ? <Text style={{ color: '#374151', fontSize: 14, marginTop: 8, lineHeight: 20 }}>{review.comment}</Text> : null}
+            </View>
+          )}
+        />
+      )}
+
+      {sellerTab === 'chats' && (
+        <FlatList
+          data={sellerChats}
+          keyExtractor={item => `${item.store_id}_${item.customer_id}`}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          ListEmptyComponent={<SellerEmptyState icon="chatbubbles-outline" title="No conversations yet" subtitle="Customer chat messages will appear here" />}
+          renderItem={({ item: chat }) => (
+            <TouchableOpacity onPress={() => openSellerChat(chat)} style={[styles.card, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{chat.customer_name || chat.customer_email}</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{chat.store_name}</Text>
+                  <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 6 }} numberOfLines={2}>{chat.last_message || 'No messages yet'}</Text>
+                </View>
+                {chat.unread_count > 0 && (
+                  <View style={{ backgroundColor: SELLER_BRAND, borderRadius: 12, minWidth: 24, height: 24, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>{chat.unread_count}</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+
+      {sellerTab === 'staff' && user?.role === 'SellersAdmin' && (
+        <FlatList
+          data={staffList}
+          keyExtractor={item => String(item.id)}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          ListEmptyComponent={<SellerEmptyState icon="people-outline" title="No staff yet" subtitle="Add team members to help manage your stores" />}
+          ListHeaderComponent={
+            <TouchableOpacity onPress={() => setShowStaffModal(true)} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND, marginBottom: 16 }]}>
+              <Text style={styles.primaryButtonText}>Add Staff Member</Text>
+            </TouchableOpacity>
+          }
+          renderItem={({ item: staff }) => (
+            <View style={[styles.card, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="person-outline" size={22} color={SELLER_BRAND} />
+                </View>
+                <View>
+                  <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{staff.name}</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{staff.email}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      )}
+
       {/* FAB Add Button */}
+      {inventoryTab && (
       <TouchableOpacity
         onPress={() => {
-          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setShowStoreModal(true); }
+          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setShowStoreModal(true); }
           else if (sellerTab === 'bags') { setEditingBagId(null); setBagStoreId(null); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setShowBagModal(true); }
           else { setEditingFoodId(null); setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]); setShowFoodModal(true); }
         }}
         style={{
           position: 'absolute', bottom: 30, right: 20,
           width: 56, height: 56, borderRadius: 28,
-          backgroundColor: sellerTab === 'food' ? '#059669' : '#EA580C',
+          backgroundColor: SELLER_BRAND,
           justifyContent: 'center', alignItems: 'center',
           shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8
         }}>
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
+      )}
 
       {/* ── STORE MODAL ── */}
       <Modal visible={showStoreModal} animationType="slide" transparent onRequestClose={() => setShowStoreModal(false)}>
@@ -4452,6 +4968,43 @@ function SellerDashboardScreen() {
               <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. Green Grocer" placeholderTextColor="#9CA3AF" value={storeName} onChangeText={setStoreName} />
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Address *</Text>
               <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. 10 Oxford Street" placeholderTextColor="#9CA3AF" value={storeAddress} onChangeText={setStoreAddress} />
+
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Store Location *</Text>
+              <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>
+                Pan the map, then tap where your store is — or drag the pin
+              </Text>
+              <View style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 10, borderWidth: 1, borderColor: '#E5E7EB' }}>
+                <MapView
+                  ref={storeMapRef}
+                  key={editingStoreId ? `store-map-${editingStoreId}` : 'store-map-new'}
+                  style={{ height: 180, width: '100%' }}
+                  initialRegion={{
+                    latitude: storeLat,
+                    longitude: storeLng,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }}
+                  onPress={(e) => {
+                    setStoreMapLocation(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude);
+                  }}
+                >
+                  <Marker
+                    coordinate={{ latitude: storeLat, longitude: storeLng }}
+                    draggable
+                    onDragEnd={(e) => {
+                      setStoreMapLocation(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude);
+                    }}
+                  />
+                </MapView>
+              </View>
+              <TouchableOpacity onPress={useCurrentStoreLocation} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, backgroundColor: '#FFF7ED', borderRadius: 10, marginBottom: 8 }}>
+                <Ionicons name="locate-outline" size={18} color={SELLER_BRAND} />
+                <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 13 }}>Use Current Location</Text>
+              </TouchableOpacity>
+              <Text style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 14, textAlign: 'center' }}>
+                {storeLat.toFixed(5)}, {storeLng.toFixed(5)}
+              </Text>
+
               {storeImage ? (
                 <View style={{ position: 'relative', width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
                   <Image source={{ uri: storeImage }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -4462,10 +5015,10 @@ function SellerDashboardScreen() {
               ) : (
                 <TouchableOpacity onPress={async () => { let r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.2, base64: true }); if (!r.canceled) setStoreImage(`data:image/jpeg;base64,${r.assets[0].base64}`); }} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}>
                   <Ionicons name="camera-outline" size={24} color="#6B7280" style={{ marginBottom: 4 }} />
-                  <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>📷 Upload Store Image (Optional)</Text>
+                  <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>Upload Store Image (Optional)</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={handleCreateStore} style={[styles.primaryButton, { backgroundColor: '#EA580C' }]}>
+              <TouchableOpacity onPress={handleCreateStore} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND }]}>
                 <Text style={styles.primaryButtonText}>{editingStoreId ? 'Update Store' : 'Create Store'}</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -4527,15 +5080,15 @@ function SellerDashboardScreen() {
                 </View>
               </View>
               {pickupTime ? (
-                <View style={{ backgroundColor: '#F0FDF4', borderRadius: 8, padding: 8, marginBottom: 14 }}>
-                  <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>📅 {pickupTime}</Text>
+                <View style={{ backgroundColor: '#FFF7ED', borderRadius: 8, padding: 8, marginBottom: 14 }}>
+                  <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 12 }}>{pickupTime}</Text>
                 </View>
               ) : <View style={{ marginBottom: 14 }} />}
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Description</Text>
               <TextInput style={[styles.input, { height: 70, marginBottom: 14 }]} placeholder="What might be inside..." placeholderTextColor="#9CA3AF" value={bagDescription} onChangeText={setBagDescription} multiline />
               <TouchableOpacity onPress={pickImages} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}>
                  <Ionicons name="images-outline" size={24} color="#6B7280" style={{ marginBottom: 4 }} />
-                 <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>📷 Upload Images</Text>
+                 <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>Upload Images</Text>
                </TouchableOpacity>
                {bagImages.length > 0 ? (
                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
@@ -4569,7 +5122,7 @@ function SellerDashboardScreen() {
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Select Store *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                 {stores.map(store => (
-                  <TouchableOpacity key={store.id} onPress={() => setFoodStoreId(store.id)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: foodStoreId === store.id ? '#059669' : '#F3F4F6' }}>
+                  <TouchableOpacity key={store.id} onPress={() => setFoodStoreId(store.id)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: foodStoreId === store.id ? SELLER_BRAND : '#F3F4F6' }}>
                     <Text style={{ color: foodStoreId === store.id ? '#FFFFFF' : '#374151', fontWeight: '600', fontSize: 13 }}>{store.name}</Text>
                   </TouchableOpacity>
                 ))}
@@ -4579,7 +5132,7 @@ function SellerDashboardScreen() {
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                 {FOOD_CATEGORIES.map(cat => (
-                  <TouchableOpacity key={cat} onPress={() => setFoodCategory(cat)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, marginRight: 8, backgroundColor: foodCategory === cat ? '#059669' : '#F3F4F6' }}>
+                  <TouchableOpacity key={cat} onPress={() => setFoodCategory(cat)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, marginRight: 8, backgroundColor: foodCategory === cat ? SELLER_BRAND : '#F3F4F6' }}>
                     <Text style={{ color: foodCategory === cat ? '#FFFFFF' : '#374151', fontWeight: '600', fontSize: 12 }}>{cat}</Text>
                   </TouchableOpacity>
                 ))}
@@ -4598,9 +5151,9 @@ function SellerDashboardScreen() {
               <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="10" placeholderTextColor="#9CA3AF" value={foodQuantity} onChangeText={setFoodQuantity} keyboardType="numeric" />
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Description</Text>
               <TextInput style={[styles.input, { height: 70, marginBottom: 14 }]} placeholder="Optional description..." placeholderTextColor="#9CA3AF" value={foodDescription} onChangeText={setFoodDescription} multiline />
-              <TouchableOpacity onPress={pickFoodImages} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#10B981' }}>
-                 <Ionicons name="images-outline" size={24} color="#10B981" style={{ marginBottom: 4 }} />
-                 <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>📷 Upload Images (Optional)</Text>
+              <TouchableOpacity onPress={pickFoodImages} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#FED7AA' }}>
+                 <Ionicons name="images-outline" size={24} color={SELLER_BRAND} style={{ marginBottom: 4 }} />
+                 <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>Upload Images (Optional)</Text>
                </TouchableOpacity>
                {foodImages.length > 0 ? (
                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
@@ -4614,10 +5167,83 @@ function SellerDashboardScreen() {
                    ))}
                  </View>
                ) : null}
-              <TouchableOpacity onPress={() => { handleCreateFoodItem(); setShowFoodModal(false); }} style={[styles.primaryButton, { backgroundColor: '#059669' }]}>
+              <TouchableOpacity onPress={() => { handleCreateFoodItem(); setShowFoodModal(false); }} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND }]}>
                 <Text style={styles.primaryButtonText}>{editingFoodId ? 'Update Item' : 'Create Item'}</Text>
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── SELLER CHAT MODAL ── */}
+      <Modal visible={showSellerChatModal} animationType="slide" onRequestClose={() => setShowSellerChatModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+            <TouchableOpacity onPress={() => setShowSellerChatModal(false)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name="arrow-back" size={20} color="#111827" />
+            </TouchableOpacity>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827' }} numberOfLines={1}>{activeSellerChat?.customer_name || activeSellerChat?.customer_email || 'Customer'}</Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }} numberOfLines={1}>{activeSellerChat?.store_name}</Text>
+            </View>
+          </View>
+          <FlatList
+            ref={sellerChatListRef}
+            data={sellerChatMessages}
+            keyExtractor={item => String(item.id)}
+            contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12 }}
+            onContentSizeChange={() => sellerChatListRef.current?.scrollToEnd({ animated: true })}
+            renderItem={({ item }) => {
+              const isMe = item.sender_role === 'Seller';
+              return (
+                <View style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                  <View style={{
+                    backgroundColor: isMe ? SELLER_BRAND : '#F3F4F6',
+                    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18,
+                    borderBottomRightRadius: isMe ? 2 : 18, borderBottomLeftRadius: isMe ? 18 : 2,
+                  }}>
+                    <Text style={{ color: isMe ? '#FFFFFF' : '#111827', fontSize: 15, lineHeight: 20 }}>{item.message}</Text>
+                  </View>
+                  <Text style={{ color: '#9CA3AF', fontSize: 10, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: 4, paddingHorizontal: 4 }}>
+                    {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              );
+            }}
+          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+            <TextInput
+              style={{ flex: 1, backgroundColor: '#F3F4F6', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#111827', maxHeight: 100 }}
+              placeholder="Reply to customer..."
+              placeholderTextColor="#9CA3AF"
+              value={sellerChatInput}
+              onChangeText={setSellerChatInput}
+              multiline
+            />
+            <TouchableOpacity onPress={sendSellerChatMessage} style={{ marginLeft: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: SELLER_BRAND, justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name="send" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* ── STAFF MODAL ── */}
+      <Modal visible={showStaffModal} animationType="slide" transparent onRequestClose={() => setShowStaffModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>Add Staff Member</Text>
+              <TouchableOpacity onPress={() => setShowStaffModal(false)}><Ionicons name="close" size={24} color="#6B7280" /></TouchableOpacity>
+            </View>
+            <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Full Name *</Text>
+            <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="Jane Smith" placeholderTextColor="#9CA3AF" value={newStaffName} onChangeText={setNewStaffName} />
+            <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Email *</Text>
+            <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="jane@example.com" placeholderTextColor="#9CA3AF" value={newStaffEmail} onChangeText={setNewStaffEmail} keyboardType="email-address" autoCapitalize="none" />
+            <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Password *</Text>
+            <TextInput style={[styles.input, { marginBottom: 20 }]} placeholder="Minimum 6 characters" placeholderTextColor="#9CA3AF" value={newStaffPassword} onChangeText={setNewStaffPassword} secureTextEntry />
+            <TouchableOpacity onPress={handleCreateStaff} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND }]}>
+              <Text style={styles.primaryButtonText}>Create Staff Account</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -4726,6 +5352,17 @@ export default function App() {
       try {
         userToken = await AsyncStorage.getItem('userToken');
         user = JSON.parse(await AsyncStorage.getItem('user'));
+        if (userToken) {
+          try {
+            const res = await axios.get(`${API_URL}/auth/me`, {
+              headers: { Authorization: `Bearer ${userToken}` },
+            });
+            user = res.data;
+            await AsyncStorage.setItem('user', JSON.stringify(user));
+          } catch (_) {
+            // Keep cached user if refresh fails
+          }
+        }
       } catch (e) {
         // Restoring token failed
       }
@@ -4794,7 +5431,7 @@ export default function App() {
                   <Stack.Screen name="Register" component={RegisterScreen} />
                   <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                 </>
-              ) : state.user?.role === 'SellersAdmin' ? (
+              ) : state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff' ? (
                 // Seller Stack
                 <Stack.Screen name="SellerDashboard" component={SellerDashboardScreen} />
               ) : (
