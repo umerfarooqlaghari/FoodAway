@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Map, { Marker } from 'react-map-gl';
+import HeroPagePeelTeaser from './components/HeroPagePeelTeaser';
+import SupermarketHeroVisual from './components/SupermarketHeroVisual';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './index.css';
@@ -50,6 +52,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [heroSlide, setHeroSlide] = useState(0);
 
   // Auth state
   const [email, setEmail] = useState('');
@@ -62,6 +65,16 @@ function App() {
     } else if (view === 'app') {
       setView('landing');
     }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    axios.get(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => {
+        setUser(res.data);
+        localStorage.setItem('adminUser', JSON.stringify(res.data));
+      })
+      .catch(() => {});
   }, [token]);
 
   // Password reset flow states
@@ -114,6 +127,7 @@ function App() {
   const activeTabRef = useRef('dashboard');
   const isTypingRef = useRef(false);
   const chatEndRef = useRef(null);
+  const storeMapRef = useRef(null);
 
   // Store form state
   const [newStoreName, setNewStoreName] = useState('');
@@ -849,6 +863,28 @@ function App() {
     }
   };
 
+  const setStoreMapCoords = (lat, lng) => {
+    if (editingStore) {
+      setEditingStore(prev => ({ ...prev, lat, lng }));
+    } else {
+      setNewStoreLat(lat);
+      setNewStoreLng(lng);
+    }
+    storeMapRef.current?.flyTo?.({ center: [lng, lat], zoom: 15, duration: 800 });
+  };
+
+  const useCurrentStoreLocationWeb = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported in this browser.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setStoreMapCoords(pos.coords.latitude, pos.coords.longitude),
+      (err) => alert(err.message || 'Could not get your location. Check browser permissions.'),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
   const handleCreateStore = async (e) => {
     e.preventDefault();
     try {
@@ -977,34 +1013,91 @@ function App() {
           </div>
         )}
 
-        {/* Hero Section */}
+        {/* Hero Section — sliding carousel */}
         <section className="landing-hero">
-          <video
-            className="landing-hero-video"
-            src="/5780292-uhd_3840_2160_24fps.mp4"
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
-          <div className="landing-hero-overlay" />
-          <div className="landing-hero-container">
-            <div className="landing-hero-content">
-              <span className="landing-hero-badge">Saving food from going to waste</span>
-              <h1 className="landing-hero-title">Save good food<br />from going to waste</h1>
-              <p className="landing-hero-subtitle">
-                FoodAway connects you with local stores, cafes, and bakeries offering delicious surplus food at unbeatable prices. Rescue meals and help protect the planet.
-              </p>
-              <div className="landing-hero-btns">
-                <button className="btn-hero-outline" onClick={() => setView('customer')}>Explore Food</button>
-                <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Download the app</button>
-                <button className="btn-hero-outline" onClick={() => {
-                  const element = document.getElementById("solutions");
-                  if (element) element.scrollIntoView({ behavior: 'smooth' });
-                }}>Business solutions</button>
+          <div className="hero-slider-viewport">
+            <div className={`hero-slider-track ${heroSlide === 1 ? 'hero-slider-track--next' : ''}`}>
+
+              {/* Slide 1 — Current hero */}
+              <div className="hero-slide hero-slide--primary">
+                <video
+                  className="landing-hero-video"
+                  src="/5780292-uhd_3840_2160_24fps.mp4"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
+                <div className="landing-hero-overlay" />
+                <div className="landing-hero-container">
+                  <div className="landing-hero-content">
+                    <span className="landing-hero-badge">Saving food from going to waste</span>
+                    <h1 className="landing-hero-title">Save good food<br />from going to waste</h1>
+                    <p className="landing-hero-subtitle">
+                      FoodAway connects you with local stores, cafes, and bakeries offering delicious surplus food at unbeatable prices. Rescue meals and help protect the planet.
+                    </p>
+                    <div className="landing-hero-btns">
+                      <button className="btn-hero-outline" onClick={() => setView('customer')}>Explore Food</button>
+                      <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Download the app</button>
+                      <button className="btn-hero-outline" onClick={() => {
+                        const element = document.getElementById("solutions");
+                        if (element) element.scrollIntoView({ behavior: 'smooth' });
+                      }}>Business solutions</button>
+                    </div>
+                  </div>
+                  <div className="landing-hero-mockup-wrapper" />
+                </div>
+                <HeroPagePeelTeaser onClick={() => setHeroSlide(1)} />
               </div>
-            </div>
-            <div className="landing-hero-mockup-wrapper">
+
+              {/* Slide 2 — Supermarkets announcement */}
+              <div className="hero-slide hero-slide--announcement">
+                <div className="hero-announcement-accent" aria-hidden="true" />
+                <div className="hero-announcement-inner">
+                  <button type="button" className="hero-back-btn" onClick={() => setHeroSlide(0)}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M10 3L5 8L10 13" stroke="#FF5A00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Back
+                  </button>
+                  <div className="hero-announcement-grid">
+                    <div className="hero-announcement-copy">
+                      <span className="hero-announcement-badge">Coming Soon</span>
+                      <h2 className="hero-announcement-title">Supermarkets on FoodAway</h2>
+                      <p className="hero-announcement-lead">
+                        We are expanding beyond surplus meals to bring leading supermarkets onto the platform — premium discounts on fast-moving consumer goods, household essentials, and fresh groceries.
+                      </p>
+                      <div className="hero-announcement-tags">
+                        <span>FMCG</span>
+                        <span>Grocery</span>
+                        <span>Household</span>
+                        <span>Premium Deals</span>
+                      </div>
+                      <ul className="hero-announcement-list">
+                        <li>Food and FMCG under one rescue marketplace</li>
+                        <li>Premium brand discounts on everyday essentials</li>
+                        <li>Same mission: less waste, more value for you</li>
+                      </ul>
+                      <div className="hero-announcement-stats">
+                        <div className="hero-announcement-stat">
+                          <strong>Up to 50%</strong>
+                          <span>off surplus stock</span>
+                        </div>
+                        <div className="hero-announcement-stat">
+                          <strong>One app</strong>
+                          <span>food + FMCG rescue</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="hero-announcement-visual">
+                      <div className="hero-announcement-visual-card">
+                        <SupermarketHeroVisual className="hero-announcement-illustration" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </section>
@@ -1478,7 +1571,11 @@ function App() {
             </div>
             <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)} aria-label="Close menu">✕</button>
           </div>
-          <p style={{ paddingLeft: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '2rem' }}>Role: {user?.role}</p>
+          <div style={{ paddingLeft: '1rem', marginBottom: '2rem' }}>
+            <p style={{ color: 'var(--text-primary)', fontSize: '1rem', fontWeight: '700', margin: '0 0 4px 0' }}>{user?.name || 'Seller Account'}</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 4px 0' }}>{user?.email}</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>{user?.role === 'SellersAdmin' ? 'Seller Admin' : user?.role === 'SellersStaff' ? 'Seller Staff' : user?.role}</p>
+          </div>
         </div>
 
 
@@ -1546,7 +1643,8 @@ function App() {
                 ) : (
                   <>
                     <h1 className="header-title" style={{ margin: 0 }}>{user?.name || 'Overview'}</h1>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>{user?.role === 'SellersStaff' ? 'Seller Staff' : 'Seller Admin'}</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>{user?.email}</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '2px' }}>{user?.role === 'SellersStaff' ? 'Seller Staff' : 'Seller Admin'}</p>
                   </>
                 )}
               </div>
@@ -1841,16 +1939,54 @@ function App() {
                         </label>
                       )}
                     </div>
-                    {!editingStore && (
-                      <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Location (drag pin)</label>
-                        <div style={{ height: '220px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                          <Map mapboxAccessToken={MAPBOX_TOKEN} initialViewState={{ longitude: newStoreLng, latitude: newStoreLat, zoom: 12 }} style={{ width: '100%', height: '100%' }} mapStyle="mapbox://styles/mapbox/streets-v12">
-                            <Marker longitude={newStoreLng} latitude={newStoreLat} draggable onDragEnd={(e) => { setNewStoreLng(e.lngLat.lng); setNewStoreLat(e.lngLat.lat); }} color="red" />
-                          </Map>
-                        </div>
-                      </div>
-                    )}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Location *</label>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>
+                        Pan the map, then click where your store is — or drag the pin
+                      </p>
+                      {(() => {
+                        const pickerLat = editingStore ? (editingStore.lat ?? 51.5074) : newStoreLat;
+                        const pickerLng = editingStore ? (editingStore.lng ?? -0.1278) : newStoreLng;
+                        return (
+                          <>
+                            <div style={{ height: '220px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', cursor: 'crosshair' }}>
+                              <Map
+                                key={editingStore ? `store-map-${editingStore.id}` : 'store-map-new'}
+                                ref={storeMapRef}
+                                mapboxAccessToken={MAPBOX_TOKEN}
+                                initialViewState={{ longitude: pickerLng, latitude: pickerLat, zoom: 14 }}
+                                style={{ width: '100%', height: '100%' }}
+                                mapStyle="mapbox://styles/mapbox/streets-v12"
+                                onClick={(e) => setStoreMapCoords(e.lngLat.lat, e.lngLat.lng)}
+                              >
+                                <Marker
+                                  longitude={pickerLng}
+                                  latitude={pickerLat}
+                                  draggable
+                                  onDragEnd={(e) => setStoreMapCoords(e.lngLat.lat, e.lngLat.lng)}
+                                  color="#FF5A00"
+                                />
+                              </Map>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={useCurrentStoreLocationWeb}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                                width: '100%', marginTop: '0.6rem', padding: '0.6rem',
+                                background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '8px',
+                                color: '#FF5A00', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer',
+                              }}
+                            >
+                              Use Current Location
+                            </button>
+                            <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'center', margin: '0.4rem 0 0' }}>
+                              {pickerLat.toFixed(5)}, {pickerLng.toFixed(5)}
+                            </p>
+                          </>
+                        );
+                      })()}
+                    </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
                       <button type="button" onClick={() => setShowStoreModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
                       <button type="submit" className="btn-primary" style={{ flex: 1 }}>{editingStore ? 'Save Changes' : 'Create Store'}</button>
