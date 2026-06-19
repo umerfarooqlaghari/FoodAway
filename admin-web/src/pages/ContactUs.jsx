@@ -199,7 +199,7 @@ export default function ContactUs({ onBack }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {[
             { q: 'How do I reset my password?', a: 'Use the "Forgot Password" option on the login screen. You\'ll receive an OTP to your registered email.' },
-            { q: 'Can I list my business on FoodAway?', a: 'Yes! Click "Business Sign Up" on our homepage or contact us via this form with the subject "Partnership Opportunity".' },
+            { q: 'Can I list my business on FoodAway?', a: 'Yes! Click "Register as Seller" on our homepage or use the seller registration page, then log in to manage your stores.' },
             { q: 'How do refunds work?', a: 'If a business fails to fulfil your order, contact us within 24 hours of the scheduled pickup time for a refund.' },
             { q: 'Is my data safe?', a: 'Absolutely. We use industry-standard encryption and comply with GDPR. See our Privacy Policy for full details.' },
           ].map(({ q, a }) => (

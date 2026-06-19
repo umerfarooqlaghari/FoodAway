@@ -214,7 +214,38 @@ const initDB = async () => {
       otp TEXT NOT NULL,
       expires_at TIMESTAMP NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS checkout_pending (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      otp TEXT NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      payload TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      confirmed_result TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS checkout_idempotency (
+      idempotency_key TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      response TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+  try { await db.exec("ALTER TABLE checkout_pending ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'"); } catch (e) {}
+  try { await db.exec("ALTER TABLE checkout_pending ADD COLUMN IF NOT EXISTS confirmed_result TEXT"); } catch (e) {}
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS checkout_idempotency (
+        idempotency_key TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        response TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch (e) {}
 
   // Column migrations — safe to run repeatedly
   try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT"); } catch (e) {}

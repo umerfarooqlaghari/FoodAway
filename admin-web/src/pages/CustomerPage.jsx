@@ -209,8 +209,14 @@ export default function CustomerPage({ onBack }) {
   const [panelTab, setPanelTab] = useState('cart');
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState('details');
   const [form, setForm] = useState({ name: '', email: '', phone: '' });
+  const [otp, setOtp] = useState('');
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [idempotencyKey, setIdempotencyKey] = useState(null);
+  const [, setOtpTick] = useState(0);
   const [placing, setPlacing] = useState(false);
+  const [resending, setResending] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const [confirmedOrders, setConfirmedOrders] = useState(null);
 
@@ -246,6 +252,15 @@ export default function CustomerPage({ onBack }) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  useEffect(() => {
+    if (!otpExpiresAt || checkoutStep !== 'otp') return;
+    const timer = setInterval(() => {
+      setOtpTick(t => t + 1);
+      if (Date.now() >= otpExpiresAt) clearInterval(timer);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [otpExpiresAt, checkoutStep]);
+
   const addToCart = (item, type) => {
     setCart(prev => {
       const idx = prev.findIndex(c => c.item.id === item.id && c.type === type);
@@ -266,7 +281,28 @@ export default function CustomerPage({ onBack }) {
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0);
   const cartSubtotal = cart.reduce((s, c) => s + c.item.price * c.quantity, 0);
 
-  const handleCheckout = async (e) => {
+  const openCheckout = () => {
+    setCheckoutError('');
+    setCheckoutStep('details');
+    setOtp('');
+    setOtpExpiresAt(null);
+    setIdempotencyKey(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+    setCheckoutOpen(true);
+  };
+
+  const closeCheckout = () => {
+    setCheckoutOpen(false);
+    setCheckoutStep('details');
+    setOtp('');
+    setOtpExpiresAt(null);
+    setCheckoutError('');
+  };
+
+  const otpSecondsLeft = otpExpiresAt
+    ? Math.max(0, Math.floor((otpExpiresAt - Date.now()) / 1000))
+    : 0;
+
+  const handleSendOtp = async (e) => {
     e.preventDefault();
     setCheckoutError('');
     if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
@@ -275,20 +311,62 @@ export default function CustomerPage({ onBack }) {
     }
     setPlacing(true);
     try {
-      const res = await axios.post(`${API}/public/checkout`, {
+      const res = await axios.post(`${API}/public/checkout/send-otp`, {
         name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
         items: cart.map(c => ({ id: c.item.id, type: c.type, quantity: c.quantity }))
       });
+      setCheckoutStep('otp');
+      setOtp('');
+      setOtpExpiresAt(Date.now() + (res.data.expiresIn || 300) * 1000);
+    } catch (err) {
+      setCheckoutError(err?.response?.data?.error || 'Could not send verification code. Please try again.');
+    }
+    setPlacing(false);
+  };
+
+  const handleResendOtp = async () => {
+    setCheckoutError('');
+    setResending(true);
+    try {
+      const res = await axios.post(`${API}/public/checkout/resend-otp`, {
+        email: form.email.trim()
+      });
+      setOtp('');
+      setOtpExpiresAt(Date.now() + (res.data.expiresIn || 300) * 1000);
+    } catch (err) {
+      setCheckoutError(err?.response?.data?.error || 'Could not resend verification code.');
+    }
+    setResending(false);
+  };
+
+  const handleConfirmOrder = async (e) => {
+    e.preventDefault();
+    setCheckoutError('');
+    if (!otp.trim() || otp.trim().length !== 6) {
+      setCheckoutError('Please enter the 6-digit verification code from your email.');
+      return;
+    }
+    if (otpSecondsLeft === 0) {
+      setCheckoutError('Verification code expired. Please resend a new code.');
+      return;
+    }
+    setPlacing(true);
+    try {
+      const res = await axios.post(`${API}/public/checkout/confirm`, {
+        email: form.email.trim(),
+        otp: otp.trim(),
+        idempotencyKey
+      });
       setConfirmedOrders(res.data.orders);
       setMyOrders(res.data.orders);
       setCart([]);
-      setCheckoutOpen(false);
+      closeCheckout();
       setPanelTab('orders');
       setLookupDone(true);
     } catch (err) {
-      setCheckoutError(err?.response?.data?.error || 'Checkout failed. Please try again.');
+      setCheckoutError(err?.response?.data?.error || 'Could not confirm order. Please check your code and try again.');
     }
     setPlacing(false);
   };
@@ -503,7 +581,7 @@ export default function CustomerPage({ onBack }) {
                       <strong>{CURRENCY}{cartSubtotal.toFixed(2)}</strong>
                     </div>
                     <p className="pos-cash-note">Cash payment at pickup</p>
-                    <button className="pos-place-order-btn" onClick={() => { setCheckoutOpen(true); setCheckoutError(''); }}>
+                    <button className="pos-place-order-btn" onClick={openCheckout}>
                       Place Order
                     </button>
                     <button className="pos-clear-btn" onClick={() => setCart([])}>Clear Cart</button>
@@ -519,7 +597,7 @@ export default function CustomerPage({ onBack }) {
                   <div className="pos-confirmed-banner">
                     <div className="pos-confirmed-top">
                       <CheckCircleIcon size={16} color="#166534" />
-                      <span>Order confirmed! A confirmation email has been sent.</span>
+                      <span>Order confirmed! Your receipt is ready to download.</span>
                     </div>
                     <button
                       className="pos-receipt-btn"
@@ -601,14 +679,18 @@ export default function CustomerPage({ onBack }) {
 
       {/* ── Checkout Modal ─────────────────────────── */}
       {checkoutOpen && (
-        <div className="pos-modal-bg" onClick={e => e.target === e.currentTarget && setCheckoutOpen(false)}>
+        <div className="pos-modal-bg" onClick={e => e.target === e.currentTarget && closeCheckout()}>
           <div className="pos-modal">
             <div className="pos-modal-head">
               <div>
-                <h2>Almost there!</h2>
-                <p>No account needed — just your contact details.</p>
+                <h2>{checkoutStep === 'details' ? 'Almost there!' : 'Verify your email'}</h2>
+                <p>
+                  {checkoutStep === 'details'
+                    ? 'No account needed — just your contact details.'
+                    : `Enter the 6-digit code sent to ${form.email}`}
+                </p>
               </div>
-              <button className="pos-modal-x" onClick={() => setCheckoutOpen(false)}>
+              <button className="pos-modal-x" onClick={closeCheckout}>
                 <XIcon size={16} />
               </button>
             </div>
@@ -627,25 +709,65 @@ export default function CustomerPage({ onBack }) {
               </div>
             </div>
 
-            <form onSubmit={handleCheckout} className="pos-modal-form">
-              <label className="pos-label">Full Name</label>
-              <input className="pos-input" type="text" placeholder="Your name"
-                value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
-              <label className="pos-label">Email Address</label>
-              <input className="pos-input" type="email" placeholder="you@example.com"
-                value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required />
-              <label className="pos-label">Phone Number</label>
-              <input className="pos-input" type="tel" placeholder="+44 7700 000000"
-                value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} required />
-              <p className="pos-modal-note">A confirmation email will be sent to you. Payment is cash at pickup.</p>
-              {checkoutError && <p className="pos-error">{checkoutError}</p>}
-              <div className="pos-modal-actions">
-                <button type="button" className="pos-outline-btn" onClick={() => setCheckoutOpen(false)}>Back</button>
-                <button type="submit" className="pos-place-order-btn pos-flex1" disabled={placing}>
-                  {placing ? 'Placing order...' : `Confirm Order · ${CURRENCY}${cartSubtotal.toFixed(2)}`}
+            {checkoutStep === 'details' ? (
+              <form onSubmit={handleSendOtp} className="pos-modal-form">
+                <label className="pos-label">Full Name</label>
+                <input className="pos-input" type="text" placeholder="Your name"
+                  value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
+                <label className="pos-label">Email Address</label>
+                <input className="pos-input" type="email" placeholder="you@example.com"
+                  value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required />
+                <label className="pos-label">Phone Number</label>
+                <input className="pos-input" type="tel" placeholder="+44 7700 000000"
+                  value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} required />
+                <p className="pos-modal-note">We&apos;ll email you a verification code. Your order is only placed after you confirm the code. Payment is cash at pickup.</p>
+                {checkoutError && <p className="pos-error">{checkoutError}</p>}
+                <div className="pos-modal-actions">
+                  <button type="button" className="pos-outline-btn" onClick={closeCheckout}>Back</button>
+                  <button type="submit" className="pos-place-order-btn pos-flex1" disabled={placing}>
+                    {placing ? 'Sending code...' : 'Send Verification Code'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleConfirmOrder} className="pos-modal-form">
+                <label className="pos-label">Verification Code</label>
+                <input
+                  className="pos-input pos-otp-input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  autoFocus
+                />
+                <p className="pos-modal-note">
+                  {otpSecondsLeft > 0
+                    ? `Code expires in ${Math.floor(otpSecondsLeft / 60)}:${String(otpSecondsLeft % 60).padStart(2, '0')}`
+                    : 'Code expired — resend a new one below.'}
+                </p>
+                {checkoutError && <p className="pos-error">{checkoutError}</p>}
+                <div className="pos-modal-actions">
+                  <button type="button" className="pos-outline-btn" onClick={() => { setCheckoutStep('details'); setOtp(''); setCheckoutError(''); }}>
+                    Back
+                  </button>
+                  <button type="submit" className="pos-place-order-btn pos-flex1" disabled={placing || otpSecondsLeft === 0}>
+                    {placing ? 'Confirming...' : `Confirm Order · ${CURRENCY}${cartSubtotal.toFixed(2)}`}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="pos-resend-otp-btn"
+                  onClick={handleResendOtp}
+                  disabled={resending}
+                >
+                  {resending ? 'Resending...' : 'Resend verification code'}
                 </button>
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}

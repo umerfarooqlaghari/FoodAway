@@ -38,11 +38,27 @@ const { verifyToken, requireRole, JWT_SECRET } = require('./middleware');
 
 // Authentication Routes
 app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, role, phone } = req.body;
+  const { name, email, password, role, phone, brand_name, logo } = req.body;
   try {
+    const requestedRole = role || 'Customers';
+    const allowedRoles = ['Customers', 'SellersAdmin'];
+    if (!allowedRoles.includes(requestedRole)) {
+      return res.status(400).json({ error: 'Invalid registration type' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    const assignedRole = role || 'Customers';
-    const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, assignedRole, phone || null);
+
+    if (requestedRole === 'SellersAdmin') {
+      const finalName = (brand_name || name || '').trim();
+      if (!finalName) return res.status(400).json({ error: 'Brand name is required' });
+      if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+      const logoUrl = logo ? await uploadImageToS3(logo) : null;
+      const info = await db.prepare('INSERT INTO users (name, email, password, logo, role, phone) VALUES (?, ?, ?, ?, ?, ?)').run(finalName, email, hashedPassword, logoUrl, 'SellersAdmin', phone || null);
+      return res.status(201).json({ id: info.lastInsertRowid, message: 'Seller account registered successfully' });
+    }
+
+    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required' });
+    const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'Customers', phone || null);
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === '23505') {
@@ -1612,97 +1628,234 @@ app.get('/api/public/food-items', async (req, res) => {
   }
 });
 
-app.post('/api/public/checkout', async (req, res) => {
-  const { name, email, phone, items } = req.body;
-  if (!name || !email || !phone || !items || !items.length) {
-    return res.status(400).json({ error: 'name, email, phone, and items are required' });
+async function previewCheckoutItems(items) {
+  const preview = [];
+  for (const cartItem of items) {
+    const { id, type, quantity = 1 } = cartItem;
+    if (type === 'bag') {
+      const bag = await db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
+      if (!bag || bag.quantity < quantity) continue;
+      const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(bag.store_id);
+      if (!store?.is_active) continue;
+      preview.push({
+        id, type, quantity,
+        item_name: bag.description || 'Surprise Bag',
+        store_name: store.name,
+        price: bag.price
+      });
+    } else if (type === 'food') {
+      const food = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
+      if (!food || !food.is_available || food.quantity < quantity) continue;
+      const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(food.store_id);
+      if (!store?.is_active) continue;
+      preview.push({
+        id, type, quantity,
+        item_name: food.name,
+        store_name: store.name,
+        price: food.price
+      });
+    }
   }
+  return preview;
+}
+
+async function resolveCheckoutCustomer({ name, email, phone }) {
+  let user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  if (!user) {
+    const hashed = await bcrypt.hash(`${phone}${Date.now()}`, 8);
+    const info = await db.prepare(
+      'INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)'
+    ).run(name, email, hashed, 'Customers', phone);
+    user = { id: info.lastInsertRowid, name, email, phone };
+  } else {
+    if (!user.phone && phone) {
+      await db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, user.id);
+    }
+    if (!user.name && name) {
+      await db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, user.id);
+    }
+    user = { ...user, name: user.name || name, phone: user.phone || phone };
+  }
+  return user;
+}
+
+async function placeCheckoutOrders(user, items) {
+  const placedOrders = [];
+  for (const cartItem of items) {
+    const { id, type, quantity = 1 } = cartItem;
+
+    if (type === 'bag') {
+      const bag = await db.prepare(
+        'UPDATE surprise_bags SET quantity = quantity - ? WHERE id = ? AND quantity >= ? RETURNING *'
+      ).get(quantity, id, quantity);
+      if (!bag) {
+        throw new Error(`Surprise bag #${id} is no longer available in the requested quantity`);
+      }
+      const store = await db.prepare('SELECT * FROM stores WHERE id = ? AND is_active = TRUE').get(bag.store_id);
+      if (!store) {
+        throw new Error(`Store for surprise bag #${id} is unavailable`);
+      }
+      const orderInfo = await db.prepare(
+        'INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(bag.id, 'bag', quantity, bag.store_id, user.id, bag.price, 'Cash at Pickup');
+      placedOrders.push({
+        id: orderInfo.lastInsertRowid,
+        type: 'bag',
+        store_name: store.name,
+        store_address: store.address || '',
+        item_name: bag.description || 'Surprise Bag',
+        quantity,
+        price: bag.price,
+        pickup_time: bag.pickup_time || 'During opening hours'
+      });
+    } else if (type === 'food') {
+      const food = await db.prepare(
+        'UPDATE food_items SET quantity = quantity - ? WHERE id = ? AND is_available = TRUE AND quantity >= ? RETURNING *'
+      ).get(quantity, id, quantity);
+      if (!food) {
+        throw new Error(`Food item #${id} is no longer available in the requested quantity`);
+      }
+      const store = await db.prepare('SELECT * FROM stores WHERE id = ? AND is_active = TRUE').get(food.store_id);
+      if (!store) {
+        throw new Error(`Store for food item #${id} is unavailable`);
+      }
+      const orderInfo = await db.prepare(
+        'INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(food.id, 'food', quantity, food.store_id, user.id, food.price, 'Cash at Pickup');
+      placedOrders.push({
+        id: orderInfo.lastInsertRowid,
+        type: 'food',
+        store_name: store.name,
+        store_address: store.address || '',
+        item_name: food.name,
+        quantity,
+        price: food.price,
+        pickup_time: food.pickup_time || 'During opening hours'
+      });
+    }
+  }
+  if (placedOrders.length === 0) {
+    throw new Error('No valid items could be ordered');
+  }
+  return placedOrders;
+}
+
+function parseExpiresAt(expiresAt) {
+  let value = expiresAt;
+  if (typeof value === 'string' && !value.includes('T') && !value.includes('Z')) {
+    value = value.replace(' ', 'T') + 'Z';
+  }
+  return new Date(value);
+}
+
+async function confirmCheckoutWithIdempotency({ email, otp, idempotencyKey }) {
+  const normalizedEmail = email.trim();
+  const normalizedOtp = String(otp).trim();
+
+  return db.transaction(async () => {
+    if (idempotencyKey) {
+      const cached = await db.prepare(
+        'SELECT response FROM checkout_idempotency WHERE idempotency_key = ?'
+      ).get(idempotencyKey);
+      if (cached) {
+        return { ...JSON.parse(cached.response), replayed: true };
+      }
+    }
+
+    const pending = await db.prepare(
+      'SELECT * FROM checkout_pending WHERE email = ? FOR UPDATE'
+    ).get(normalizedEmail);
+
+    if (!pending) {
+      const err = new Error('No pending checkout found. Please request a verification code first.');
+      err.status = 400;
+      throw err;
+    }
+
+    if (pending.status === 'confirmed' && pending.confirmed_result) {
+      const result = { ...JSON.parse(pending.confirmed_result), replayed: true };
+      if (idempotencyKey) {
+        await db.prepare(
+          'INSERT INTO checkout_idempotency (idempotency_key, email, response) VALUES (?, ?, ?) ON CONFLICT (idempotency_key) DO NOTHING'
+        ).run(idempotencyKey, normalizedEmail, JSON.stringify(result));
+      }
+      return result;
+    }
+
+    if (pending.status === 'processing') {
+      const err = new Error('This checkout is already being processed. Please wait.');
+      err.status = 409;
+      throw err;
+    }
+
+    if (pending.otp !== normalizedOtp) {
+      const err = new Error('Invalid verification code');
+      err.status = 400;
+      throw err;
+    }
+
+    if (new Date() > parseExpiresAt(pending.expires_at)) {
+      await db.prepare('DELETE FROM checkout_pending WHERE email = ?').run(normalizedEmail);
+      const err = new Error('Verification code expired. Please request a new one.');
+      err.status = 400;
+      throw err;
+    }
+
+    await db.prepare("UPDATE checkout_pending SET status = 'processing' WHERE email = ?").run(normalizedEmail);
+
+    const { name, phone, items } = JSON.parse(pending.payload);
+    const user = await resolveCheckoutCustomer({ name, email: normalizedEmail, phone });
+    const placedOrders = await placeCheckoutOrders(user, items);
+
+    const result = { success: true, orders: placedOrders, customerId: user.id, name, phone, email: normalizedEmail, replayed: false };
+
+    await db.prepare(
+      "UPDATE checkout_pending SET status = 'confirmed', confirmed_result = ? WHERE email = ?"
+    ).run(JSON.stringify(result), normalizedEmail);
+
+    if (idempotencyKey) {
+      await db.prepare(
+        'INSERT INTO checkout_idempotency (idempotency_key, email, response) VALUES (?, ?, ?) ON CONFLICT (idempotency_key) DO NOTHING'
+      ).run(idempotencyKey, normalizedEmail, JSON.stringify(result));
+    }
+
+    return result;
+  });
+}
+
+async function sendCheckoutOtpEmail({ to, name, otp }) {
+  await sendEmail({
+    to,
+    subject: 'Confirm your FoodAway order',
+    html: `<p>Hi ${name || 'there'},</p>
+           <p>Enter this verification code to confirm your order:</p>
+           <h2 style="font-size: 28px; letter-spacing: 4px; color: #EA580C; font-family: monospace;">${otp}</h2>
+           <p>This code expires in <strong>5 minutes</strong>. If you did not start a checkout, you can ignore this email.</p>`,
+    text: `Your FoodAway order verification code is ${otp}. Valid for 5 minutes.`
+  });
+}
+
+async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders }) {
+  const total = placedOrders.reduce((s, o) => s + o.price * o.quantity, 0);
+  const orderRows = placedOrders.map(o => `
+    <tr>
+      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.item_name}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;text-align:center;">${o.quantity}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">£${(o.price * o.quantity).toFixed(2)}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.store_name}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.pickup_time}</td>
+    </tr>`).join('');
+
+  const ordersWithPayment = placedOrders.map(o => ({ ...o, payment_method: 'Cash at Pickup' }));
+  const receiptPdf = await generateReceiptBuffer(ordersWithPayment, { name, email, phone });
 
   try {
-    // Find or create guest customer
-    let user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-    if (!user) {
-      const hashed = await bcrypt.hash(`${phone}${Date.now()}`, 8);
-      const info = await db.prepare(
-        'INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)'
-      ).run(name, email, hashed, 'Customers', phone);
-      user = { id: info.lastInsertRowid, name, email, phone };
-    } else {
-      if (!user.phone && phone) {
-        await db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, user.id);
-      }
-      if (!user.name && name) {
-        await db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, user.id);
-      }
-    }
-
-    const placedOrders = [];
-    for (const cartItem of items) {
-      const { id, type, quantity = 1 } = cartItem;
-
-      if (type === 'bag') {
-        const bag = await db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
-        if (!bag || bag.quantity < quantity) continue;
-        const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(bag.store_id);
-        const orderInfo = await db.prepare(
-          'INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
-        ).run(bag.id, 'bag', quantity, bag.store_id, user.id, bag.price, 'Cash at Pickup');
-        await db.prepare('UPDATE surprise_bags SET quantity = quantity - ? WHERE id = ?').run(quantity, bag.id);
-        placedOrders.push({
-          id: orderInfo.lastInsertRowid,
-          type: 'bag',
-          store_name: store?.name || '',
-          store_address: store?.address || '',
-          item_name: bag.description || 'Surprise Bag',
-          quantity,
-          price: bag.price,
-          pickup_time: bag.pickup_time || 'During opening hours'
-        });
-      } else if (type === 'food') {
-        const food = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
-        if (!food || food.quantity < quantity) continue;
-        const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(food.store_id);
-        const orderInfo = await db.prepare(
-          'INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
-        ).run(food.id, 'food', quantity, food.store_id, user.id, food.price, 'Cash at Pickup');
-        await db.prepare('UPDATE food_items SET quantity = quantity - ? WHERE id = ?').run(quantity, food.id);
-        placedOrders.push({
-          id: orderInfo.lastInsertRowid,
-          type: 'food',
-          store_name: store?.name || '',
-          store_address: store?.address || '',
-          item_name: food.name,
-          quantity,
-          price: food.price,
-          pickup_time: food.pickup_time || 'During opening hours'
-        });
-      }
-    }
-
-    if (placedOrders.length === 0) {
-      return res.status(400).json({ error: 'No valid items could be ordered (check stock levels)' });
-    }
-
-    const total = placedOrders.reduce((s, o) => s + o.price * o.quantity, 0);
-    const orderRows = placedOrders.map(o => `
-      <tr>
-        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.item_name}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;text-align:center;">${o.quantity}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">£${(o.price * o.quantity).toFixed(2)}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.store_name}</td>
-        <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.pickup_time}</td>
-      </tr>`).join('');
-
-    // Generate PDF receipt and send confirmation email with attachment
-    const ordersWithPayment = placedOrders.map(o => ({ ...o, payment_method: 'Cash at Pickup' }));
-    const receiptPdf = await generateReceiptBuffer(ordersWithPayment, { name, email, phone });
-
     await sendEmail({
       to: email,
       subject: `Your FoodAway Order is Confirmed! 🎉 #${placedOrders.map(o => o.id).join(', #')}`,
       attachments: [{
-        filename:    'FoodAway-Receipt.pdf',
-        content:     receiptPdf,
+        filename: 'FoodAway-Receipt.pdf',
+        content: receiptPdf,
         contentType: 'application/pdf'
       }],
       html: `
@@ -1723,10 +1876,9 @@ app.post('/api/public/checkout', async (req, res) => {
                 <td style="padding:32px 40px 24px;">
                   <p style="margin:0 0 8px;color:#1a1a1a;font-size:16px;">Hi <strong>${name}</strong>,</p>
                   <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">
-                    Your order has been placed successfully! Your <strong>PDF receipt is attached</strong> to this email.
+                    Your order has been confirmed! Your <strong>PDF receipt is attached</strong> to this email.
                     Please pay <strong>cash at pickup</strong> and present the receipt at the store.
                   </p>
-
                   <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #f0f0f0;border-radius:10px;overflow:hidden;">
                     <thead>
                       <tr style="background:#fdf5ef;">
@@ -1737,9 +1889,7 @@ app.post('/api/public/checkout', async (req, res) => {
                         <th style="padding:10px 14px;font-size:12px;color:#ff6b35;text-transform:uppercase;letter-spacing:0.5px;">Pickup</th>
                       </tr>
                     </thead>
-                    <tbody style="font-size:14px;color:#333;">
-                      ${orderRows}
-                    </tbody>
+                    <tbody style="font-size:14px;color:#333;">${orderRows}</tbody>
                     <tfoot>
                       <tr style="background:#fdf5ef;">
                         <td colspan="2" style="padding:12px 14px;font-weight:700;color:#1a1a1a;">Total</td>
@@ -1747,13 +1897,11 @@ app.post('/api/public/checkout', async (req, res) => {
                       </tr>
                     </tfoot>
                   </table>
-
                   <div style="margin-top:24px;padding:16px;background:#fdf5ef;border-radius:10px;border-left:4px solid #ff6b35;">
                     <p style="margin:0;font-size:13px;color:#555;line-height:1.6;">
-                      <strong>Reminder:</strong> Payment is <strong>cash only at pickup</strong>. Please arrive within the pickup window. Your PDF receipt is attached — save it or show it at the store.
+                      <strong>Reminder:</strong> Payment is <strong>cash only at pickup</strong>. Please arrive within the pickup window.
                     </p>
                   </div>
-
                   <div style="margin-top:24px;text-align:center;">
                     <p style="font-size:12px;color:#999;margin:0;">Order Reference: <strong style="color:#ff6b35;">#${placedOrders.map(o => o.id).join(', #')}</strong></p>
                     <p style="font-size:12px;color:#999;margin:4px 0 0;">Ordered for: ${email} · ${phone}</p>
@@ -1769,15 +1917,111 @@ app.post('/api/public/checkout', async (req, res) => {
           </td></tr>
         </table>
       </body>
-      </html>
-      `,
+      </html>`,
       text: `Hi ${name}, your FoodAway order is confirmed! Total: £${total.toFixed(2)}. Order refs: #${placedOrders.map(o => o.id).join(', #')}. Payment: cash at pickup. Your receipt is attached.`
     });
+  } catch (emailErr) {
+    console.error('[Checkout Confirm] Order confirmed but receipt email failed:', emailErr);
+  }
+}
 
-    res.json({ success: true, orders: placedOrders, customerId: user.id });
+app.post('/api/public/checkout/send-otp', async (req, res) => {
+  const { name, email, phone, items } = req.body;
+  if (!name || !email || !phone || !items || !items.length) {
+    return res.status(400).json({ error: 'name, email, phone, and items are required' });
+  }
+
+  try {
+    const preview = await previewCheckoutItems(items);
+    if (preview.length === 0) {
+      return res.status(400).json({ error: 'No valid items could be ordered (check stock levels)' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const payload = JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), items });
+
+    await db.transaction(async () => {
+      await db.prepare('DELETE FROM checkout_pending WHERE email = ?').run(email.trim());
+      await db.prepare(
+        'INSERT INTO checkout_pending (email, otp, expires_at, payload, status) VALUES (?, ?, ?, ?, ?)'
+      ).run(email.trim(), otp, expiresAt, payload, 'pending');
+    });
+
+    await sendCheckoutOtpEmail({ to: email.trim(), name: name.trim(), otp });
+
+    res.json({ message: 'Verification code sent to your email', expiresIn: 300 });
   } catch (err) {
-    console.error('[Guest Checkout Error]', err);
-    res.status(500).json({ error: err.message });
+    console.error('[Checkout Send OTP Error]', err);
+    try { await db.prepare('DELETE FROM checkout_pending WHERE email = ?').run((req.body.email || '').trim()); } catch (_) {}
+    res.status(500).json({ error: err.message || 'Failed to send verification code' });
+  }
+});
+
+app.post('/api/public/checkout/resend-otp', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email is required' });
+
+  try {
+    let otpPayload = null;
+    await db.transaction(async () => {
+      const pending = await db.prepare(
+        'SELECT * FROM checkout_pending WHERE email = ? FOR UPDATE'
+      ).get(email.trim());
+      if (!pending) {
+        const err = new Error('No pending checkout found. Please start checkout again.');
+        err.status = 400;
+        throw err;
+      }
+      if (pending.status === 'confirmed') {
+        const err = new Error('This checkout is already confirmed.');
+        err.status = 400;
+        throw err;
+      }
+
+      const { name } = JSON.parse(pending.payload);
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+      await db.prepare(
+        "UPDATE checkout_pending SET otp = ?, expires_at = ?, status = 'pending' WHERE email = ?"
+      ).run(otp, expiresAt, email.trim());
+
+      otpPayload = { to: email.trim(), name, otp };
+    });
+
+    await sendCheckoutOtpEmail(otpPayload);
+
+    res.json({ message: 'New verification code sent', expiresIn: 300 });
+  } catch (err) {
+    console.error('[Checkout Resend OTP Error]', err);
+    res.status(err.status || 500).json({ error: err.message || 'Failed to resend verification code' });
+  }
+});
+
+app.post('/api/public/checkout/confirm', async (req, res) => {
+  const { email, otp, idempotencyKey } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ error: 'email and otp are required' });
+  }
+
+  try {
+    const result = await confirmCheckoutWithIdempotency({ email, otp, idempotencyKey });
+
+    if (!result.replayed) {
+      await sendCheckoutConfirmationEmail({
+        name: result.name,
+        email: result.email,
+        phone: result.phone,
+        placedOrders: result.orders
+      });
+    }
+
+    const { name, phone, email: confirmedEmail, replayed, ...clientResult } = result;
+    res.json(clientResult);
+  } catch (err) {
+    console.error('[Checkout Confirm Error]', err);
+    res.status(err.status || 500).json({ error: err.message || 'Failed to confirm order' });
   }
 });
 

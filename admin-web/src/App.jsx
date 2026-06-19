@@ -36,6 +36,13 @@ const parsePickupTimeDetails = (pickupTimeStr) => {
   return { days, from, to };
 };
 
+const TabLoading = ({ label = 'Loading...' }) => (
+  <div className="portal-loading">
+    <div className="portal-spinner" />
+    <span>{label}</span>
+  </div>
+);
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem('adminToken'));
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('adminUser')));
@@ -66,6 +73,19 @@ function App() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [tabLoading, setTabLoading] = useState({});
+
+  // Seller registration (public web)
+  const [registerBrand, setRegisterBrand] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerLogo, setRegisterLogo] = useState('');
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerError, setRegisterError] = useState('');
+  const [registerSuccess, setRegisterSuccess] = useState('');
 
   // Data state
   const [bags, setBags] = useState([]);
@@ -177,33 +197,77 @@ function App() {
   const [newUserLogo, setNewUserLogo] = useState('');
 
   useEffect(() => {
-    if (token) {
+    if (!token) return;
+
+    const loadTabData = async () => {
       if (activeTab === 'dashboard') {
-        fetchStats();
-        if (user?.role === 'SuperAdmin') fetchTenants();
+        setTabLoading(prev => ({ ...prev, dashboard: true }));
+        try {
+          await fetchStats();
+          if (user?.role === 'SuperAdmin') await fetchTenants();
+        } finally {
+          setTabLoading(prev => ({ ...prev, dashboard: false }));
+        }
       }
       if (activeTab === 'stores') {
-        fetchBags();
-        fetchStores();
-        fetchFoodItems();
+        setTabLoading(prev => ({ ...prev, stores: true }));
+        try {
+          await Promise.all([fetchBags(), fetchStores(), fetchFoodItems()]);
+        } finally {
+          setTabLoading(prev => ({ ...prev, stores: false }));
+        }
       }
-      if (activeTab === 'appreviews' && user?.role === 'SuperAdmin') { fetchAppReviews(); }
-      if (activeTab === 'staff' && user?.role === 'SellersAdmin') { fetchStaff(); }
+      if (activeTab === 'appreviews' && user?.role === 'SuperAdmin') {
+        setTabLoading(prev => ({ ...prev, appreviews: true }));
+        try {
+          await fetchAppReviews();
+        } finally {
+          setTabLoading(prev => ({ ...prev, appreviews: false }));
+        }
+      }
+      if (activeTab === 'staff' && user?.role === 'SellersAdmin') {
+        setTabLoading(prev => ({ ...prev, staff: true }));
+        try {
+          await fetchStaff();
+        } finally {
+          setTabLoading(prev => ({ ...prev, staff: false }));
+        }
+      }
       if (activeTab === 'superadmin' && user?.role === 'SuperAdmin') {
-        fetchUsers();
+        setTabLoading(prev => ({ ...prev, superadmin: true }));
+        try {
+          await fetchUsers();
+        } finally {
+          setTabLoading(prev => ({ ...prev, superadmin: false }));
+        }
       }
       if (activeTab === 'reviews') {
-        fetchReviews();
-        fetchStores();
+        setTabLoading(prev => ({ ...prev, reviews: true }));
+        try {
+          await Promise.all([fetchReviews(), fetchStores()]);
+        } finally {
+          setTabLoading(prev => ({ ...prev, reviews: false }));
+        }
       }
       if (activeTab === 'orders') {
-        fetchOrders();
-        fetchStores();
+        setTabLoading(prev => ({ ...prev, orders: true }));
+        try {
+          await Promise.all([fetchOrders(), fetchStores()]);
+        } finally {
+          setTabLoading(prev => ({ ...prev, orders: false }));
+        }
       }
       if (activeTab === 'chats') {
-        fetchActiveChats();
+        setTabLoading(prev => ({ ...prev, chats: true }));
+        try {
+          await fetchActiveChats();
+        } finally {
+          setTabLoading(prev => ({ ...prev, chats: false }));
+        }
       }
-    }
+    };
+
+    loadTabData();
   }, [token, activeTab, selectedTenantId]);
 
   useEffect(() => {
@@ -275,6 +339,8 @@ function App() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setLoginLoading(true);
+    setAuthError('');
     try {
       const res = await axios.post(`${API_URL}/auth/login`, { email, password });
       const { token, user } = res.data;
@@ -289,6 +355,46 @@ function App() {
       setAuthError('');
     } catch (err) {
       setAuthError(err.response?.data?.error || 'Login failed');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleSellerRegister = async (e) => {
+    e.preventDefault();
+    setRegisterLoading(true);
+    setRegisterError('');
+    setRegisterSuccess('');
+    if (!registerBrand.trim() || !registerEmail.trim() || !registerPhone.trim() || !registerPassword) {
+      setRegisterError('Please fill in all required fields.');
+      setRegisterLoading(false);
+      return;
+    }
+    try {
+      await axios.post(`${API_URL}/auth/register`, {
+        brand_name: registerBrand.trim(),
+        email: registerEmail.trim(),
+        password: registerPassword,
+        phone: registerPhone.trim(),
+        role: 'SellersAdmin',
+        logo: registerLogo || undefined
+      });
+      setRegisterSuccess('Seller account created! Redirecting to login...');
+      setTimeout(() => {
+        setEmail(registerEmail.trim());
+        setPassword('');
+        setRegisterBrand('');
+        setRegisterEmail('');
+        setRegisterPhone('');
+        setRegisterPassword('');
+        setRegisterLogo('');
+        setRegisterSuccess('');
+        setView('login');
+      }, 1500);
+    } catch (err) {
+      setRegisterError(err.response?.data?.error || 'Registration failed');
+    } finally {
+      setRegisterLoading(false);
     }
   };
 
@@ -1007,7 +1113,7 @@ function App() {
             <p className="join-subtitle">Download the FoodAway app today and start saving food or listing your surplus.</p>
             <div className="join-btns">
               <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Get the App</button>
-              <button className="btn-hero-outline" onClick={() => { setForgotPasswordStep('login'); setView('login'); }}>Business Sign Up</button>
+              <button className="btn-hero-outline" onClick={() => { setRegisterError(''); setRegisterSuccess(''); setView('register'); }}>Register as Seller</button>
             </div>
           </div>
         </section>
@@ -1164,7 +1270,28 @@ function App() {
                   <div style={{ textAlign: 'right', marginBottom: '1.5rem' }}>
                     <span onClick={() => { setForgotPasswordStep('email'); setResetError(''); setResetSuccess(''); }} style={{ color: 'var(--brand-orange)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '700' }}>Forgot Password?</span>
                   </div>
-                  <button type="submit" className="btn-primary" style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Login</button>
+                  <button type="submit" className="btn-primary" disabled={loginLoading} style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: loginLoading ? 'not-allowed' : 'pointer', opacity: loginLoading ? 0.75 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    {loginLoading && <div className="portal-spinner portal-spinner-sm" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,0.3)' }} />}
+                    {loginLoading ? 'Signing in...' : 'Login'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setView('register')}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--brand-orange)',
+                      cursor: 'pointer',
+                      fontWeight: '700',
+                      marginTop: '0.75rem'
+                    }}
+                  >
+                    Register your business
+                  </button>
 
                   <button
                     type="button"
@@ -1266,6 +1393,65 @@ function App() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      );
+    }
+    if (view === 'register') {
+      return (
+        <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%)' }}>
+          <div className="glass-card animate-fade-in" style={{ padding: '2.5rem', width: '460px', maxWidth: '95vw', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
+            <img src="/favicon.png" alt="FoodAway Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
+            <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Register as Seller</h2>
+            <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on FoodAway and start selling surplus food</p>
+
+            {registerError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerError}</div>}
+            {registerSuccess && <div style={{ color: '#065F46', marginBottom: '1rem', padding: '0.5rem', background: '#D1FAE5', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerSuccess}</div>}
+
+            <form onSubmit={handleSellerRegister} style={{ width: '100%', textAlign: 'left' }}>
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Name *</label>
+              <input type="text" placeholder="e.g. KFC, Starbucks" value={registerBrand} onChange={e => setRegisterBrand(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
+
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Email Address *</label>
+              <input type="email" placeholder="admin@brand.com" value={registerEmail} onChange={e => setRegisterEmail(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
+
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Phone Number *</label>
+              <input type="tel" placeholder="+44 7700 000000" value={registerPhone} onChange={e => setRegisterPhone(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
+
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Password *</label>
+              <div style={{ marginBottom: '1rem', position: 'relative' }}>
+                <input type={showRegisterPassword ? 'text' : 'password'} placeholder="Password" value={registerPassword} onChange={e => setRegisterPassword(e.target.value)} style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }} required />
+                <button type="button" onClick={() => setShowRegisterPassword(!showRegisterPassword)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#4B5563' }}>
+                  {showRegisterPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Logo (optional)</label>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                <input type="text" placeholder="Image URL or upload below..." value={registerLogo} onChange={e => setRegisterLogo(e.target.value)} style={{ flex: 1, padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }} />
+                <label style={{ cursor: 'pointer', padding: '0.75rem 1rem', background: '#E5E7EB', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                  Upload
+                  <input type="file" accept="image/*" onChange={e => handleSingleImageUpload(e, setRegisterLogo)} style={{ display: 'none' }} />
+                </label>
+              </div>
+              {registerLogo && (
+                <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <img src={registerLogo} alt="Logo preview" style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #E5E7EB' }} />
+                  <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>Logo preview</span>
+                </div>
+              )}
+
+              <button type="submit" className="btn-primary" disabled={registerLoading} style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: registerLoading ? 'not-allowed' : 'pointer', opacity: registerLoading ? 0.75 : 1 }}>
+                {registerLoading ? 'Creating account...' : 'Create Seller Account'}
+              </button>
+
+              <button type="button" onClick={() => setView('login')} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7EB', background: 'transparent', color: '#374151', cursor: 'pointer', fontWeight: '600', marginTop: '1rem' }}>
+                Already have an account? Login
+              </button>
+              <button type="button" onClick={() => setView('landing')} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: 'none', background: 'transparent', color: '#6B7280', cursor: 'pointer', fontWeight: '600', marginTop: '0.5rem' }}>
+                Back to Home
+              </button>
+            </form>
           </div>
         </div>
       );
@@ -1388,16 +1574,23 @@ function App() {
             <section className="stats-grid">
               <div className="glass-card stat-card delay-1">
                 <div className="stat-title">Total Revenue</div>
-                <div className="stat-value">{currencySymbol}{stats.totalRevenue.toFixed(2)}</div>
+                <div className="stat-value stat-value-loading">
+                  {tabLoading.dashboard ? <div className="portal-spinner portal-spinner-sm" /> : `${currencySymbol}${stats.totalRevenue.toFixed(2)}`}
+                </div>
               </div>
               <div className="glass-card stat-card delay-2">
                 <div className="stat-title">Surprise Bags Sold</div>
-                <div className="stat-value">{stats.bagsSold}</div>
+                <div className="stat-value stat-value-loading">
+                  {tabLoading.dashboard ? <div className="portal-spinner portal-spinner-sm" /> : stats.bagsSold}
+                </div>
               </div>
             </section>
 
             <div className="glass-card" style={{ padding: '1.5rem', marginTop: '2rem', height: '400px' }}>
               <h3 style={{ marginBottom: '1rem' }}>Sales Over Last 7 Days</h3>
+              {tabLoading.dashboard ? (
+                <TabLoading label="Loading chart data..." />
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={stats.dailySales} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1407,6 +1600,7 @@ function App() {
                   <Line type="monotone" dataKey="revenue" stroke="#EA580C" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
                 </LineChart>
               </ResponsiveContainer>
+              )}
             </div>
           </div>
         )}
@@ -1439,6 +1633,10 @@ function App() {
               ))}
             </div>
 
+            {tabLoading.stores ? (
+              <TabLoading label="Loading store data..." />
+            ) : (
+            <>
             {/* ── STORES TAB ── */}
             {storeSubTab === 'stores' && (
               <div>
@@ -1833,6 +2031,9 @@ function App() {
                 </div>
               </div>
             )}
+
+            </>
+            )}
           </div>
         )}
 
@@ -1841,6 +2042,10 @@ function App() {
           <div className="animate-fade-in">
             <header className="header"><h1 className="header-title">App Reviews</h1></header>
             <div className="glass-card" style={{ padding: '1.5rem' }}>
+              {tabLoading.appreviews ? (
+                <TabLoading label="Loading app reviews..." />
+              ) : (
+              <>
               {appReviews.map(r => (
                 <div key={r.id} style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1851,6 +2056,8 @@ function App() {
                 </div>
               ))}
               {appReviews.length === 0 && <p>No app reviews yet.</p>}
+              </>
+              )}
             </div>
           </div>
         )}
@@ -1878,7 +2085,11 @@ function App() {
               </div>
               <div className="glass-card" style={{ padding: '1.5rem' }}>
                 <h3 style={{ marginBottom: '1.5rem' }}>Existing Staff</h3>
-                {staffList.map(s => (
+                {tabLoading.staff ? (
+                  <TabLoading label="Loading staff..." />
+                ) : staffList.length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)' }}>No staff members yet.</p>
+                ) : staffList.map(s => (
                   <div key={s.id} style={{ padding: '1rem', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
                     <div>
                       <strong>{s.name}</strong>
@@ -1936,6 +2147,9 @@ function App() {
 
               <div className="glass-card" style={{ padding: '1.5rem' }}>
                 <h3 style={{ marginBottom: '1.5rem' }}>Platform Users</h3>
+                {tabLoading.superadmin ? (
+                  <TabLoading label="Loading users..." />
+                ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {users.map(u => (
                     <div key={u.id} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1958,6 +2172,7 @@ function App() {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             </div>
 
@@ -2050,7 +2265,9 @@ function App() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-              {reviews
+              {tabLoading.reviews ? (
+                <TabLoading label="Loading reviews..." />
+              ) : reviews
                 .filter(r => !reviewStoreFilter || r.store_name === reviewStoreFilter)
                 .filter(r => !reviewRatingFilter || r.rating === parseInt(reviewRatingFilter))
                 .length === 0 ? (
@@ -2152,7 +2369,9 @@ function App() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-              {orders
+              {tabLoading.orders ? (
+                <TabLoading label="Loading orders..." />
+              ) : orders
                 .filter(o => !orderStoreFilter || o.store_name === orderStoreFilter)
                 .filter(o => !orderPaymentFilter || o.payment_method.toLowerCase() === orderPaymentFilter.toLowerCase())
                 .length === 0 ? (
@@ -2232,7 +2451,9 @@ function App() {
               <div className="glass-card chat-sidebar">
                 <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>Active Conversations</h3>
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {chatsList.length === 0 ? (
+                  {tabLoading.chats ? (
+                    <TabLoading label="Loading conversations..." />
+                  ) : chatsList.length === 0 ? (
                     <div style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: '2rem', fontSize: '0.95rem' }}>
                       No active customer chats yet.
                     </div>

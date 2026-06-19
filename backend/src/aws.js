@@ -1,6 +1,6 @@
 const { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { SESClient } = require('@aws-sdk/client-ses');
+const { SESv2Client, SendEmailCommand } = require('@aws-sdk/client-sesv2');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
@@ -23,7 +23,7 @@ if (hasCredentials && !isTestEnv) {
     }
   });
 
-  sesClient = new SESClient({
+  sesClient = new SESv2Client({
     region,
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -106,7 +106,7 @@ let _sesTransporter = null;
 function getSesTransporter() {
   if (!_sesTransporter && sesClient) {
     _sesTransporter = nodemailer.createTransport({
-      SES: { ses: sesClient, aws: require('@aws-sdk/client-ses') }
+      SES: { sesClient, SendEmailCommand }
     });
   }
   return _sesTransporter;
