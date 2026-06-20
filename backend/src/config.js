@@ -21,5 +21,6 @@ module.exports = {
   fromEmail,
   promoCode: process.env.APP_PROMO_CODE || 'Grabengo20',
   logoUrl: process.env.APP_LOGO_URL || '',
+  groceriesBagUrl: process.env.APP_GROCERIES_BAG_URL || '',
   receiptFilename: `${brandName}-Receipt.pdf`,
 };

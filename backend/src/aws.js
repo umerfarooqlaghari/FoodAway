@@ -8,6 +8,10 @@ const { fromEmail } = require('./config');
 const region = process.env.AWS_REGION || 'us-east-1';
 const bucketName = process.env.AWS_S3_BUCKET_NAME || 'goodtogo-assets';
 
+function publicS3Url(key) {
+  return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+}
+
 const hasCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
 const isTestEnv = process.env.NODE_ENV === 'test';
 
@@ -205,8 +209,47 @@ async function presignImages(images) {
   return getPresignedUrl(images);
 }
 
+/**
+ * Uploads a local file buffer to S3 under the given key.
+ * @param {string} key          e.g. brand/logo.png
+ * @param {Buffer} buffer
+ * @param {string} contentType
+ * @returns {Promise<string>}   Public S3 URL
+ */
+async function uploadBufferToS3(key, buffer, contentType) {
+  const url = publicS3Url(key);
+
+  if (!s3Client) {
+    console.log(`[MOCK AWS S3] Mock upload: ${key} (${buffer.length} bytes)`);
+    return url;
+  }
+
+  const params = {
+    Bucket: bucketName,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+    CacheControl: 'public, max-age=31536000, immutable',
+  };
+
+  try {
+    await s3Client.send(new PutObjectCommand({ ...params, ACL: 'public-read' }));
+  } catch (err) {
+    if (err.name === 'AccessControlListNotSupported' || err.Code === 'AccessControlListNotSupported') {
+      await s3Client.send(new PutObjectCommand(params));
+    } else {
+      throw err;
+    }
+  }
+
+  console.log(`Uploaded brand asset to S3: ${url}`);
+  return url;
+}
+
 module.exports = {
   uploadImageToS3,
+  uploadBufferToS3,
+  publicS3Url,
   sendEmail,
   getPresignedUrl,
   presignImages

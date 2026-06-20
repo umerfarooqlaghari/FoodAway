@@ -991,7 +991,7 @@ function App() {
             <a href="#join" className="landing-nav-link">Impact</a>
           </nav>
           <div className="landing-actions">
-            <button className="btn-landing-login" onClick={() => { setForgotPasswordStep('login'); setView('login'); }}>MyStore login</button>
+            <button className="btn-landing-login" onClick={() => { setForgotPasswordStep('login'); setView('login'); }}>MyStore</button>
             <button className="btn-landing-download" onClick={() => setShowAppDownloadModal(true)}>Download app</button>
           </div>
           {/* Mobile hamburger */}
@@ -1008,7 +1008,7 @@ function App() {
             <a href="#why-use" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>About</a>
             <a href="#solutions" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>Solutions</a>
             <a href="#join" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>Impact</a>
-            <button className="btn-landing-login mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setForgotPasswordStep('login'); setView('login'); }}>MyStore login</button>
+            <button className="btn-landing-login mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setForgotPasswordStep('login'); setView('login'); }}>MyStore</button>
             <button className="btn-landing-download mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setShowAppDownloadModal(true); }}>Download app</button>
           </div>
         )}

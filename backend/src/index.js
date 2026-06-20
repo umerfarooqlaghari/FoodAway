@@ -6,6 +6,7 @@ const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
 const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename } = require('./config');
+const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout } = require('./emailTemplates');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -89,9 +90,13 @@ app.post('/api/auth/login', async (req, res) => {
     sendEmail({
       to: user.email,
       subject: `New Login Alert - ${brandName} 🍩`,
-      html: `<p>Hi ${user.name},</p>
-             <p>A new login was detected on your ${brandName} account at <strong>${new Date().toLocaleString()}</strong>.</p>
-             <p>If this was you, you can safely ignore this email. Otherwise, please secure your account immediately.</p>`,
+      html: emailSimpleLayout({
+        title: 'New Login Detected',
+        bodyHtml: `
+          <p>Hi <strong>${user.name}</strong>,</p>
+          <p>A new login was detected on your ${brandName} account at <strong>${new Date().toLocaleString()}</strong>.</p>
+          <p>If this was you, you can safely ignore this email. Otherwise, please secure your account immediately.</p>`,
+      }),
       text: `Hi ${user.name}, A new login was detected on your ${brandName} account at ${new Date().toLocaleString()}.`
     }).catch(err => console.error('Failed to send login alert email:', err.message));
 
@@ -150,10 +155,14 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     await sendEmail({
       to: email,
       subject: `${brandName} Password Reset OTP 🔑`,
-      html: `<p>Hi ${user.name || 'User'},</p>
-             <p>You requested a password reset. Your OTP verification code is:</p>
-             <h2 style="font-size: 24px; letter-spacing: 2px; color: #EA580C; font-family: monospace;">${otp}</h2>
-             <p>This code is valid for <strong>2 minutes</strong>. If you did not request this reset, please ignore this email.</p>`,
+      html: emailSimpleLayout({
+        title: 'Password Reset',
+        bodyHtml: `
+          <p>Hi ${user.name || 'User'},</p>
+          <p>You requested a password reset. Your OTP verification code is:</p>
+          <h2 style="font-size: 24px; letter-spacing: 2px; color: #EA580C; font-family: monospace;">${otp}</h2>
+          <p>This code is valid for <strong>2 minutes</strong>. If you did not request this reset, please ignore this email.</p>`,
+      }),
       text: `Hi, your ${brandName} password reset OTP is ${otp}. Valid for 2 minutes.`
     }).catch(mailErr => {
       console.error('Mail sending failed during password reset:', mailErr.message);
@@ -661,10 +670,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
         subject: `Your ${brandName} Order Confirmation 🍩`,
         html: `
           <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;">
-            <div style="background:#FF5A00;padding:24px 32px;border-radius:8px 8px 0 0;">
-              <h1 style="color:#fff;margin:0;font-size:26px;">${brandName}</h1>
-              <p style="color:#ffe0cc;margin:4px 0 0;font-size:13px;">Order Confirmed ✓</p>
-            </div>
+            ${emailOrangeHeader('Order Confirmed ✓')}
             <div style="background:#fff;padding:24px 32px;border:1px solid #eee;border-top:none;">
               <p style="color:#333;">Hi <strong>${customer.name}</strong>,</p>
               <p style="color:#555;">Thank you for rescuing food! Your order has been confirmed. Your receipt is attached to this email.</p>
@@ -679,7 +685,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
               </div>
             </div>
             <div style="background:#f5f5f5;padding:14px 32px;text-align:center;border-radius:0 0 8px 8px;">
-              <p style="margin:0;color:#aaa;font-size:12px;">© ${new Date().getFullYear()} ${brandName} — ${tagline}</p>
+              ${emailFooter()}
             </div>
           </div>`,
         text: `Hi ${customer.name}, your ${brandName} order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: £${total.toFixed(2)}. Your receipt is attached.`,
@@ -877,9 +883,13 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
         await sendEmail({
           to: customer.email,
           subject: `We miss you, ${customer.name}! 🍩`,
-          html: `<p>Hi ${customer.name},</p>
-                 <p>We miss you! Save 20% on your next surplus rescue bag with code <strong>${promoCode}</strong>.</p>
-                 <p>Help us reduce food waste and save delicious treats today!</p>`,
+          html: emailSimpleLayout({
+            title: 'We Miss You!',
+            bodyHtml: `
+              <p>Hi ${customer.name},</p>
+              <p>We miss you! Save 20% on your next surplus rescue bag with code <strong>${promoCode}</strong>.</p>
+              <p>Help us reduce food waste and save delicious treats today!</p>`,
+          }),
           text: `Hi ${customer.name}, We miss you! Save 20% on your next surplus rescue bag with code ${promoCode}.`
         });
       } catch (emailErr) {
@@ -1373,7 +1383,7 @@ app.post('/api/contact', async (req, res) => {
         <!-- Header -->
         <tr>
           <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:36px 40px;text-align:center;">
-            <img src="${logoUrl}" alt="${brandName}" height="44" style="margin-bottom:12px;" onerror="this.style.display='none'" />
+            ${emailLogoBlock({ height: 44, centered: true })}
             <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">New Support Enquiry</h1>
             <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Received via ${brandName} Contact Form</p>
           </td>
@@ -1449,7 +1459,7 @@ app.post('/api/contact', async (req, res) => {
         <!-- Orange header with logo -->
         <tr>
           <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:44px 40px;text-align:center;">
-            <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:64px;text-align:center;">🍃</div>
+            ${emailLogoBlock({ height: 56, centered: true })}
             <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">We've Got Your Message!</h1>
             <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px;">Thank you for reaching out to ${brandName}.</p>
           </td>
@@ -1838,10 +1848,14 @@ async function sendCheckoutOtpEmail({ to, name, otp }) {
   await sendEmail({
     to,
     subject: `Confirm your ${brandName} order`,
-    html: `<p>Hi ${name || 'there'},</p>
-           <p>Enter this verification code to confirm your order:</p>
-           <h2 style="font-size: 28px; letter-spacing: 4px; color: #EA580C; font-family: monospace;">${otp}</h2>
-           <p>This code expires in <strong>5 minutes</strong>. If you did not start a checkout, you can ignore this email.</p>`,
+    html: emailSimpleLayout({
+      title: 'Order Verification',
+      bodyHtml: `
+        <p>Hi ${name || 'there'},</p>
+        <p>Enter this verification code to confirm your order:</p>
+        <h2 style="font-size: 28px; letter-spacing: 4px; color: #EA580C; font-family: monospace;">${otp}</h2>
+        <p>This code expires in <strong>5 minutes</strong>. If you did not start a checkout, you can ignore this email.</p>`,
+    }),
     text: `Your ${brandName} order verification code is ${otp}. Valid for 5 minutes.`
   });
 }
@@ -1879,7 +1893,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
             <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
               <tr>
                 <td style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);padding:40px 40px 30px;text-align:center;">
-                  <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:700;">${brandName}</h1>
+                  ${emailLogoBlock({ height: 52, centered: true })}
                   <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:15px;">Order Confirmed ✓</p>
                 </td>
               </tr>
@@ -1921,7 +1935,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
               </tr>
               <tr>
                 <td style="background:#1a1a1a;padding:20px 40px;text-align:center;">
-                  <p style="color:#666;font-size:12px;margin:0;">© ${new Date().getFullYear()} ${brandName} — ${tagline}</p>
+                  ${emailFooter({ dark: true })}
                 </td>
               </tr>
             </table>
