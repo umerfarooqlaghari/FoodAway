@@ -5,6 +5,7 @@ require('dotenv').config();
 const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
+const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename } = require('./config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,7 +26,7 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Routes
 app.get('/', async (req, res) => {
-  res.json({ message: 'Welcome to the FoodAway API!' });
+  res.json({ message: `Welcome to the ${brandName} API!` });
 });
 
 app.get('/health', async (req, res) => {
@@ -87,11 +88,11 @@ app.post('/api/auth/login', async (req, res) => {
     // Send login notification email asynchronously
     sendEmail({
       to: user.email,
-      subject: 'New Login Alert - FoodAway 🍩',
+      subject: `New Login Alert - ${brandName} 🍩`,
       html: `<p>Hi ${user.name},</p>
-             <p>A new login was detected on your FoodAway account at <strong>${new Date().toLocaleString()}</strong>.</p>
+             <p>A new login was detected on your ${brandName} account at <strong>${new Date().toLocaleString()}</strong>.</p>
              <p>If this was you, you can safely ignore this email. Otherwise, please secure your account immediately.</p>`,
-      text: `Hi ${user.name}, A new login was detected on your FoodAway account at ${new Date().toLocaleString()}.`
+      text: `Hi ${user.name}, A new login was detected on your ${brandName} account at ${new Date().toLocaleString()}.`
     }).catch(err => console.error('Failed to send login alert email:', err.message));
 
     res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, logo: user.logo, tenant_id: user.tenant_id } });
@@ -148,12 +149,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Send email with OTP
     await sendEmail({
       to: email,
-      subject: 'FoodAway Password Reset OTP 🔑',
+      subject: `${brandName} Password Reset OTP 🔑`,
       html: `<p>Hi ${user.name || 'User'},</p>
              <p>You requested a password reset. Your OTP verification code is:</p>
              <h2 style="font-size: 24px; letter-spacing: 2px; color: #EA580C; font-family: monospace;">${otp}</h2>
              <p>This code is valid for <strong>2 minutes</strong>. If you did not request this reset, please ignore this email.</p>`,
-      text: `Hi, your FoodAway password reset OTP is ${otp}. Valid for 2 minutes.`
+      text: `Hi, your ${brandName} password reset OTP is ${otp}. Valid for 2 minutes.`
     }).catch(mailErr => {
       console.error('Mail sending failed during password reset:', mailErr.message);
     });
@@ -657,11 +658,11 @@ app.post('/api/orders', verifyToken, async (req, res) => {
         phone: customer.phone || ''
       }).then(receiptPdf => sendEmail({
         to:      customer.email,
-        subject: 'Your FoodAway Order Confirmation 🍩',
+        subject: `Your ${brandName} Order Confirmation 🍩`,
         html: `
           <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;">
             <div style="background:#FF5A00;padding:24px 32px;border-radius:8px 8px 0 0;">
-              <h1 style="color:#fff;margin:0;font-size:26px;">FoodAway</h1>
+              <h1 style="color:#fff;margin:0;font-size:26px;">${brandName}</h1>
               <p style="color:#ffe0cc;margin:4px 0 0;font-size:13px;">Order Confirmed ✓</p>
             </div>
             <div style="background:#fff;padding:24px 32px;border:1px solid #eee;border-top:none;">
@@ -678,12 +679,12 @@ app.post('/api/orders', verifyToken, async (req, res) => {
               </div>
             </div>
             <div style="background:#f5f5f5;padding:14px 32px;text-align:center;border-radius:0 0 8px 8px;">
-              <p style="margin:0;color:#aaa;font-size:12px;">© ${new Date().getFullYear()} FoodAway — Reducing food waste, one meal at a time.</p>
+              <p style="margin:0;color:#aaa;font-size:12px;">© ${new Date().getFullYear()} ${brandName} — ${tagline}</p>
             </div>
           </div>`,
-        text: `Hi ${customer.name}, your FoodAway order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: £${total.toFixed(2)}. Your receipt is attached.`,
+        text: `Hi ${customer.name}, your ${brandName} order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: £${total.toFixed(2)}. Your receipt is attached.`,
         attachments: [{
-          filename:    'FoodAway-Receipt.pdf',
+          filename:    receiptFilename,
           content:     receiptPdf,
           contentType: 'application/pdf'
         }]
@@ -868,7 +869,7 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
     for (const customer of inactiveUsers) {
       sendToUser(customer.id, {
         type: 'inactivity_reminder',
-        message: `We miss you, ${customer.name}! 🍩 Save 20% on your next surplus rescue bag with code FoodAway20.`
+        message: `We miss you, ${customer.name}! 🍩 Save 20% on your next surplus rescue bag with code ${promoCode}.`
       });
 
       // Send email using AWS SES
@@ -877,9 +878,9 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
           to: customer.email,
           subject: `We miss you, ${customer.name}! 🍩`,
           html: `<p>Hi ${customer.name},</p>
-                 <p>We miss you! Save 20% on your next surplus rescue bag with code <strong>FoodAway20</strong>.</p>
+                 <p>We miss you! Save 20% on your next surplus rescue bag with code <strong>${promoCode}</strong>.</p>
                  <p>Help us reduce food waste and save delicious treats today!</p>`,
-          text: `Hi ${customer.name}, We miss you! Save 20% on your next surplus rescue bag with code FoodAway20.`
+          text: `Hi ${customer.name}, We miss you! Save 20% on your next surplus rescue bag with code ${promoCode}.`
         });
       } catch (emailErr) {
         console.error(`Failed to send inactivity email to ${customer.email}:`, emailErr.message);
@@ -1362,7 +1363,7 @@ app.post('/api/contact', async (req, res) => {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>New Contact Enquiry — FoodAway</title>
+<title>New Contact Enquiry — ${brandName}</title>
 </head>
 <body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 0;">
@@ -1372,9 +1373,9 @@ app.post('/api/contact', async (req, res) => {
         <!-- Header -->
         <tr>
           <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:36px 40px;text-align:center;">
-            <img src="https://goodtogo-assets.s3.us-east-1.amazonaws.com/brand/logo.png" alt="FoodAway" height="44" style="margin-bottom:12px;" onerror="this.style.display='none'" />
+            <img src="${logoUrl}" alt="${brandName}" height="44" style="margin-bottom:12px;" onerror="this.style.display='none'" />
             <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">New Support Enquiry</h1>
-            <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Received via FoodAway Contact Form</p>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Received via ${brandName} Contact Form</p>
           </td>
         </tr>
 
@@ -1421,7 +1422,7 @@ app.post('/api/contact', async (req, res) => {
         <!-- Footer -->
         <tr>
           <td style="background:#0d0d0d;padding:24px 40px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
-            <p style="margin:0;color:#6b7280;font-size:12px;">FoodAway ApS · info@alpha-devs.cloud</p>
+            <p style="margin:0;color:#6b7280;font-size:12px;">${brandName} · ${supportEmail}</p>
             <p style="margin:6px 0 0;color:#4b5563;font-size:11px;">This is an automated notification. Do not reply to this email directly.</p>
           </td>
         </tr>
@@ -1438,7 +1439,7 @@ app.post('/api/contact', async (req, res) => {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>We've received your message — FoodAway</title>
+<title>We've received your message — ${brandName}</title>
 </head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
@@ -1450,7 +1451,7 @@ app.post('/api/contact', async (req, res) => {
           <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:44px 40px;text-align:center;">
             <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:64px;text-align:center;">🍃</div>
             <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">We've Got Your Message!</h1>
-            <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px;">Thank you for reaching out to FoodAway.</p>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px;">Thank you for reaching out to ${brandName}.</p>
           </td>
         </tr>
 
@@ -1459,7 +1460,7 @@ app.post('/api/contact', async (req, res) => {
           <td style="padding:36px 40px 0;">
             <p style="margin:0;color:#111827;font-size:17px;line-height:1.6;">Hi <strong>${name}</strong>,</p>
             <p style="margin:14px 0 0;color:#374151;font-size:15px;line-height:1.7;">
-              Thanks for getting in touch with the FoodAway team. We've received your enquiry and our team will review it shortly.
+              Thanks for getting in touch with the ${brandName} team. We've received your enquiry and our team will review it shortly.
             </p>
           </td>
         </tr>
@@ -1522,7 +1523,7 @@ app.post('/api/contact', async (req, res) => {
               <tr>
                 <td style="padding:16px 20px;">
                   <p style="margin:0;color:#FF5A00;font-size:13px;font-weight:700;">Need urgent help?</p>
-                  <p style="margin:4px 0 0;color:#374151;font-size:13px;">Email us directly at <a href="mailto:info@alpha-devs.cloud" style="color:#FF5A00;text-decoration:none;font-weight:600;">info@alpha-devs.cloud</a></p>
+                  <p style="margin:4px 0 0;color:#374151;font-size:13px;">Email us directly at <a href="mailto:${supportEmail}" style="color:#FF5A00;text-decoration:none;font-weight:600;">${supportEmail}</a></p>
                 </td>
               </tr>
             </table>
@@ -1533,17 +1534,17 @@ app.post('/api/contact', async (req, res) => {
         <tr>
           <td style="padding:32px 40px 36px;">
             <p style="margin:0;color:#374151;font-size:15px;line-height:1.7;">
-              Thanks again for being part of the FoodAway family. Together we're making a difference — one rescued meal at a time. 🍃
+              Thanks again for being part of the ${brandName} family. Together we're making a difference — one rescued meal at a time. 🍃
             </p>
-            <p style="margin:20px 0 0;color:#111827;font-size:15px;">Warm regards,<br/><strong>The FoodAway Team</strong></p>
+            <p style="margin:20px 0 0;color:#111827;font-size:15px;">Warm regards,<br/><strong>The ${brandName} Team</strong></p>
           </td>
         </tr>
 
         <!-- Footer -->
         <tr>
           <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
-            <p style="margin:0;color:#9ca3af;font-size:12px;">© ${new Date().getFullYear()} FoodAway ApS · All Rights Reserved</p>
-            <p style="margin:6px 0 0;color:#9ca3af;font-size:11px;">You're receiving this because you submitted a contact form on foodaway.app</p>
+            <p style="margin:0;color:#9ca3af;font-size:12px;">© ${new Date().getFullYear()} ${brandName} · All Rights Reserved</p>
+            <p style="margin:6px 0 0;color:#9ca3af;font-size:11px;">You're receiving this because you submitted a contact form on ${siteHost}</p>
           </td>
         </tr>
 
@@ -1556,22 +1557,22 @@ app.post('/api/contact', async (req, res) => {
   try {
     await Promise.all([
       sendEmail({
-        to: 'info@alpha-devs.cloud',
-        subject: `[FoodAway Support] ${subject} — from ${name}`,
+        to: supportEmail,
+        subject: `[${brandName} Support] ${subject} — from ${name}`,
         html: adminHtml,
         text: `New contact form submission\n\nName: ${name}\nEmail: ${email}\nSubject: ${subject}\nSubmitted: ${submittedAt}\n\nMessage:\n${message}`,
       }),
       sendEmail({
         to: email,
-        subject: `We've received your message — FoodAway Support`,
+        subject: `We've received your message — ${brandName} Support`,
         html: senderHtml,
-        text: `Hi ${name},\n\nThanks for contacting FoodAway. We've received your message about "${subject}" and will respond within 24–48 business hours.\n\nYour message:\n${message}\n\nBest regards,\nThe FoodAway Team\ninfo@alpha-devs.cloud`,
+        text: `Hi ${name},\n\nThanks for contacting ${brandName}. We've received your message about "${subject}" and will respond within 24–48 business hours.\n\nYour message:\n${message}\n\nBest regards,\nThe ${brandName} Team\n${supportEmail}`,
       }),
     ]);
     res.json({ success: true, message: 'Your message has been sent. Check your inbox for a confirmation.' });
   } catch (err) {
     console.error('Contact form email error:', err.message);
-    res.status(500).json({ error: 'Failed to send message. Please try again or email us directly at info@alpha-devs.cloud.' });
+    res.status(500).json({ error: `Failed to send message. Please try again or email us directly at ${supportEmail}.` });
   }
 });
 
@@ -1836,12 +1837,12 @@ async function confirmCheckoutWithIdempotency({ email, otp, idempotencyKey }) {
 async function sendCheckoutOtpEmail({ to, name, otp }) {
   await sendEmail({
     to,
-    subject: 'Confirm your FoodAway order',
+    subject: `Confirm your ${brandName} order`,
     html: `<p>Hi ${name || 'there'},</p>
            <p>Enter this verification code to confirm your order:</p>
            <h2 style="font-size: 28px; letter-spacing: 4px; color: #EA580C; font-family: monospace;">${otp}</h2>
            <p>This code expires in <strong>5 minutes</strong>. If you did not start a checkout, you can ignore this email.</p>`,
-    text: `Your FoodAway order verification code is ${otp}. Valid for 5 minutes.`
+    text: `Your ${brandName} order verification code is ${otp}. Valid for 5 minutes.`
   });
 }
 
@@ -1862,9 +1863,9 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
   try {
     await sendEmail({
       to: email,
-      subject: `Your FoodAway Order is Confirmed! 🎉 #${placedOrders.map(o => o.id).join(', #')}`,
+      subject: `Your ${brandName} Order is Confirmed! 🎉 #${placedOrders.map(o => o.id).join(', #')}`,
       attachments: [{
-        filename: 'FoodAway-Receipt.pdf',
+        filename: receiptFilename,
         content: receiptPdf,
         contentType: 'application/pdf'
       }],
@@ -1878,7 +1879,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
             <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
               <tr>
                 <td style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);padding:40px 40px 30px;text-align:center;">
-                  <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:700;">FoodAway</h1>
+                  <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:700;">${brandName}</h1>
                   <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:15px;">Order Confirmed ✓</p>
                 </td>
               </tr>
@@ -1920,7 +1921,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
               </tr>
               <tr>
                 <td style="background:#1a1a1a;padding:20px 40px;text-align:center;">
-                  <p style="color:#666;font-size:12px;margin:0;">© ${new Date().getFullYear()} FoodAway — Reducing food waste, one meal at a time.</p>
+                  <p style="color:#666;font-size:12px;margin:0;">© ${new Date().getFullYear()} ${brandName} — ${tagline}</p>
                 </td>
               </tr>
             </table>
@@ -1928,7 +1929,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
         </table>
       </body>
       </html>`,
-      text: `Hi ${name}, your FoodAway order is confirmed! Total: £${total.toFixed(2)}. Order refs: #${placedOrders.map(o => o.id).join(', #')}. Payment: cash at pickup. Your receipt is attached.`
+      text: `Hi ${name}, your ${brandName} order is confirmed! Total: £${total.toFixed(2)}. Order refs: #${placedOrders.map(o => o.id).join(', #')}. Payment: cash at pickup. Your receipt is attached.`
     });
   } catch (emailErr) {
     console.error('[Checkout Confirm] Order confirmed but receipt email failed:', emailErr);

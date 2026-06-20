@@ -5,10 +5,10 @@ export default function Legal({ onBack }) {
   return (
     <PageWrapper onBack={onBack}>
       <PageTitle>Legal Information</PageTitle>
-      <PageSubtitle>Important legal disclosures and corporate information for FoodAway ApS.</PageSubtitle>
+      <PageSubtitle>Important legal disclosures and corporate information for Grabengo.</PageSubtitle>
 
       <Section title="Company Details">
-        <p><strong style={{ color: '#fff' }}>Company Name:</strong> FoodAway ApS</p>
+        <p><strong style={{ color: '#fff' }}>Company Name:</strong> Grabengo</p>
         <p><strong style={{ color: '#fff' }}>Registered Address:</strong> Karachi, Pakistan</p>
         <p><strong style={{ color: '#fff' }}>Business Registration:</strong> Registered under applicable local law</p>
         <p><strong style={{ color: '#fff' }}>VAT Number:</strong> Available upon request</p>
@@ -31,8 +31,8 @@ export default function Legal({ onBack }) {
 
       <Section title="Intellectual Property">
         <p>
-          All content, trademarks, logos, and intellectual property on the FoodAway platform are owned by
-          FoodAway ApS or its licensors. Unauthorised use, reproduction, or distribution is strictly
+          All content, trademarks, logos, and intellectual property on the Grabengo platform are owned by
+          Grabengo or its licensors. Unauthorised use, reproduction, or distribution is strictly
           prohibited without prior written consent.
         </p>
       </Section>
@@ -41,8 +41,8 @@ export default function Legal({ onBack }) {
 
       <Section title="Liability Disclaimer">
         <p>
-          FoodAway operates as a marketplace platform connecting consumers with food businesses. We do not
-          produce, prepare, or sell food directly. FoodAway ApS shall not be held liable for the quality,
+          Grabengo operates as a marketplace platform connecting consumers with food businesses. We do not
+          produce, prepare, or sell food directly. Grabengo shall not be held liable for the quality,
           safety, or suitability of any food products listed by partner businesses on our platform.
         </p>
         <br />
@@ -56,7 +56,7 @@ export default function Legal({ onBack }) {
 
       <Section title="Changes to Legal Terms">
         <p>
-          FoodAway reserves the right to update or modify these legal terms at any time. Continued use of
+          Grabengo reserves the right to update or modify these legal terms at any time. Continued use of
           the platform following any changes constitutes acceptance of the revised terms. We encourage
           users to review this page periodically.
         </p>

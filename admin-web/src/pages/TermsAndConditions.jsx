@@ -5,11 +5,11 @@ export default function TermsAndConditions({ onBack }) {
   return (
     <PageWrapper onBack={onBack}>
       <PageTitle>Terms & Conditions</PageTitle>
-      <PageSubtitle>By using FoodAway, you agree to these terms. Please read them carefully before using our platform.</PageSubtitle>
+      <PageSubtitle>By using Grabengo, you agree to these terms. Please read them carefully before using our platform.</PageSubtitle>
 
       <Section title="1. Acceptance of Terms">
         <p>
-          By accessing or using the FoodAway platform, you agree to be bound by these Terms and Conditions.
+          By accessing or using the Grabengo platform, you agree to be bound by these Terms and Conditions.
           If you do not agree to any part of these terms, you may not use our services.
         </p>
       </Section>
@@ -18,8 +18,8 @@ export default function TermsAndConditions({ onBack }) {
 
       <Section title="2. The Platform">
         <p>
-          FoodAway is a digital marketplace that connects consumers with food businesses to reduce food
-          waste by offering surplus food at reduced prices. FoodAway ApS acts solely as an intermediary
+          Grabengo is a digital marketplace that connects consumers with food businesses to reduce food
+          waste by offering surplus food at reduced prices. Grabengo acts solely as an intermediary
           and is not the seller of any food items listed on the platform.
         </p>
       </Section>
@@ -43,8 +43,8 @@ export default function TermsAndConditions({ onBack }) {
 
       <Section title="4. Orders and Payments">
         <p>
-          All orders placed through FoodAway are subject to availability. Once an order is confirmed, it
-          constitutes a binding agreement between you and the partner business. FoodAway is not responsible
+          All orders placed through Grabengo are subject to availability. Once an order is confirmed, it
+          constitutes a binding agreement between you and the partner business. Grabengo is not responsible
           for non-fulfilment by partner businesses.
         </p>
         <br />
@@ -59,7 +59,7 @@ export default function TermsAndConditions({ onBack }) {
       <Section title="5. Food Quality & Safety">
         <p>
           Partner businesses are solely responsible for the quality, safety, and accurate labelling of
-          their food products. FoodAway does not inspect, guarantee, or assume liability for the quality
+          their food products. Grabengo does not inspect, guarantee, or assume liability for the quality
           of food offered by businesses on the platform.
         </p>
         <br />
@@ -96,8 +96,8 @@ export default function TermsAndConditions({ onBack }) {
 
       <Section title="8. Intellectual Property">
         <p>
-          All content on the FoodAway platform — including text, images, logos, and software — is the
-          property of FoodAway ApS or its licensors and is protected by applicable intellectual property
+          All content on the Grabengo platform — including text, images, logos, and software — is the
+          property of Grabengo or its licensors and is protected by applicable intellectual property
           laws. Unauthorised use is strictly prohibited.
         </p>
       </Section>
@@ -106,7 +106,7 @@ export default function TermsAndConditions({ onBack }) {
 
       <Section title="9. Limitation of Liability">
         <p>
-          To the fullest extent permitted by law, FoodAway ApS shall not be liable for any indirect,
+          To the fullest extent permitted by law, Grabengo shall not be liable for any indirect,
           incidental, special, consequential, or punitive damages arising from your use of the platform,
           including but not limited to loss of profits, data, or goodwill.
         </p>
@@ -117,7 +117,7 @@ export default function TermsAndConditions({ onBack }) {
       <Section title="10. Modifications">
         <p>
           We reserve the right to modify these Terms at any time. Changes will be effective upon posting
-          to the platform. Continued use of FoodAway following any changes constitutes acceptance of the
+          to the platform. Continued use of Grabengo following any changes constitutes acceptance of the
           revised Terms.
         </p>
       </Section>

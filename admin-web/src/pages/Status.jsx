@@ -49,7 +49,7 @@ export default function Status({ onBack }) {
   return (
     <PageWrapper onBack={onBack}>
       <PageTitle>System Status</PageTitle>
-      <PageSubtitle>Real-time status of FoodAway platform services.</PageSubtitle>
+      <PageSubtitle>Real-time status of Grabengo platform services.</PageSubtitle>
 
       {/* Overall status banner */}
       <div style={{

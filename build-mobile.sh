@@ -1,9 +1,8 @@
 #!/bin/bash
 
-# Usage:
-#   ./build-mobile.sh            → production build (for TestFlight / App Store)
-#   ./build-mobile.sh preview    → internal distribution build
-#   ./build-mobile.sh dev        → development client build (requires running Expo server)
+# ./build-mobile.sh           → production build + auto-submit to TestFlight
+# ./build-mobile.sh preview   → internal distribution build (no submit)
+# ./build-mobile.sh dev       → development client build (requires running Expo server)
 
 PROFILE="${1:-production}"
 
@@ -11,9 +10,13 @@ case "$PROFILE" in
   dev)        PROFILE="development" ;;
   preview)    PROFILE="preview" ;;
   production) PROFILE="production" ;;
-  *)          PROFILE="$1" ;;
 esac
 
-echo "🚀 Starting EAS iOS Build — profile: $PROFILE"
+echo "🚀 EAS iOS Build — profile: $PROFILE"
 cd mobile-app
-npx eas-cli build --profile "$PROFILE" --platform ios
+
+if [ "$PROFILE" = "production" ]; then
+  npx eas-cli build --profile production --platform ios --auto-submit
+else
+  npx eas-cli build --profile "$PROFILE" --platform ios
+fi

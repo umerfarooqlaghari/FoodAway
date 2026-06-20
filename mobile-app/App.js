@@ -139,7 +139,7 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
   <div class="receipt">
     <div class="hdr">
       <div class="check">✓</div>
-      <div class="brand">FoodAway</div>
+      <div class="brand">Grabengo</div>
       <div class="confirmed">Booking Confirmed</div>
       <div class="ref-pill"><span class="ref-text">${orderRef}</span></div>
     </div>
@@ -164,7 +164,7 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
       </div>
     </div>
     <div class="footer-area">
-      <div class="footer-txt"><span class="leaf">🌿</span> Thank you for rescuing food &amp; reducing waste<br>FoodAway © 2025 · Rescue Food · Save Money · Help the Planet</div>
+      <div class="footer-txt"><span class="leaf">🌿</span> Thank you for rescuing food &amp; reducing waste<br>Grabengo © 2025 · Rescue Food · Save Money · Help the Planet</div>
     </div>
   </div>
 </div>
@@ -478,7 +478,7 @@ function ChatProvider({ children }) {
           playSoundAndHaptic('success');
           setToastNotification({
             type: 'inactivity_reminder',
-            storeName: 'FoodAway Rewards',
+            storeName: 'Grabengo Rewards',
             message: payload.message
           });
           triggerLocalPushNotification(
@@ -904,7 +904,7 @@ function GlobalReceiptModal() {
       const html = generateReceiptHTML(receiptModalData, currencySymbol);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save FoodAway Receipt', UTI: 'com.adobe.pdf' });
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save Grabengo Receipt', UTI: 'com.adobe.pdf' });
       } else {
         Alert.alert('Receipt Saved', 'Your receipt has been saved to your device.');
       }
@@ -945,7 +945,7 @@ function GlobalReceiptModal() {
               <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}>
                 <Ionicons name="checkmark" size={30} color="white" />
               </View>
-              <Text style={{ fontSize: 26, fontWeight: '900', color: 'white', letterSpacing: -0.5 }}>FoodAway</Text>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: 'white', letterSpacing: -0.5 }}>Grabengo</Text>
               <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 }}>Booking Confirmed</Text>
               <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8, marginTop: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
                 <Text style={{ color: 'white', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 }}>{orderRef}</Text>
@@ -1042,7 +1042,7 @@ function GlobalReceiptModal() {
             {/* Footer */}
             <View style={{ backgroundColor: '#F8FAFC', paddingVertical: 20, paddingHorizontal: 24, alignItems: 'center' }}>
               <Text style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', lineHeight: 18 }}>
-                🌿 Thank you for rescuing food & reducing waste{'\n'}FoodAway © 2025
+                🌿 Thank you for rescuing food & reducing waste{'\n'}Grabengo © 2025
               </Text>
             </View>
           </View>
@@ -1147,7 +1147,7 @@ function LandingScreen({ navigation }) {
       <TouchableOpacity style={{ position: 'absolute', top: 60, right: 30 }} onPress={() => setMenuVisible(false)}>
         <Text style={{ fontSize: 40, color: '#111827', fontWeight: '300' }}>×</Text>
       </TouchableOpacity>
-      <Text style={{ fontSize: 32, fontWeight: '800', color: '#EA580C', marginBottom: 60 }}>FoodAway Menu</Text>
+      <Text style={{ fontSize: 32, fontWeight: '800', color: '#EA580C', marginBottom: 60 }}>Grabengo Menu</Text>
       <TouchableOpacity
         style={{ backgroundColor: '#111827', paddingVertical: 18, paddingHorizontal: 60, borderRadius: 30, marginBottom: 20, width: 250, alignItems: 'center' }}
         onPress={() => { setMenuVisible(false); navigation.navigate('Login'); }}>
@@ -1180,7 +1180,7 @@ function LandingScreen({ navigation }) {
                   <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 11, letterSpacing: 1.2 }}>COMING SOON</Text>
                 </View>
                 <Text style={{ fontSize: 32, fontWeight: '900', color: '#111827', lineHeight: 38, letterSpacing: -0.5 }}>
-                  Supermarkets on FoodAway
+                  Supermarkets on Grabengo
                 </Text>
                 <Text style={{ fontSize: 15, color: '#4B5563', lineHeight: 23, marginTop: 14 }}>
                   We are expanding beyond surplus meals to bring leading supermarkets onto the platform. Premium discounts on fast-moving consumer goods, household essentials, and fresh groceries.
@@ -1218,7 +1218,7 @@ function LandingScreen({ navigation }) {
           <View style={{ paddingHorizontal: 24, marginTop: 20, minHeight: 320 }}>
             <View style={{ position: 'absolute', right: -120, top: -20, zIndex: -1 }}>
               <Image
-                source={require('./assets/images/Takeaway_landing.png')}
+                source={require('./assets/images/grabengo_landing.png')}
                 style={{ width: 400, height: 500, resizeMode: 'contain' }}
               />
             </View>
@@ -1672,9 +1672,9 @@ function SplashScreen({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#EA580C', justifyContent: 'center', alignItems: 'center' }}>
       <StatusBar style="light" />
-      <Image source={require('./assets/images/Takeaway_landing.png')} style={{ width: 250, height: 250, resizeMode: 'contain', marginBottom: 30 }} />
-      <Text style={{ fontSize: 40, fontWeight: '900', color: '#FFFFFF', letterSpacing: 2 }}>FoodAway</Text>
-      <Text style={{ fontSize: 16, color: '#FDE68A', marginTop: 10, letterSpacing: 1 }}>Rescue Delicious Food</Text>
+      <Image source={require('./assets/images/grabengo_landing.png')} style={{ width: 250, height: 250, resizeMode: 'contain', marginBottom: 30 }} />
+      <Text style={{ fontSize: 40, fontWeight: '900', color: '#FFFFFF', letterSpacing: 2 }}>Grabengo</Text>
+      <Text style={{ fontSize: 16, color: '#FDE68A', marginTop: 10, letterSpacing: 1 }}>Grab & Go</Text>
       <ActivityIndicator color="#FFFFFF" size="large" style={{ marginTop: 40 }} />
     </View>
   );
@@ -2736,7 +2736,7 @@ function DiscoverScreen({ navigation, route }) {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', padding: 24, paddingBottom: Math.max(insets.bottom, 24), borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Rate FoodAway App</Text>
+              <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Rate Grabengo App</Text>
               <TouchableOpacity onPress={() => setAppReviewVisible(false)}><Ionicons name="close" size={24} color="#111827" /></TouchableOpacity>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>

@@ -21,7 +21,7 @@ export default function FoodWasteSources({ onBack }) {
   return (
     <PageWrapper onBack={onBack}>
       <PageTitle>Food Waste Sources</PageTitle>
-      <PageSubtitle>The data and research behind FoodAway's mission to fight food waste globally.</PageSubtitle>
+      <PageSubtitle>The data and research behind Grabengo's mission to fight food waste globally.</PageSubtitle>
 
       <Section title="The Scale of the Problem">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '0.5rem' }}>
@@ -39,7 +39,7 @@ export default function FoodWasteSources({ onBack }) {
 
       <Section title="Our Methodology">
         <p>
-          FoodAway uses data from leading international organisations to communicate the impact of food
+          Grabengo uses data from leading international organisations to communicate the impact of food
           waste. All statistics cited on our platform, marketing materials, and communications are sourced
           from peer-reviewed research or established governmental and intergovernmental bodies.
         </p>
@@ -68,9 +68,9 @@ export default function FoodWasteSources({ onBack }) {
 
       <Divider />
 
-      <Section title="Impact of FoodAway">
+      <Section title="Impact of Grabengo">
         <p>
-          Every surprise bag rescued through FoodAway helps divert food from landfill. On average, rescuing
+          Every surprise bag rescued through Grabengo helps divert food from landfill. On average, rescuing
           one surprise bag prevents approximately 2.5 kg of CO₂ equivalent emissions — equivalent to
           charging a smartphone over 300 times.
         </p>

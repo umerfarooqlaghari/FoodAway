@@ -5,13 +5,13 @@ export default function DsaDisclosure({ onBack }) {
   return (
     <PageWrapper onBack={onBack}>
       <PageTitle>DSA Disclosure</PageTitle>
-      <PageSubtitle>FoodAway's transparency statement in accordance with the EU Digital Services Act (DSA).</PageSubtitle>
+      <PageSubtitle>Grabengo's transparency statement in accordance with the EU Digital Services Act (DSA).</PageSubtitle>
 
       <Section title="What Is the DSA?">
         <p>
           The Digital Services Act (EU) 2022/2065 is a regulation by the European Union that establishes
           rules for online platforms to ensure transparency, accountability, and user safety across digital
-          services. FoodAway is committed to full compliance with the DSA.
+          services. Grabengo is committed to full compliance with the DSA.
         </p>
       </Section>
 
@@ -19,7 +19,7 @@ export default function DsaDisclosure({ onBack }) {
 
       <Section title="Our Role as an Intermediary">
         <p>
-          FoodAway operates as an online marketplace that facilitates transactions between food businesses
+          Grabengo operates as an online marketplace that facilitates transactions between food businesses
           ("sellers") and consumers ("buyers"). We do not directly sell or prepare food. We are an
           intermediary service provider under the definition of the DSA.
         </p>
@@ -29,7 +29,7 @@ export default function DsaDisclosure({ onBack }) {
 
       <Section title="Content Moderation">
         <p>
-          FoodAway has policies in place to prevent the listing of illegal, unsafe, or misleading food
+          Grabengo has policies in place to prevent the listing of illegal, unsafe, or misleading food
           items. Listings are reviewed against our community guidelines. Users may report content that
           they believe violates applicable law or our policies.
         </p>
@@ -44,7 +44,7 @@ export default function DsaDisclosure({ onBack }) {
 
       <Section title="Transparency on Recommender Systems">
         <p>
-          FoodAway uses algorithmic systems to surface nearby, relevant surprise bags and food items based
+          Grabengo uses algorithmic systems to surface nearby, relevant surprise bags and food items based
           on factors such as:
         </p>
         <ul style={{ paddingLeft: '1.5rem', marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -63,7 +63,7 @@ export default function DsaDisclosure({ onBack }) {
 
       <Section title="Advertising Transparency">
         <p>
-          Any promoted or sponsored listings on FoodAway are clearly labelled. We do not use
+          Any promoted or sponsored listings on Grabengo are clearly labelled. We do not use
           micro-targeted advertising based on sensitive categories of personal data (e.g. health,
           religion, or political opinion) as defined under DSA Article 26.
         </p>
@@ -72,7 +72,7 @@ export default function DsaDisclosure({ onBack }) {
       <Divider />
 
       <Section title="User Rights Under the DSA">
-        <p>Users of FoodAway have the right to:</p>
+        <p>Users of Grabengo have the right to:</p>
         <ul style={{ paddingLeft: '1.5rem', marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           <li>Know why content was removed or accounts suspended.</li>
           <li>Challenge content moderation decisions through our internal complaints process.</li>
@@ -85,7 +85,7 @@ export default function DsaDisclosure({ onBack }) {
 
       <Section title="Point of Contact">
         <p>
-          FoodAway designates the following as the single point of contact for DSA-related enquiries from
+          Grabengo designates the following as the single point of contact for DSA-related enquiries from
           EU authorities and users:
         </p>
         <br />

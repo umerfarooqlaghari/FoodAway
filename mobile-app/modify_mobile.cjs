@@ -58,7 +58,7 @@ const appReviewModal = `
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', padding: 24, paddingBottom: Math.max(insets.bottom, 24), borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Rate GoodToGo App</Text>
+              <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Rate Grabengo App</Text>
               <TouchableOpacity onPress={() => setAppReviewVisible(false)}><Ionicons name="close" size={24} color="#111827" /></TouchableOpacity>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>

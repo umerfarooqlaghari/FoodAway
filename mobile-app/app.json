@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "FoodAway",
-    "slug": "mobile-app",
-    "version": "1.0.3",
+    "name": "Grabengo",
+    "slug": "grabengo",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobileapp",
+    "scheme": "grabengo",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/icon.png",
@@ -16,12 +16,12 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UIRequiresFullScreen": true,
         "LSRequiresIPhoneOS": true,
-        "NSCameraUsageDescription": "FoodAway needs camera access to upload store and food images.",
-        "NSPhotoLibraryUsageDescription": "FoodAway needs photo library access to select store and food images.",
-        "NSPhotoLibraryAddUsageDescription": "FoodAway saves images to your photo library.",
-        "NSLocationWhenInUseUsageDescription": "FoodAway uses your location to show nearby stores.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "FoodAway uses your location to show nearby stores.",
-        "NSUserNotificationsUsageDescription": "FoodAway sends you order updates and alerts."
+        "NSCameraUsageDescription": "Grabengo needs camera access to upload store and food images.",
+        "NSPhotoLibraryUsageDescription": "Grabengo needs photo library access to select store and food images.",
+        "NSPhotoLibraryAddUsageDescription": "Grabengo saves images to your photo library.",
+        "NSLocationWhenInUseUsageDescription": "Grabengo uses your location to show nearby stores.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Grabengo uses your location to show nearby stores.",
+        "NSUserNotificationsUsageDescription": "Grabengo sends you order updates and alerts."
       }
     },
     "android": {
@@ -71,15 +71,15 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "FoodAway uses your location to show nearby stores.",
-          "locationWhenInUsePermission": "FoodAway uses your location to show nearby stores."
+          "locationAlwaysAndWhenInUsePermission": "Grabengo uses your location to show nearby stores.",
+          "locationWhenInUsePermission": "Grabengo uses your location to show nearby stores."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "FoodAway needs photo library access to select images.",
-          "cameraPermission": "FoodAway needs camera access to take photos."
+          "photosPermission": "Grabengo needs photo library access to select images.",
+          "cameraPermission": "Grabengo needs camera access to take photos."
         }
       ],
       "expo-image"

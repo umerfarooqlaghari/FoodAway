@@ -12,8 +12,8 @@ export default function PageWrapper({ onBack, children }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }} onClick={onBack}>
-          <img src="/favicon.png" alt="FoodAway" style={{ height: '32px', objectFit: 'contain' }} />
-          <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#fff' }}>FoodAway</span>
+          <img src="/favicon.png" alt="Grabengo" style={{ height: '32px', objectFit: 'contain' }} />
+          <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#fff' }}>Grabengo</span>
         </div>
         <button
           onClick={onBack}
@@ -42,7 +42,7 @@ export default function PageWrapper({ onBack, children }) {
         padding: '1.5rem 2rem', textAlign: 'center',
         fontSize: '0.8rem', color: '#6b7280'
       }}>
-        © {new Date().getFullYear()} FoodAway ApS. All Rights Reserved.
+        © {new Date().getFullYear()} Grabengo. All Rights Reserved.
       </footer>
     </div>
   );

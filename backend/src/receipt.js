@@ -1,4 +1,5 @@
 const PDFDocument = require('pdfkit');
+const { brandName, tagline } = require('./config');
 
 const ORANGE = '#FF5A00';
 const DARK   = '#1a1a1a';
@@ -35,10 +36,10 @@ function generateReceiptBuffer(orders, customer = {}) {
 
     doc.fillColor('#ffffff')
        .fontSize(28).font('Helvetica-Bold')
-       .text('FoodAway', 50, 28, { align: 'left' });
+       .text(brandName, 50, 28, { align: 'left' });
 
     doc.fontSize(11).font('Helvetica')
-       .text('Reducing food waste, one meal at a time.', 50, 62, { align: 'left' });
+       .text(tagline, 50, 62, { align: 'left' });
 
     doc.fontSize(20).font('Helvetica-Bold')
        .text('ORDER RECEIPT', 0, 36, { align: 'right', width: pageWidth - 50 });
@@ -134,7 +135,7 @@ function generateReceiptBuffer(orders, customer = {}) {
     doc.moveTo(50, footerY - 12).lineTo(pageWidth - 50, footerY - 12)
        .strokeColor('#e0e0e0').lineWidth(0.5).stroke();
     doc.fillColor('#aaaaaa').font('Helvetica').fontSize(8)
-       .text(`© ${new Date().getFullYear()} FoodAway — Reducing food waste, one meal at a time.`, 50, footerY - 4, { align: 'center', width: innerWidth });
+       .text(`© ${new Date().getFullYear()} ${brandName} — ${tagline}`, 50, footerY - 4, { align: 'center', width: innerWidth });
 
     doc.end();
   });

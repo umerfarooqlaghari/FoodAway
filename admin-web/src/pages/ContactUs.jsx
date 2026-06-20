@@ -186,7 +186,7 @@ export default function ContactUs({ onBack }) {
           <div style={{ background: 'rgba(255,90,0,0.07)', border: '1px solid rgba(255,90,0,0.2)', borderRadius: '12px', padding: '1.25rem' }}>
             <p style={{ fontWeight: '700', color: '#FF5A00', fontSize: '0.88rem', marginBottom: '0.5rem' }}>🍃 Fighting Food Waste Together</p>
             <p style={{ color: '#9ca3af', fontSize: '0.82rem', lineHeight: 1.6 }}>
-              Every question helps us improve FoodAway. We read every message personally and take your feedback seriously.
+              Every question helps us improve Grabengo. We read every message personally and take your feedback seriously.
             </p>
           </div>
         </div>
@@ -199,7 +199,7 @@ export default function ContactUs({ onBack }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {[
             { q: 'How do I reset my password?', a: 'Use the "Forgot Password" option on the login screen. You\'ll receive an OTP to your registered email.' },
-            { q: 'Can I list my business on FoodAway?', a: 'Yes! Click "Register as Seller" on our homepage or use the seller registration page, then log in to manage your stores.' },
+            { q: 'Can I list my business on Grabengo?', a: 'Yes! Click "Register as Seller" on our homepage or use the seller registration page, then log in to manage your stores.' },
             { q: 'How do refunds work?', a: 'If a business fails to fulfil your order, contact us within 24 hours of the scheduled pickup time for a refund.' },
             { q: 'Is my data safe?', a: 'Absolutely. We use industry-standard encryption and comply with GDPR. See our Privacy Policy for full details.' },
           ].map(({ q, a }) => (

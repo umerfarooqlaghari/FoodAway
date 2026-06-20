@@ -9,7 +9,7 @@ export default function PrivacyPolicy({ onBack }) {
 
       <Section title="Who We Are">
         <p>
-          FoodAway ApS ("we", "us", "our") operates the FoodAway platform — a food-rescue marketplace
+          Grabengo ("we", "us", "our") operates the Grabengo platform — a food-rescue marketplace
           that connects consumers with businesses to reduce food waste. This Privacy Policy explains how
           we handle your personal data when you use our services.
         </p>

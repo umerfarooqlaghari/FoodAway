@@ -982,8 +982,8 @@ function App() {
         {/* Navigation */}
         <header className="landing-navbar">
           <a href="#" className="landing-logo">
-            <img src="/favicon.png" alt="FoodAway Logo" style={{ height: '40px', objectFit: 'contain' }} />
-            <span>FoodAway</span>
+            <img src="/favicon.png" alt="Grabengo Logo" style={{ height: '40px', objectFit: 'contain' }} />
+            <span>Grabengo</span>
           </a>
           <nav className="landing-nav-links">
             <a href="#why-use" className="landing-nav-link">About</a>
@@ -1031,10 +1031,10 @@ function App() {
                 <div className="landing-hero-overlay" />
                 <div className="landing-hero-container">
                   <div className="landing-hero-content">
-                    <span className="landing-hero-badge">Saving food from going to waste</span>
+                    <span className="landing-hero-badge">Grab & Go — Saving food from going to waste</span>
                     <h1 className="landing-hero-title">Save good food<br />from going to waste</h1>
                     <p className="landing-hero-subtitle">
-                      FoodAway connects you with local stores, cafes, and bakeries offering delicious surplus food at unbeatable prices. Rescue meals and help protect the planet.
+                      Grabengo connects you with local stores, cafes, and bakeries offering delicious surplus food at unbeatable prices. Rescue meals and help protect the planet.
                     </p>
                     <div className="landing-hero-btns">
                       <button className="btn-hero-outline" onClick={() => setView('customer')}>Explore Food</button>
@@ -1063,7 +1063,7 @@ function App() {
                   <div className="hero-announcement-grid">
                     <div className="hero-announcement-copy">
                       <span className="hero-announcement-badge">Coming Soon</span>
-                      <h2 className="hero-announcement-title">Supermarkets on FoodAway</h2>
+                      <h2 className="hero-announcement-title">Supermarkets on Grabengo</h2>
                       <p className="hero-announcement-lead">
                         We are expanding beyond surplus meals to bring leading supermarkets onto the platform. Premium discounts on fast-moving consumer goods, household essentials, and fresh groceries.
                       </p>
@@ -1105,8 +1105,8 @@ function App() {
         {/* Why Use Section */}
         <section id="why-use" className="why-use-section">
           <div className="section-container">
-            <span className="section-tag">Why use FoodAway</span>
-            <h2 className="section-title">WHY USE FOODAWAY</h2>
+            <span className="section-tag">Why use Grabengo</span>
+            <h2 className="section-title">WHY USE GRABENGO</h2>
             <div className="why-grid">
               <div className="why-features-col">
                 <div className="why-feature-card">
@@ -1120,7 +1120,7 @@ function App() {
               </div>
 
               <div className="why-image-wrapper">
-                <img src="/groceries_bag.png" alt="FoodAway Groceries Bag" className="why-bag-image" />
+                <img src="/groceries_bag.png" alt="Grabengo Groceries Bag" className="why-bag-image" />
               </div>
 
               <div className="why-features-col why-features-col-right">
@@ -1179,7 +1179,7 @@ function App() {
                 </div>
                 <div className="solution-item">
                   <span className="solution-tag">For: Grocery Retail</span>
-                  <h3 className="solution-title">FoodAway Platform</h3>
+                  <h3 className="solution-title">Grabengo Platform</h3>
                   <p className="solution-desc">
                     Your end-to-end surplus food management suite. Modular, intelligent software that helps grocery retailers track, manage, and redistribute surplus.
                   </p>
@@ -1203,7 +1203,7 @@ function App() {
         <section id="join" className="join-section">
           <div className="section-container">
             <h2 className="join-title">Join over 180,000 businesses fighting food waste with us</h2>
-            <p className="join-subtitle">Download the FoodAway app today and start saving food or listing your surplus.</p>
+            <p className="join-subtitle">Download the Grabengo app today and start saving food or listing your surplus.</p>
             <div className="join-btns">
               <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Get the App</button>
               <button className="btn-hero-outline" onClick={() => { setRegisterError(''); setRegisterSuccess(''); setView('register'); }}>Register as Seller</button>
@@ -1215,8 +1215,8 @@ function App() {
         <footer className="giant-footer">
           <div className="footer-top">
             <div className="footer-logo">
-              <img src="/favicon.png" alt="FoodAway Logo" style={{ height: '50px', objectFit: 'contain' }} />
-              <span>FoodAway</span>
+              <img src="/favicon.png" alt="Grabengo Logo" style={{ height: '50px', objectFit: 'contain' }} />
+              <span>Grabengo</span>
             </div>
             <div className="footer-links-row">
             
@@ -1230,7 +1230,7 @@ function App() {
           </div>
 
           <div className="giant-text-wrapper">
-            <p className="giant-footer-text">FoodAway</p>
+            <p className="giant-footer-text">Grabengo</p>
           </div>
 
           <div className="footer-bottom">
@@ -1253,7 +1253,7 @@ function App() {
               ))}
             </div>
             <div>
-              <p>Copyright &copy; {new Date().getFullYear()} FoodAway ApS. All Rights Reserved.</p>
+              <p>Copyright &copy; {new Date().getFullYear()} Grabengo. All Rights Reserved. · <a href="https://grabengo.store" style={{ color: 'inherit' }}>grabengo.store</a></p>
             </div>
           </div>
         </footer>
@@ -1267,7 +1267,7 @@ function App() {
 
               <div className="app-modal-header">
                 <div className="app-modal-icon-wrap">
-                  <img src="/favicon.png" alt="FoodAway" />
+                  <img src="/favicon.png" alt="Grabengo" />
                 </div>
                 <span className="app-modal-badge">Coming Soon</span>
                 <h3 id="app-modal-title" className="app-modal-title">Mobile App In Development</h3>
@@ -1319,7 +1319,7 @@ function App() {
       return (
         <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%)' }}>
           <div className="glass-card animate-fade-in" style={{ padding: '2.5rem', width: '420px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
-            <img src="/favicon.png" alt="FoodAway Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
+            <img src="/favicon.png" alt="Grabengo Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
 
             {forgotPasswordStep === 'login' && (
               <>
@@ -1494,9 +1494,9 @@ function App() {
       return (
         <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%)' }}>
           <div className="glass-card animate-fade-in" style={{ padding: '2.5rem', width: '460px', maxWidth: '95vw', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
-            <img src="/favicon.png" alt="FoodAway Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
+            <img src="/favicon.png" alt="Grabengo Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
             <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Register as Seller</h2>
-            <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on FoodAway and start selling surplus food</p>
+            <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on Grabengo and start selling surplus food</p>
 
             {registerError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerError}</div>}
             {registerSuccess && <div style={{ color: '#065F46', marginBottom: '1rem', padding: '0.5rem', background: '#D1FAE5', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerSuccess}</div>}
@@ -1563,10 +1563,10 @@ function App() {
             {user?.logo ? (
               <img src={user.logo} alt="Brand Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }} />
             ) : (
-              <img src="/favicon.png" alt="FoodAway Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'contain', flexShrink: 0 }} />
+              <img src="/favicon.png" alt="Grabengo Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'contain', flexShrink: 0 }} />
             )}
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              <span className="sidebar-logo" style={{ fontSize: '1.35rem', fontWeight: '800', lineHeight: '1.1', margin: 0, padding: 0 }}>FoodAway</span>
+              <span className="sidebar-logo" style={{ fontSize: '1.35rem', fontWeight: '800', lineHeight: '1.1', margin: 0, padding: 0 }}>Grabengo</span>
               <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '2px' }}>Admin Portal</span>
             </div>
             <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)} aria-label="Close menu">✕</button>
@@ -1626,7 +1626,7 @@ function App() {
             <span className="ham-bar" />
             <span className="ham-bar" />
           </button>
-          <span style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-primary)' }}>FoodAway Admin</span>
+          <span style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-primary)' }}>Grabengo Admin</span>
           <div style={{ width: 40 }} />
         </div>
 

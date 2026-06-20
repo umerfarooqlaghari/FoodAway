@@ -12,7 +12,7 @@ export default function CookiePolicy({ onBack }) {
   return (
     <PageWrapper onBack={onBack}>
       <PageTitle>Cookie Policy</PageTitle>
-      <PageSubtitle>We use cookies to make FoodAway work better for you. Here's what we use and why.</PageSubtitle>
+      <PageSubtitle>We use cookies to make Grabengo work better for you. Here's what we use and why.</PageSubtitle>
 
       <Section title="What Are Cookies?">
         <p>

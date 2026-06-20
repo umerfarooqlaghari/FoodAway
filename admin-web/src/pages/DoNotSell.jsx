@@ -27,7 +27,7 @@ export default function DoNotSell({ onBack }) {
         </p>
         <br />
         <p>
-          FoodAway does not sell personal data in the traditional sense. However, we may share certain
+          Grabengo does not sell personal data in the traditional sense. However, we may share certain
           identifiers (such as device IDs or browsing behaviour) with advertising and analytics partners.
           You can opt out of this sharing using the form below.
         </p>
@@ -99,7 +99,7 @@ export default function DoNotSell({ onBack }) {
         </p>
         <br />
         <p>
-          Opting out of data sharing will not affect your ability to use FoodAway or the prices you
+          Opting out of data sharing will not affect your ability to use Grabengo or the prices you
           receive. You may continue to use all features of the platform.
         </p>
       </Section>

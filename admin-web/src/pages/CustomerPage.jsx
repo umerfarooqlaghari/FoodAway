@@ -29,7 +29,7 @@ function downloadReceipt(orders, contactInfo) {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>FoodAway Receipt ${refNos}</title>
+  <title>Grabengo Receipt ${refNos}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f5f5f5; padding: 40px 20px; color: #1a1a1a; }
@@ -70,7 +70,7 @@ function downloadReceipt(orders, contactInfo) {
     <div class="header">
       <div class="header-icon">🛍️</div>
       <h1>Order Confirmed!</h1>
-      <p>FoodAway — Thank you for your order</p>
+      <p>Grabengo — Thank you for your order</p>
     </div>
     <div class="body">
       <div class="ref-box">
@@ -101,7 +101,7 @@ function downloadReceipt(orders, contactInfo) {
       </div>
     </div>
     <div class="footer">
-      <p>© ${new Date().getFullYear()} FoodAway — Reducing food waste, one meal at a time.</p>
+      <p>© ${new Date().getFullYear()} Grabengo — Reducing food waste, one meal at a time.</p>
     </div>
   </div>
   <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
@@ -417,7 +417,7 @@ export default function CustomerPage({ onBack }) {
           <ArrowLeftIcon size={14} /> Back
         </button>
         <div className="pos-logo">
-          <img src="/FoodAway-V1-transparent.png" alt="FoodAway" className="pos-logo-img" />
+          <img src="/Grabengo-V1-transparent.png" alt="Grabengo" className="pos-logo-img" />
         </div>
         <div className="pos-search-wrap">
           <span className="pos-search-icon"><SearchIcon size={15} color="#aaa" /></span>
@@ -481,7 +481,7 @@ export default function CustomerPage({ onBack }) {
             </div>
           ) : totalItemCount === 0 ? (
             <div className="pos-empty">
-              <img src="/FoodAway-V1-transparent.png" alt="" style={{ height: 56, opacity: 0.2 }} />
+              <img src="/Grabengo-V1-transparent.png" alt="" style={{ height: 56, opacity: 0.2 }} />
               <h3>No items found</h3>
               <p>{search ? `No results for "${search}"` : 'Check back soon for fresh deals!'}</p>
               {search && <button className="pos-outline-btn" onClick={() => setSearch('')}>Clear search</button>}
