@@ -9,20 +9,17 @@
     "SellersAdmin": {
       "stores": ["read", "write"],
       "bags": ["read", "write", "delete"],
-      "food_items": ["read", "write", "delete"],
-      "users": ["read"]
+      "food_items": ["read", "write", "delete"]
     },
     "SellersStaff": {
       "stores": ["read", "write"],
       "bags": ["read", "write", "delete"],
-      "food_items": ["read", "write", "delete"],
-      "users": ["read"]
+      "food_items": ["read", "write", "delete"]
     },
     "Customers": {
       "stores": ["read"],
       "bags": ["read"],
-      "food_items": ["read"],
-      "users": ["read"]
+      "food_items": ["read"]
     }
   }
 }

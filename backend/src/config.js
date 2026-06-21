@@ -12,6 +12,11 @@ function siteHostFromUrl(url) {
   }
 }
 
+function tenantStoreUrl(subdomain, options) {
+  const { tenantStoreUrl: buildUrl } = require('./subdomain');
+  return buildUrl(subdomain, options);
+}
+
 module.exports = {
   brandName,
   tagline: process.env.APP_TAGLINE || 'Reducing food waste, one meal at a time.',
@@ -23,4 +28,5 @@ module.exports = {
   logoUrl: process.env.APP_LOGO_URL || '',
   groceriesBagUrl: process.env.APP_GROCERIES_BAG_URL || '',
   receiptFilename: `${brandName}-Receipt.pdf`,
+  tenantStoreUrl,
 };

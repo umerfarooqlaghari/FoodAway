@@ -3,10 +3,171 @@ const cors = require('cors');
 require('dotenv').config();
 
 const { initDB, db } = require('./db');
-const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl } = require('./aws');
+const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
-const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename } = require('./config');
-const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout } = require('./emailTemplates');
+const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl } = require('./config');
+const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout, emailSellerWelcomeLayout } = require('./emailTemplates');
+const {
+  validateSubdomain,
+  slugifySubdomain,
+  allocateUniqueSubdomain,
+  isSubdomainTaken,
+  parseSubdomainFromHost,
+} = require('./subdomain');
+const {
+  parseFloatParam,
+  resolveTenantFilter,
+  sortByNearest,
+  attachDistance,
+  haversineKm,
+} = require('./publicCatalog');
+const {
+  getTenantById,
+  getTenantBySubdomain,
+  createTenant,
+  getTenantForUser,
+  ensureTenantSubdomain,
+  listTenantsForSuperAdmin,
+} = require('./tenants');
+const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess } = require('./tenant');
+const { formatStoreReview, formatAppReview, stripStoreTenantId } = require('./serializers');
+const { normalizePhone, phoneDigits, phoneLookupVariants, phonesMatch } = require('./phone');
+
+async function findUserForOrderLookup({ email, phone }) {
+  const trimmedEmail = email?.trim().toLowerCase();
+  if (trimmedEmail) {
+    const byEmail = await db.prepare(
+      'SELECT id FROM users WHERE LOWER(TRIM(email)) = ?'
+    ).get(trimmedEmail);
+    if (byEmail) return byEmail;
+  }
+
+  if (phone?.trim()) {
+    const variants = phoneLookupVariants(phone);
+    for (const v of variants) {
+      const row = await db.prepare('SELECT id FROM users WHERE TRIM(phone) = ?').get(v);
+      if (row) return row;
+    }
+    const candidates = await db.prepare(
+      "SELECT id, phone FROM users WHERE phone IS NOT NULL AND TRIM(phone) <> ''"
+    ).all();
+    const match = candidates.find((u) => phonesMatch(u.phone, phone));
+    if (match) return { id: match.id };
+  }
+
+  return null;
+}
+
+async function formatUserForClient(user) {
+  if (!user) return user;
+  const tenant = user.tenant_id ? await getTenantById(db, user.tenant_id) : null;
+  const logoSource = tenant?.logo || user.logo;
+  const logo = logoSource ? await getPresignedUrl(logoSource) : null;
+  const subdomain = tenant?.subdomain || null;
+  const storeUrl = subdomain ? tenantStoreUrl(subdomain) : null;
+  const displayName = tenant?.name || user.name;
+  return {
+    id: user.id,
+    name: displayName,
+    email: user.email,
+    role: user.role,
+    logo,
+    tenant_id: user.tenant_id,
+    subdomain,
+    storeUrl,
+    tenant: tenant ? { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain } : null,
+  };
+}
+
+function resolveRequestSubdomain(req) {
+  const raw = req.body?.subdomain || req.headers['x-tenant-subdomain'] || parseSubdomainFromHost(req.headers.host);
+  if (!raw) return null;
+  const validation = validateSubdomain(String(raw));
+  return validation.ok ? validation.subdomain : null;
+}
+
+async function fetchOrderForNotification(orderId) {
+  return db.prepare(`
+    SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+           s.name as store_name, s.tenant_id,
+           u.name as customer_name,
+           COALESCE(b.pickup_time, 'N/A') as pickup_time,
+           COALESCE(b.description, f.name) as item_name
+    FROM orders o
+    JOIN stores s ON o.store_id = s.id
+    JOIN users u ON o.customer_id = u.id
+    LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
+    LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
+    WHERE o.id = ?
+  `).get(orderId);
+}
+
+async function notifyNewOrder(orderId, customerId) {
+  const order = await fetchOrderForNotification(orderId);
+  if (!order) return;
+  const payload = { type: 'new_order', order };
+  if (order.tenant_id) sendToTenantSellers(order.tenant_id, payload);
+  sendToSuperAdminSellers(payload);
+  if (customerId) {
+    sendToUser(customerId, {
+      type: 'new_order_confirmation',
+      order: {
+        id: order.id,
+        quantity: order.quantity,
+        price: order.price,
+        store_name: order.store_name,
+        item_name: order.item_name,
+        pickup_time: order.pickup_time,
+      },
+    });
+  }
+}
+
+function groupOrdersByTenant(orders) {
+  const groups = new Map();
+  for (const order of orders) {
+    const key = order.tenant_id || 'default';
+    if (!groups.has(key)) {
+      groups.set(key, {
+        tenant_id: order.tenant_id,
+        tenant_name: order.tenant_name || order.store_name || brandName,
+        orders: [],
+      });
+    }
+    groups.get(key).orders.push(order);
+  }
+  return [...groups.values()];
+}
+
+function assertSingleTenantCart(items) {
+  const tenantIds = new Set(items.map((i) => i.tenant_id).filter(Boolean));
+  if (tenantIds.size > 1) {
+    const err = new Error('Your cart contains items from different brands. Please checkout one brand at a time.');
+    err.status = 400;
+    throw err;
+  }
+}
+
+async function buildReceiptAttachments(orderGroups, customer) {
+  const attachments = [];
+  for (const group of orderGroups) {
+    const ordersWithPayment = group.orders.map((o) => ({
+      ...o,
+      payment_method: o.payment_method || 'Cash at Pickup',
+    }));
+    const pdf = await generateReceiptBuffer(ordersWithPayment, customer, {
+      brandName: group.tenant_name,
+      tagline: 'Thank you for your order',
+    });
+    const slug = slugifySubdomain(group.tenant_name) || 'order';
+    attachments.push({
+      filename: `${slug}-receipt.pdf`,
+      content: pdf,
+      contentType: 'application/pdf',
+    });
+  }
+  return attachments;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,9 +195,84 @@ app.get('/health', async (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/api/public/tenant/:subdomain', async (req, res) => {
+  try {
+    const validation = validateSubdomain(req.params.subdomain);
+    if (!validation.ok) return res.status(400).json({ error: validation.error });
+    const tenant = await getTenantBySubdomain(db, validation.subdomain);
+    if (!tenant) return res.status(404).json({ error: 'Store not found' });
+    const signedLogo = tenant.logo ? await getPresignedUrl(tenant.logo) : null;
+    res.json({
+      id: tenant.id,
+      name: tenant.name,
+      logo: signedLogo,
+      subdomain: tenant.subdomain,
+      storeUrl: tenantStoreUrl(tenant.subdomain),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/public/tenants', async (req, res) => {
+  try {
+    const lat = parseFloatParam(req.query.lat);
+    const lng = parseFloatParam(req.query.lng);
+    const sort = req.query.sort;
+
+    const rows = await db.prepare(`
+      SELECT t.id, t.name, t.subdomain, t.logo,
+             COUNT(DISTINCT s.id)::int AS store_count,
+             AVG(s.lat) AS avg_lat,
+             AVG(s.lng) AS avg_lng
+      FROM tenants t
+      INNER JOIN stores s ON s.tenant_id = t.id AND s.is_active = TRUE
+      GROUP BY t.id, t.name, t.subdomain, t.logo
+      ORDER BY t.name ASC
+    `).all();
+
+    let tenants = await Promise.all(rows.map(async (row) => {
+      const signedLogo = row.logo ? await getPresignedUrl(row.logo) : null;
+      const avgLat = row.avg_lat != null ? Number(row.avg_lat) : null;
+      const avgLng = row.avg_lng != null ? Number(row.avg_lng) : null;
+      const item = {
+        id: row.id,
+        name: row.name,
+        subdomain: row.subdomain,
+        logo: signedLogo,
+        store_count: row.store_count,
+        storeUrl: tenantStoreUrl(row.subdomain, { path: '/shop' }),
+        lat: avgLat,
+        lng: avgLng,
+      };
+      if (lat != null && lng != null && avgLat != null && avgLng != null) {
+        item.distance_km = haversineKm(lat, lng, avgLat, avgLng);
+      }
+      return item;
+    }));
+
+    if (sort === 'nearest' && lat != null && lng != null) {
+      tenants = sortByNearest(tenants, lat, lng);
+    }
+
+    res.json(tenants);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/public/media', async (req, res) => {
+  const key = req.query.key;
+  if (!key || typeof key !== 'string' || key.includes('..')) {
+    return res.status(400).json({ error: 'Invalid media key' });
+  }
+  const ok = await streamS3Object(decodeURIComponent(key), res);
+  if (!ok) res.status(404).json({ error: 'Image not found' });
+});
+
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { verifyToken, requireRole, JWT_SECRET } = require('./middleware');
+const { verifyToken, optionalVerifyToken, requireRole, blockInProduction, JWT_SECRET } = require('./middleware');
 
 // Authentication Routes
 app.post('/api/auth/register', async (req, res) => {
@@ -54,9 +290,48 @@ app.post('/api/auth/register', async (req, res) => {
       const finalName = (brand_name || name || '').trim();
       if (!finalName) return res.status(400).json({ error: 'Brand name is required' });
       if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+
+      let subdomain;
+      if (req.body.subdomain) {
+        const validation = validateSubdomain(req.body.subdomain);
+        if (!validation.ok) return res.status(400).json({ error: validation.error });
+        subdomain = validation.subdomain;
+        if (await isSubdomainTaken(db, subdomain)) {
+          return res.status(400).json({ error: 'This store URL is already taken. Please choose another.' });
+        }
+      } else {
+        subdomain = await allocateUniqueSubdomain(db, finalName);
+      }
+
       const logoUrl = logo ? await uploadImageToS3(logo) : null;
-      const info = await db.prepare('INSERT INTO users (name, email, password, logo, role, phone) VALUES (?, ?, ?, ?, ?, ?)').run(finalName, email, hashedPassword, logoUrl, 'SellersAdmin', phone || null);
-      return res.status(201).json({ id: info.lastInsertRowid, message: 'Seller account registered successfully' });
+      const tenant = await createTenant(db, {
+        name: finalName,
+        subdomain,
+        logo: logoUrl,
+        phone: phone || null,
+      });
+      const info = await db.prepare(
+        'INSERT INTO users (name, email, password, role, phone, tenant_id) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(finalName, email, hashedPassword, 'SellersAdmin', phone || null, tenant.id);
+
+      const storeUrl = tenantStoreUrl(subdomain);
+      const loginUrl = tenantStoreUrl(subdomain, { path: '/login' });
+
+      sendEmail({
+        to: email,
+        subject: `Your ${brandName} store portal is ready`,
+        html: emailSellerWelcomeLayout({ brandName: finalName, storeUrl, loginUrl }),
+        text: `Welcome to ${brandName}! Your store portal: ${storeUrl}`,
+      }).catch(err => console.error('Failed to send seller welcome email:', err.message));
+
+      return res.status(201).json({
+        id: info.lastInsertRowid,
+        tenant_id: tenant.id,
+        subdomain,
+        storeUrl,
+        loginUrl,
+        message: 'Seller account registered successfully. Your store link has been emailed to you.',
+      });
     }
 
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required' });
@@ -64,6 +339,10 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === '23505') {
+      const detail = String(err.detail || err.message || '');
+      if (detail.includes('subdomain') || String(err.constraint || '').includes('subdomain')) {
+        return res.status(400).json({ error: 'This store URL is already taken. Please choose another.' });
+      }
       return res.status(400).json({ error: 'Email already exists' });
     }
     res.status(500).json({ error: err.message });
@@ -78,6 +357,33 @@ app.post('/api/auth/login', async (req, res) => {
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const requestSubdomain = resolveRequestSubdomain(req);
+
+    if (user.role === 'SuperAdmin' && requestSubdomain) {
+      return res.status(403).json({ error: 'Platform admin sign-in is only available on the main site.' });
+    }
+
+    if (user.role === 'SellersAdmin' || user.role === 'SellersStaff') {
+      const tenant = await getTenantForUser(db, user);
+      if (!tenant) return res.status(403).json({ error: 'Seller account is not linked to a store.' });
+      await ensureTenantSubdomain(db, tenant);
+      const storeUrl = tenantStoreUrl(tenant.subdomain);
+      if (!requestSubdomain) {
+        return res.status(403).json({
+          error: 'Please sign in on your store portal.',
+          storeUrl,
+          subdomain: tenant.subdomain,
+        });
+      }
+      if (requestSubdomain !== tenant.subdomain) {
+        return res.status(403).json({
+          error: 'This account belongs to a different store.',
+          storeUrl,
+          subdomain: tenant.subdomain,
+        });
+      }
+    }
 
     // Generate Tokens
     const token = jwt.sign({ id: user.id, role: user.role, tenant_id: user.tenant_id }, JWT_SECRET, { expiresIn: '7d' });
@@ -100,7 +406,7 @@ app.post('/api/auth/login', async (req, res) => {
       text: `Hi ${user.name}, A new login was detected on your ${brandName} account at ${new Date().toLocaleString()}.`
     }).catch(err => console.error('Failed to send login alert email:', err.message));
 
-    res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, logo: user.logo, tenant_id: user.tenant_id } });
+    res.json({ token, refreshToken, user: await formatUserForClient(user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -110,7 +416,7 @@ app.get('/api/auth/me', verifyToken, async (req, res) => {
   try {
     const user = await db.prepare('SELECT id, name, email, role, logo, tenant_id FROM users WHERE id = ?').get(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    res.json(await formatUserForClient(user));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -186,25 +492,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     }
 
     // Check expiration timezone-safely
-    let expiresAt = otpRecord.expires_at;
-    if (typeof expiresAt === 'string') {
-      if (!expiresAt.endsWith('Z') && !expiresAt.includes('+')) {
-        expiresAt += 'Z';
-      }
-      expiresAt = new Date(expiresAt);
-    } else if (expiresAt instanceof Date) {
-      expiresAt = new Date(Date.UTC(
-        expiresAt.getFullYear(),
-        expiresAt.getMonth(),
-        expiresAt.getDate(),
-        expiresAt.getHours(),
-        expiresAt.getMinutes(),
-        expiresAt.getSeconds(),
-        expiresAt.getMilliseconds()
-      ));
-    } else {
-      expiresAt = new Date(expiresAt);
-    }
+    const expiresAt = parseStoredTimestamp(otpRecord.expires_at);
 
     if (expiresAt < new Date()) {
       await db.prepare('DELETE FROM otps WHERE email = ?').run(email);
@@ -229,7 +517,7 @@ app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) 
   const { all, tenant_id } = req.query;
   try {
     let query = `
-      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image,
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image, s.tenant_id,
              CASE WHEN f.user_id IS NOT NULL THEN 1 ELSE 0 END as is_favorited
       FROM surprise_bags b
       JOIN stores s ON b.store_id = s.id
@@ -243,12 +531,15 @@ app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) 
     }
 
     if (req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff') {
-      const targetTenantId = req.user.tenant_id || req.user.id;
+      const targetTenantId = requireTenantId(req.user);
       conditions.push('s.tenant_id = ?');
       params.push(targetTenantId);
     } else if (req.user.role === 'SuperAdmin' && tenant_id) {
       conditions.push('s.tenant_id = ?');
       params.push(tenant_id);
+    } else if (req.user.role === 'Customers' && tenant_id) {
+      conditions.push('s.tenant_id = ?');
+      params.push(parseInt(tenant_id, 10));
     }
 
     if (conditions.length > 0) {
@@ -280,12 +571,15 @@ app.get('/api/stores', verifyToken, requireRole('stores', 'read'), async (req, r
     const conditions = [];
 
     if (req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff') {
-      const targetTenantId = req.user.tenant_id || req.user.id;
+      const targetTenantId = requireTenantId(req.user);
       conditions.push(`s.tenant_id = ?`);
       params.push(targetTenantId);
     } else if (req.user.role === 'SuperAdmin' && tenant_id) {
       conditions.push(`s.tenant_id = ?`);
       params.push(tenant_id);
+    } else if (req.user.role === 'Customers' && tenant_id) {
+      conditions.push(`s.tenant_id = ?`);
+      params.push(parseInt(tenant_id, 10));
     }
 
     if (conditions.length > 0) {
@@ -293,10 +587,13 @@ app.get('/api/stores', verifyToken, requireRole('stores', 'read'), async (req, r
     }
 
     const stores = await db.prepare(query).all(...params);
-    const signedStores = await Promise.all(stores.map(async store => ({
-      ...store,
-      image: await getPresignedUrl(store.image),
-    })));
+    const signedStores = await Promise.all(stores.map(async store => {
+      const signed = {
+        ...store,
+        image: await getPresignedUrl(store.image),
+      };
+      return stripStoreTenantId(signed, req.user.role);
+    }));
     res.json(signedStores);
   } catch (err) {
     console.error('GET /api/stores error:', err.message);
@@ -305,6 +602,9 @@ app.get('/api/stores', verifyToken, requireRole('stores', 'read'), async (req, r
 });
 
 app.get('/api/users', verifyToken, requireRole('users', 'read'), async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   try {
     const users = await db.prepare('SELECT id, name, email, role, logo, created_at FROM users').all();
     const signedUsers = await Promise.all(users.map(async u => ({ ...u, logo: await getPresignedUrl(u.logo) })));
@@ -349,7 +649,7 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
   }
 
   try {
-    const targetTenantId = req.user.tenant_id || req.user.id;
+    const targetTenantId = requireTenantId(req.user);
     const imageUrl = image ? await uploadImageToS3(image) : null;
     const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image) VALUES (?, ?, ?, ?, ?, TRUE, ?)').run(targetTenantId, name, address, lat, lng, imageUrl);
     res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl });
@@ -362,33 +662,37 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
   const { id } = req.params;
   const { lat, lng, is_active, name, address, image } = req.body;
   try {
-    const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(id);
-    if (!store) return res.status(404).json({ error: 'Store not found' });
-    
-    const imageUrl = image ? await uploadImageToS3(image) : image;
+    await assertStoreAccess(db, id, req.user);
+
+    let imageUrl;
+    if (image !== undefined) {
+      imageUrl = image ? await uploadImageToS3(image) : null;
+    }
     const isActiveBool = is_active !== undefined && is_active !== null ? Boolean(is_active) : null;
     await db.prepare('UPDATE stores SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), is_active = COALESCE(?, is_active), name = COALESCE(?, name), address = COALESCE(?, address), image = COALESCE(?, image) WHERE id = ?').run(lat, lng, isActiveBool, name, address, imageUrl, id);
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 app.delete('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (req, res) => {
   const { id } = req.params;
   try {
+    await assertStoreAccess(db, id, req.user);
     await db.prepare('DELETE FROM surprise_bags WHERE store_id = ?').run(id);
     const info = await db.prepare('DELETE FROM stores WHERE id = ?').run(id);
     if (info.changes === 0) return res.status(404).json({ error: 'Store not found' });
     res.json({ message: 'Store deleted successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 app.post('/api/bags', verifyToken, requireRole('bags', 'write'), async (req, res) => {
   const { store_id, price, original_price, description, images, quantity, pickup_time } = req.body;
   try {
+    await assertStoreAccess(db, store_id, req.user);
     let s3Images = null;
     if (images) {
       const parsedImages = typeof images === 'string' ? JSON.parse(images) : images;
@@ -431,8 +735,7 @@ app.put('/api/bags/:id', verifyToken, requireRole('bags', 'write'), async (req, 
   const { id } = req.params;
   const { price, original_price, description, images, quantity, pickup_time } = req.body;
   try {
-    const bag = await db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
-    if (!bag) return res.status(404).json({ error: 'Bag not found' });
+    const bag = await assertBagAccess(db, id, req.user);
 
     let s3Images = bag.images;
     if (images !== undefined) {
@@ -456,41 +759,56 @@ app.put('/api/bags/:id', verifyToken, requireRole('bags', 'write'), async (req, 
     await db.prepare('UPDATE surprise_bags SET price = ?, original_price = ?, description = ?, images = ?, quantity = ?, pickup_time = ? WHERE id = ?').run(finalPrice, finalOriginalPrice, finalDescription, s3Images, finalQuantity, finalPickupTime, id);
     res.json({ message: 'Bag updated successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 app.delete('/api/bags/:id', verifyToken, requireRole('bags', 'write'), async (req, res) => {
   const { id } = req.params;
   try {
+    await assertBagAccess(db, id, req.user);
     const info = await db.prepare('DELETE FROM surprise_bags WHERE id = ?').run(id);
     if (info.changes === 0) return res.status(404).json({ error: 'Bag not found' });
     res.json({ message: 'Bag deleted successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 // ─── Food Items CRUD ───────────────────────────────────────────────────────
 
 app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async (req, res) => {
-  const { all, store_id } = req.query;
+  const { all, store_id, tenant_id } = req.query;
   try {
     let query = `
       SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
              f.quantity, f.category, f.is_available, f.store_id, f.created_at,
-             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image, s.tenant_id,
              CASE WHEN fav.user_id IS NOT NULL THEN 1 ELSE 0 END as is_favorited
       FROM food_items f
       JOIN stores s ON f.store_id = s.id
       LEFT JOIN favorites fav ON fav.store_id = f.store_id AND fav.user_id = ?
     `;
+    const params = [req.user.id];
     const conditions = [];
     if (all !== 'true') conditions.push('f.is_available = TRUE AND f.quantity > 0');
-    if (store_id) conditions.push(`f.store_id = ${parseInt(store_id)}`);
+    if (store_id) {
+      conditions.push('f.store_id = ?');
+      params.push(parseInt(store_id, 10));
+    }
+    if (req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff') {
+      conditions.push('s.tenant_id = ?');
+      params.push(requireTenantId(req.user));
+    } else if (req.user.role === 'SuperAdmin' && tenant_id) {
+      conditions.push('s.tenant_id = ?');
+      params.push(parseInt(tenant_id, 10));
+    } else if (req.user.role === 'Customers' && tenant_id) {
+      conditions.push('s.tenant_id = ?');
+      params.push(parseInt(tenant_id, 10));
+    }
     if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
     query += ' ORDER BY f.created_at DESC';
-    const foodItems = await db.prepare(query).all(req.user.id);
+    const foodItems = await db.prepare(query).all(...params);
     const signedItems = await Promise.all(foodItems.map(async item => ({
       ...item,
       images: await presignImages(item.images),
@@ -507,6 +825,7 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
   const { store_id, name, description, price, original_price, images, quantity, category } = req.body;
   if (!store_id || !name || !price) return res.status(400).json({ error: 'store_id, name, and price are required.' });
   try {
+    await assertStoreAccess(db, store_id, req.user);
     let s3Images = null;
     if (images) {
       const parsedImages = typeof images === 'string' ? JSON.parse(images) : images;
@@ -528,8 +847,7 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
   const { id } = req.params;
   const { name, description, price, original_price, images, quantity, category, is_available } = req.body;
   try {
-    const item = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
-    if (!item) return res.status(404).json({ error: 'Food item not found' });
+    const item = await assertFoodItemAccess(db, id, req.user);
     
     let s3Images = undefined;
     if (images !== undefined) {
@@ -559,18 +877,19 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
     ).run(name, description, price, original_price, s3Images, quantity, category, isAvailableBool, id);
     res.json({ message: 'Food item updated successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 app.delete('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
   const { id } = req.params;
   try {
+    await assertFoodItemAccess(db, id, req.user);
     const info = await db.prepare('DELETE FROM food_items WHERE id = ?').run(id);
     if (info.changes === 0) return res.status(404).json({ error: 'Food item not found' });
     res.json({ message: 'Food item deleted successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -578,11 +897,22 @@ app.delete('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'
 
 // Create an order (checkout cart)
 app.post('/api/orders', verifyToken, async (req, res) => {
+  if (req.user.role !== 'Customers') {
+    return res.status(403).json({ error: 'Only customers can place orders' });
+  }
   const { items, paymentMethod } = req.body;
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Cart is empty' });
   const method = paymentMethod || 'Card';
 
   try {
+    const preview = await previewCheckoutItems(items);
+    if (preview.length === 0) {
+      return res.status(400).json({ error: 'No valid items could be ordered' });
+    }
+    if (preview.length !== items.length) {
+      return res.status(400).json({ error: 'Some items in your cart are no longer available. Please refresh and try again.' });
+    }
+
     const orderIds = [];
     
     // Start transaction
@@ -618,11 +948,13 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       const order = await db.prepare(`
         SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
                s.name as store_name, s.tenant_id,
+               t.name as tenant_name,
                u.name as customer_name,
                COALESCE(b.pickup_time, 'N/A') as pickup_time,
                COALESCE(b.description, f.name) as item_name
         FROM orders o
         JOIN stores s ON o.store_id = s.id
+        LEFT JOIN tenants t ON t.id = s.tenant_id
         JOIN users u ON o.customer_id = u.id
         LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
         LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
@@ -633,12 +965,12 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       }
     }
 
+    const receiptGroups = groupOrdersByTenant(placedOrders);
+
     // Trigger WS notifications
     for (const order of placedOrders) {
-      sendToSellers({
-        type: 'new_order',
-        order
-      });
+      if (order.tenant_id) sendToTenantSellers(order.tenant_id, { type: 'new_order', order });
+      sendToSuperAdminSellers({ type: 'new_order', order });
 
       sendToUser(req.user.id, {
         type: 'new_order_confirmation',
@@ -661,11 +993,11 @@ app.post('/api/orders', verifyToken, async (req, res) => {
         `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — £${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
       ).join('');
 
-      generateReceiptBuffer(placedOrders, {
-        name:  customer.name,
+      buildReceiptAttachments(receiptGroups, {
+        name: customer.name,
         email: customer.email,
-        phone: customer.phone || ''
-      }).then(receiptPdf => sendEmail({
+        phone: customer.phone || '',
+      }).then((attachments) => sendEmail({
         to:      customer.email,
         subject: `Your ${brandName} Order Confirmation 🍩`,
         html: `
@@ -673,7 +1005,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
             ${emailOrangeHeader('Order Confirmed ✓')}
             <div style="background:#fff;padding:24px 32px;border:1px solid #eee;border-top:none;">
               <p style="color:#333;">Hi <strong>${customer.name}</strong>,</p>
-              <p style="color:#555;">Thank you for rescuing food! Your order has been confirmed. Your receipt is attached to this email.</p>
+              <p style="color:#555;">Thank you for rescuing food! Your order has been confirmed. Your receipt${attachments.length > 1 ? 's are' : ' is'} attached to this email.</p>
               <h3 style="color:#FF5A00;border-bottom:2px solid #FF5A00;padding-bottom:6px;">Order Summary</h3>
               <ul style="color:#333;line-height:1.8;">${itemsList}</ul>
               <p style="font-size:18px;font-weight:bold;color:#1a1a1a;border-top:1px solid #eee;padding-top:12px;">
@@ -689,17 +1021,18 @@ app.post('/api/orders', verifyToken, async (req, res) => {
             </div>
           </div>`,
         text: `Hi ${customer.name}, your ${brandName} order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: £${total.toFixed(2)}. Your receipt is attached.`,
-        attachments: [{
-          filename:    receiptFilename,
-          content:     receiptPdf,
-          contentType: 'application/pdf'
-        }]
+        attachments,
       })).catch(err => console.error('Failed to send order confirmation email:', err.message));
     }
 
-    res.json({ message: 'Order placed successfully', order_ids: orderIds });
+    res.json({
+      message: 'Order placed successfully',
+      order_ids: orderIds,
+      orders: placedOrders,
+      receipt_groups: receiptGroups,
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -710,12 +1043,16 @@ app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), async (
     let params = [];
 
     if (req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff') {
-      const targetTenantId = req.user.tenant_id || req.user.id;
+      const targetTenantId = requireTenantId(req.user);
       queryFilter = 'WHERE s.tenant_id = ?';
       params.push(targetTenantId);
-    } else if (req.user.role === 'SuperAdmin' && tenant_id) {
-      queryFilter = 'WHERE s.tenant_id = ?';
-      params.push(tenant_id);
+    } else if (req.user.role === 'SuperAdmin') {
+      if (tenant_id) {
+        queryFilter = 'WHERE s.tenant_id = ?';
+        params.push(tenant_id);
+      } else if (req.query.all !== 'true') {
+        return res.json({ totalRevenue: 0, bagsSold: 0, dailySales: [] });
+      }
     }
 
     const totalRevenueRow = await db.prepare(`SELECT SUM(o.price * o.quantity) as total_revenue FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
@@ -741,8 +1078,9 @@ app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), async (
   }
 });
 
-// Seed data route for testing (Unprotected for ease of use)
-app.post('/api/seed', async (req, res) => {
+// Seed data routes — dev only, SuperAdmin only
+app.post('/api/seed', blockInProduction, verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const storeInfo = await db.prepare("INSERT INTO stores (name, address) VALUES ('Green Bakery', '123 Main St')").run();
     await db.prepare("INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (?, 4.99, 5, 'Today, 18:00 - 19:00')").run(storeInfo.lastInsertRowid);
@@ -756,11 +1094,12 @@ app.post('/api/seed', async (req, res) => {
   }
 });
 
-app.post('/api/seed/superadmin', async (req, res) => {
+app.post('/api/seed/superadmin', blockInProduction, verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const hashedPassword = await bcrypt.hash('superadmin123', 10);
     await db.prepare("INSERT INTO users (name, email, password, role) VALUES ('Super Admin', 'superadmin@alpha-devs.cloud', ?, 'SuperAdmin')").run(hashedPassword);
-    res.json({ message: 'SuperAdmin created. Email: superadmin@alpha-devs.cloud, Pass: superadmin123' });
+    res.json({ message: 'SuperAdmin account created for superadmin@alpha-devs.cloud' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -769,6 +1108,9 @@ app.post('/api/seed/superadmin', async (req, res) => {
 
 // Get customer's orders
 app.get('/api/orders/me', verifyToken, async (req, res) => {
+  if (req.user.role !== 'Customers') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   try {
     const orders = await db.prepare(`
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
@@ -803,12 +1145,16 @@ app.get('/api/seller/orders', verifyToken, async (req, res) => {
     let params = [];
 
     if (req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff') {
-      const targetTenantId = req.user.tenant_id || req.user.id;
+      const targetTenantId = requireTenantId(req.user);
       queryFilter = 'WHERE s.tenant_id = ?';
       params.push(targetTenantId);
-    } else if (req.user.role === 'SuperAdmin' && tenant_id) {
-      queryFilter = 'WHERE s.tenant_id = ?';
-      params.push(tenant_id);
+    } else if (req.user.role === 'SuperAdmin') {
+      if (tenant_id) {
+        queryFilter = 'WHERE s.tenant_id = ?';
+        params.push(tenant_id);
+      } else if (req.query.all !== 'true') {
+        return res.json([]);
+      }
     }
 
     const orders = await db.prepare(`
@@ -839,10 +1185,27 @@ app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const finalName = brand_name || name;
     const logoUrl = logo ? await uploadImageToS3(logo) : logo;
-    const info = await db.prepare('INSERT INTO users (name, email, password, logo, role) VALUES (?, ?, ?, ?, ?)').run(finalName, email, hashedPassword, logoUrl || null, 'SellersAdmin');
-    res.status(201).json({ id: info.lastInsertRowid, message: 'Tenant created successfully' });
+    const subdomain = await allocateUniqueSubdomain(db, finalName);
+    const tenant = await createTenant(db, { name: finalName, subdomain, logo: logoUrl || null });
+    const info = await db.prepare(
+      'INSERT INTO users (name, email, password, role, tenant_id) VALUES (?, ?, ?, ?, ?)'
+    ).run(finalName, email, hashedPassword, 'SellersAdmin', tenant.id);
+    const storeUrl = tenantStoreUrl(subdomain);
+    res.status(201).json({
+      id: tenant.id,
+      admin_user_id: info.lastInsertRowid,
+      subdomain,
+      storeUrl,
+      message: 'Tenant created successfully',
+    });
   } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(400).json({ error: 'Email already exists' });
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === '23505') {
+      const detail = String(err.detail || err.message || '');
+      if (detail.includes('subdomain') || String(err.constraint || '').includes('subdomain')) {
+        return res.status(400).json({ error: 'This store URL is already taken.' });
+      }
+      return res.status(400).json({ error: 'Email already exists' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -850,8 +1213,13 @@ app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
 app.get('/api/superadmin/tenants', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   try {
-    const tenants = await db.prepare("SELECT id, name, email, logo, created_at FROM users WHERE role = 'SellersAdmin'").all();
-    const signedTenants = await Promise.all(tenants.map(async t => ({ ...t, logo: await getPresignedUrl(t.logo) })));
+    const tenants = await listTenantsForSuperAdmin(db);
+    const signedTenants = await Promise.all(tenants.map(async t => ({
+      ...t,
+      email: t.admin_email,
+      logo: await getPresignedUrl(t.logo),
+      storeUrl: t.subdomain ? tenantStoreUrl(t.subdomain) : null,
+    })));
     res.json(signedTenants);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -896,15 +1264,10 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
         console.error(`Failed to send inactivity email to ${customer.email}:`, emailErr.message);
       }
 
-      notified.push({
-        id: customer.id,
-        name: customer.name,
-        email: customer.email,
-        last_order: customer.last_order || 'Never Ordered'
-      });
+      notified.push(customer.id);
     }
 
-    res.json({ message: `Inactivity reminders sent to ${notified.length} users.`, users: notified });
+    res.json({ message: `Inactivity reminders sent to ${notified.length} users.`, count: notified.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -915,7 +1278,7 @@ app.post('/api/seller/staff', verifyToken, async (req, res) => {
   const { name, email, password } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const tenantId = req.user.tenant_id || req.user.id;
+    const tenantId = requireTenantId(req.user);
     const info = await db.prepare('INSERT INTO users (name, email, password, role, tenant_id) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'SellersStaff', tenantId);
     res.status(201).json({ id: info.lastInsertRowid, message: 'Staff created successfully' });
   } catch (err) {
@@ -926,7 +1289,7 @@ app.post('/api/seller/staff', verifyToken, async (req, res) => {
 
 app.get('/api/seller/staff', verifyToken, async (req, res) => {
   if (req.user.role !== 'SellersAdmin') return res.status(403).json({ error: 'Forbidden' });
-  const tenantId = req.user.tenant_id || req.user.id;
+  const tenantId = requireTenantId(req.user);
   try {
     const staff = await db.prepare('SELECT id, name, email, role, created_at FROM users WHERE tenant_id = ? AND role = ?').all(tenantId, 'SellersStaff');
     res.json(staff);
@@ -950,12 +1313,12 @@ app.get('/api/app-reviews', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const reviews = await db.prepare(`
-      SELECT a.*, u.name as customer_name 
-      FROM app_reviews a 
-      JOIN users u ON a.customer_id = u.id 
+      SELECT a.id, a.rating, a.comment, a.created_at, u.name as customer_name
+      FROM app_reviews a
+      JOIN users u ON a.customer_id = u.id
       ORDER BY a.created_at DESC
     `).all();
-    res.json(reviews);
+    res.json(reviews.map(formatAppReview));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1007,17 +1370,48 @@ app.post('/api/reviews', verifyToken, async (req, res) => {
   }
 });
 
-// Get all reviews
-app.get('/api/reviews', async (req, res) => {
+// Get reviews — public when store_id is provided; otherwise auth + tenant scope
+app.get('/api/reviews', optionalVerifyToken, async (req, res) => {
+  const { store_id, tenant_id } = req.query;
+  const parsedStoreId = store_id ? parseInt(store_id, 10) : null;
+
+  if (!req.user && !parsedStoreId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
   try {
-    const reviews = await db.prepare(`
-      SELECT r.*, u.name as customer_name, s.name as store_name
+    let query = `
+      SELECT r.id, r.store_id, r.rating, r.comment, r.tags, r.created_at,
+             u.name as customer_name, s.name as store_name
       FROM reviews r
       JOIN users u ON r.customer_id = u.id
       JOIN stores s ON r.store_id = s.id
-      ORDER BY r.created_at DESC
-    `).all();
-    res.json(reviews);
+    `;
+    const conditions = [];
+    const params = [];
+
+    if (parsedStoreId) {
+      conditions.push('r.store_id = ?');
+      params.push(parsedStoreId);
+    } else if (req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff') {
+      conditions.push('s.tenant_id = ?');
+      params.push(requireTenantId(req.user));
+    } else if (req.user.role === 'SuperAdmin') {
+      if (tenant_id) {
+        conditions.push('s.tenant_id = ?');
+        params.push(parseInt(tenant_id, 10));
+      } else if (req.query.all !== 'true') {
+        return res.json([]);
+      }
+    } else {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
+    query += ' ORDER BY r.created_at DESC';
+
+    const reviews = await db.prepare(query).all(...params);
+    res.json(reviews.map(formatStoreReview));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1038,8 +1432,12 @@ app.get('/api/chat/history', verifyToken, async (req, res) => {
   }
 
   try {
+    if (req.user.role !== 'Customers') {
+      await assertStoreAccess(db, store_id, req.user);
+    }
     const messages = await db.prepare(`
-      SELECT m.*, u.name as customer_name, s.name as store_name
+      SELECT m.id, m.store_id, m.customer_id, m.message, m.sender_role, m.is_read, m.created_at,
+             u.name as customer_name, s.name as store_name
       FROM chat_messages m
       JOIN users u ON m.customer_id = u.id
       JOIN stores s ON m.store_id = s.id
@@ -1048,17 +1446,18 @@ app.get('/api/chat/history', verifyToken, async (req, res) => {
     `).all(store_id, targetCustomerId);
     res.json(messages);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 // Get active chats list for sellers
 app.get('/api/seller/chats', verifyToken, requireRole('stores', 'read'), async (req, res) => {
   try {
-    if (req.user.role !== 'SuperAdmin' && req.user.role !== 'SellersAdmin') {
+    if (req.user.role !== 'SuperAdmin' && req.user.role !== 'SellersAdmin' && req.user.role !== 'SellersStaff') {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    const chats = await db.prepare(`
+
+    let query = `
       SELECT DISTINCT m.store_id, m.customer_id, u.name as customer_name, u.email as customer_email, s.name as store_name,
              (SELECT message FROM chat_messages WHERE store_id = m.store_id AND customer_id = m.customer_id ORDER BY created_at DESC LIMIT 1) as last_message,
              (SELECT created_at FROM chat_messages WHERE store_id = m.store_id AND customer_id = m.customer_id ORDER BY created_at DESC LIMIT 1) as last_message_time,
@@ -1066,8 +1465,22 @@ app.get('/api/seller/chats', verifyToken, requireRole('stores', 'read'), async (
       FROM chat_messages m
       JOIN users u ON m.customer_id = u.id
       JOIN stores s ON m.store_id = s.id
-      ORDER BY last_message_time DESC
-    `).all();
+    `;
+    const params = [];
+    const { tenant_id } = req.query;
+    if (req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff') {
+      query += ' WHERE s.tenant_id = ?';
+      params.push(requireTenantId(req.user));
+    } else if (req.user.role === 'SuperAdmin') {
+      if (tenant_id) {
+        query += ' WHERE s.tenant_id = ?';
+        params.push(parseInt(tenant_id, 10));
+      } else if (req.query.all !== 'true') {
+        return res.json([]);
+      }
+    }
+    query += ' ORDER BY last_message_time DESC';
+    const chats = await db.prepare(query).all(...params);
     res.json(chats);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1089,6 +1502,9 @@ app.post('/api/chat/read', verifyToken, async (req, res) => {
   const unreadRole = req.user.role === 'Customers' ? 'Seller' : 'Customer';
 
   try {
+    if (req.user.role !== 'Customers') {
+      await assertStoreAccess(db, store_id, req.user);
+    }
     await db.prepare(`
       UPDATE chat_messages
       SET is_read = TRUE
@@ -1148,14 +1564,29 @@ const sendToUser = (userId, payload) => {
   }
 };
 
-const sendToSellers = (payload) => {
-  const sellersKey = 'sellers';
-  if (wsClients.has(sellersKey)) {
+const sendToTenantSellers = (tenantId, payload) => {
+  if (!tenantId) return;
+  const key = `sellers_${tenantId}`;
+  if (wsClients.has(key)) {
     const msg = JSON.stringify(payload);
-    for (const ws of wsClients.get(sellersKey)) {
+    for (const ws of wsClients.get(key)) {
       if (ws.readyState === 1) ws.send(msg);
     }
   }
+};
+
+const sendToSuperAdminSellers = (payload) => {
+  const key = 'sellers_superadmin';
+  if (wsClients.has(key)) {
+    const msg = JSON.stringify(payload);
+    for (const ws of wsClients.get(key)) {
+      if (ws.readyState === 1) ws.send(msg);
+    }
+  }
+};
+
+const sendToSellers = (payload) => {
+  sendToSuperAdminSellers(payload);
 };
 
 const initWebSockets = (httpServer) => {
@@ -1203,8 +1634,14 @@ const initWebSockets = (httpServer) => {
             addClientConnection(userKey, ws);
             clientKeys.add(userKey);
 
-            if (currentUser.role === 'SuperAdmin' || currentUser.role === 'SellersAdmin' || currentUser.role === 'SellersStaff') {
-              const sellerKey = 'sellers';
+            if (currentUser.role === 'SuperAdmin') {
+              const sellerKey = 'sellers_superadmin';
+              addClientConnection(sellerKey, ws);
+              clientKeys.add(sellerKey);
+            } else if (currentUser.role === 'SellersAdmin' || currentUser.role === 'SellersStaff') {
+              const tenantId = currentUser.tenant_id;
+              if (!tenantId) return ws.close(4003, 'Tenant required');
+              const sellerKey = `sellers_${tenantId}`;
               addClientConnection(sellerKey, ws);
               clientKeys.add(sellerKey);
             }
@@ -1228,6 +1665,14 @@ const initWebSockets = (httpServer) => {
             return ws.send(JSON.stringify({ type: 'error', error: 'customerId is required' }));
           }
 
+          if (currentUser.role !== 'Customers') {
+            try {
+              await assertStoreAccess(db, storeId, currentUser);
+            } catch (accessErr) {
+              return ws.send(JSON.stringify({ type: 'error', error: accessErr.message || 'Forbidden' }));
+            }
+          }
+
           const senderRole = currentUser.role === 'Customers' ? 'Customer' : 'Seller';
 
           // Persist message to database
@@ -1242,7 +1687,7 @@ const initWebSockets = (httpServer) => {
               if (senderRole === 'Customer') {
                 const store = await db.prepare('SELECT tenant_id, name FROM stores WHERE id = ?').get(storeId);
                 if (store) {
-                  const sellers = await db.prepare("SELECT id, push_token FROM users WHERE (id = ? OR tenant_id = ?) AND role IN ('SellersAdmin', 'SellersStaff')").all(store.tenant_id, store.tenant_id);
+                  const sellers = await db.prepare("SELECT id, push_token FROM users WHERE tenant_id = ? AND role IN ('SellersAdmin', 'SellersStaff')").all(store.tenant_id);
                   for (const seller of sellers) {
                     if (seller.push_token) {
                       await sendPushNotification(
@@ -1291,15 +1736,18 @@ const initWebSockets = (httpServer) => {
           }
 
           if (senderRole === 'Customer') {
-            const sellersKey = 'sellers';
-            const sellerClients = wsClients.get(sellersKey);
-            const sellerCount = sellerClients ? sellerClients.size : 0;
-            console.log(`[WS] Dispatching customer message to ${sellerCount} seller client(s) (store:${storeId} customer:${resolvedCustomerId})`);
-            if (sellerClients) {
-              for (const client of sellerClients) {
-                if (client.readyState === 1) client.send(msgPayload);
+            const store = await db.prepare('SELECT tenant_id, name FROM stores WHERE id = ?').get(storeId);
+            if (store?.tenant_id) {
+              const sellerClients = wsClients.get(`sellers_${store.tenant_id}`);
+              const sellerCount = sellerClients ? sellerClients.size : 0;
+              console.log(`[WS] Dispatching customer message to ${sellerCount} tenant seller client(s) (store:${storeId} customer:${resolvedCustomerId})`);
+              if (sellerClients) {
+                for (const client of sellerClients) {
+                  if (client.readyState === 1) client.send(msgPayload);
+                }
               }
             }
+            sendToSuperAdminSellers(JSON.parse(msgPayload));
           } else {
             const recipientKey = `user_${resolvedCustomerId}`;
             if (wsClients.has(recipientKey)) {
@@ -1590,14 +2038,40 @@ app.post('/api/contact', async (req, res) => {
 
 app.get('/api/public/stores', async (req, res) => {
   try {
-    const stores = await db.prepare(`
-      SELECT id, name, address, lat, lng, image
-      FROM stores WHERE is_active = TRUE
-      ORDER BY name ASC
-    `).all();
-    const signed = await Promise.all(stores.map(async s => ({
+    const tenantFilter = await resolveTenantFilter(db, req.query);
+    if (tenantFilter.error) return res.status(tenantFilter.status).json({ error: tenantFilter.error });
+
+    const lat = parseFloatParam(req.query.lat);
+    const lng = parseFloatParam(req.query.lng);
+    const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+
+    let query = `
+      SELECT s.id, s.name, s.address, s.lat, s.lng, s.image, s.tenant_id,
+             t.name AS tenant_name, t.subdomain AS tenant_subdomain
+      FROM stores s
+      JOIN tenants t ON t.id = s.tenant_id
+      WHERE s.is_active = TRUE
+    `;
+    const params = [];
+    if (tenantFilter.tenantId) {
+      query += ' AND s.tenant_id = ?';
+      params.push(tenantFilter.tenantId);
+    }
+    if (storeId) {
+      query += ' AND s.id = ?';
+      params.push(storeId);
+    }
+    query += ' ORDER BY s.name ASC';
+
+    let stores = await db.prepare(query).all(...params);
+    if (lat != null && lng != null) {
+      stores = attachDistance(stores, lat, lng);
+      if (req.query.sort === 'nearest') stores = sortByNearest(stores, lat, lng);
+    }
+
+    const signed = await Promise.all(stores.map(async (s) => ({
       ...s,
-      image: s.image ? await getPresignedUrl(s.image) : null
+      image: s.image ? await getPresignedUrl(s.image) : null,
     })));
     res.json(signed);
   } catch (err) {
@@ -1607,19 +2081,44 @@ app.get('/api/public/stores', async (req, res) => {
 
 app.get('/api/public/bags', async (req, res) => {
   try {
-    const bags = await db.prepare(`
+    const tenantFilter = await resolveTenantFilter(db, req.query);
+    if (tenantFilter.error) return res.status(tenantFilter.status).json({ error: tenantFilter.error });
+
+    const lat = parseFloatParam(req.query.lat);
+    const lng = parseFloatParam(req.query.lng);
+    const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+
+    let query = `
       SELECT b.id, b.price, b.original_price, b.description, b.images,
              b.quantity, b.pickup_time, b.store_id,
-             s.name as store_name, s.address, s.image as store_image
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image,
+             s.tenant_id, t.name AS tenant_name, t.subdomain AS tenant_subdomain
       FROM surprise_bags b
       JOIN stores s ON b.store_id = s.id
+      JOIN tenants t ON t.id = s.tenant_id
       WHERE b.quantity > 0 AND s.is_active = TRUE
-      ORDER BY b.id DESC
-    `).all();
-    const signed = await Promise.all(bags.map(async bag => ({
+    `;
+    const params = [];
+    if (tenantFilter.tenantId) {
+      query += ' AND s.tenant_id = ?';
+      params.push(tenantFilter.tenantId);
+    }
+    if (storeId) {
+      query += ' AND s.id = ?';
+      params.push(storeId);
+    }
+    query += ' ORDER BY b.id DESC';
+
+    let bags = await db.prepare(query).all(...params);
+    if (lat != null && lng != null) {
+      bags = attachDistance(bags, lat, lng);
+      if (req.query.sort === 'nearest') bags = sortByNearest(bags, lat, lng);
+    }
+
+    const signed = await Promise.all(bags.map(async (bag) => ({
       ...bag,
       images: await presignImages(bag.images),
-      store_image: bag.store_image ? await getPresignedUrl(bag.store_image) : null
+      store_image: bag.store_image ? await getPresignedUrl(bag.store_image) : null,
     })));
     res.json(signed);
   } catch (err) {
@@ -1629,21 +2128,72 @@ app.get('/api/public/bags', async (req, res) => {
 
 app.get('/api/public/food-items', async (req, res) => {
   try {
-    const items = await db.prepare(`
+    const tenantFilter = await resolveTenantFilter(db, req.query);
+    if (tenantFilter.error) return res.status(tenantFilter.status).json({ error: tenantFilter.error });
+
+    const lat = parseFloatParam(req.query.lat);
+    const lng = parseFloatParam(req.query.lng);
+    const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+
+    let query = `
       SELECT f.id, f.name, f.description, f.price, f.original_price,
              f.images, f.quantity, f.category, f.store_id, f.created_at,
-             s.name as store_name, s.address, s.image as store_image
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image,
+             s.tenant_id, t.name AS tenant_name, t.subdomain AS tenant_subdomain
       FROM food_items f
       JOIN stores s ON f.store_id = s.id
+      JOIN tenants t ON t.id = s.tenant_id
       WHERE f.is_available = TRUE AND f.quantity > 0 AND s.is_active = TRUE
-      ORDER BY f.created_at DESC
-    `).all();
-    const signed = await Promise.all(items.map(async item => ({
+    `;
+    const params = [];
+    if (tenantFilter.tenantId) {
+      query += ' AND s.tenant_id = ?';
+      params.push(tenantFilter.tenantId);
+    }
+    if (storeId) {
+      query += ' AND s.id = ?';
+      params.push(storeId);
+    }
+    query += ' ORDER BY f.created_at DESC';
+
+    let items = await db.prepare(query).all(...params);
+    if (lat != null && lng != null) {
+      items = attachDistance(items, lat, lng);
+      if (req.query.sort === 'nearest') items = sortByNearest(items, lat, lng);
+    }
+
+    const signed = await Promise.all(items.map(async (item) => ({
       ...item,
       images: await presignImages(item.images),
-      store_image: item.store_image ? await getPresignedUrl(item.store_image) : null
+      store_image: item.store_image ? await getPresignedUrl(item.store_image) : null,
     })));
     res.json(signed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/public/reviews', async (req, res) => {
+  const parsedStoreId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+  try {
+    let query = `
+      SELECT r.id, r.store_id, r.rating, r.comment, r.tags, r.created_at,
+             u.name as customer_name, s.name as store_name
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      JOIN stores s ON r.store_id = s.id
+      WHERE s.is_active = TRUE
+    `;
+    const params = [];
+    if (parsedStoreId) {
+      query += ' AND r.store_id = ?';
+      params.push(parsedStoreId);
+    }
+    query += ' ORDER BY r.created_at DESC LIMIT ?';
+    params.push(limit);
+    const reviews = await db.prepare(query).all(...params);
+    res.json(reviews.map(formatStoreReview));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1658,44 +2208,53 @@ async function previewCheckoutItems(items) {
       if (!bag || bag.quantity < quantity) continue;
       const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(bag.store_id);
       if (!store?.is_active) continue;
+      const tenant = store.tenant_id ? await getTenantById(db, store.tenant_id) : null;
       preview.push({
         id, type, quantity,
         item_name: bag.description || 'Surprise Bag',
         store_name: store.name,
-        price: bag.price
+        price: bag.price,
+        tenant_id: store.tenant_id,
+        tenant_name: tenant?.name || store.name,
       });
     } else if (type === 'food') {
       const food = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
       if (!food || !food.is_available || food.quantity < quantity) continue;
       const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(food.store_id);
       if (!store?.is_active) continue;
+      const tenant = store.tenant_id ? await getTenantById(db, store.tenant_id) : null;
       preview.push({
         id, type, quantity,
         item_name: food.name,
         store_name: store.name,
-        price: food.price
+        price: food.price,
+        tenant_id: store.tenant_id,
+        tenant_name: tenant?.name || store.name,
       });
     }
   }
+  assertSingleTenantCart(preview);
   return preview;
 }
 
 async function resolveCheckoutCustomer({ name, email, phone }) {
+  const normalizedPhone = phone ? normalizePhone(phone.trim()) : '';
   let user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!user) {
-    const hashed = await bcrypt.hash(`${phone}${Date.now()}`, 8);
+    const hashed = await bcrypt.hash(`${normalizedPhone || phone}${Date.now()}`, 8);
     const info = await db.prepare(
       'INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)'
-    ).run(name, email, hashed, 'Customers', phone);
-    user = { id: info.lastInsertRowid, name, email, phone };
+    ).run(name, email, hashed, 'Customers', normalizedPhone || phone);
+    user = { id: info.lastInsertRowid, name, email, phone: normalizedPhone || phone };
   } else {
-    if (!user.phone && phone) {
-      await db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, user.id);
+    if (normalizedPhone && (!user.phone || !phonesMatch(user.phone, normalizedPhone))) {
+      await db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(normalizedPhone, user.id);
+      user.phone = normalizedPhone;
     }
     if (!user.name && name) {
       await db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, user.id);
     }
-    user = { ...user, name: user.name || name, phone: user.phone || phone };
+    user = { ...user, name: user.name || name, phone: user.phone || normalizedPhone || phone };
   }
   return user;
 }
@@ -1716,6 +2275,7 @@ async function placeCheckoutOrders(user, items) {
       if (!store) {
         throw new Error(`Store for surprise bag #${id} is unavailable`);
       }
+      const tenant = store.tenant_id ? await getTenantById(db, store.tenant_id) : null;
       const orderInfo = await db.prepare(
         'INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
       ).run(bag.id, 'bag', quantity, bag.store_id, user.id, bag.price, 'Cash at Pickup');
@@ -1727,7 +2287,9 @@ async function placeCheckoutOrders(user, items) {
         item_name: bag.description || 'Surprise Bag',
         quantity,
         price: bag.price,
-        pickup_time: bag.pickup_time || 'During opening hours'
+        pickup_time: bag.pickup_time || 'During opening hours',
+        tenant_id: store.tenant_id,
+        tenant_name: tenant?.name || store.name,
       });
     } else if (type === 'food') {
       const food = await db.prepare(
@@ -1740,6 +2302,7 @@ async function placeCheckoutOrders(user, items) {
       if (!store) {
         throw new Error(`Store for food item #${id} is unavailable`);
       }
+      const tenant = store.tenant_id ? await getTenantById(db, store.tenant_id) : null;
       const orderInfo = await db.prepare(
         'INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
       ).run(food.id, 'food', quantity, food.store_id, user.id, food.price, 'Cash at Pickup');
@@ -1751,29 +2314,56 @@ async function placeCheckoutOrders(user, items) {
         item_name: food.name,
         quantity,
         price: food.price,
-        pickup_time: food.pickup_time || 'During opening hours'
+        pickup_time: food.pickup_time || 'During opening hours',
+        tenant_id: store.tenant_id,
+        tenant_name: tenant?.name || store.name,
       });
     }
   }
   if (placedOrders.length === 0) {
     throw new Error('No valid items could be ordered');
   }
+  assertSingleTenantCart(placedOrders);
   return placedOrders;
 }
 
-function parseExpiresAt(expiresAt) {
-  let value = expiresAt;
-  if (typeof value === 'string' && !value.includes('T') && !value.includes('Z')) {
-    value = value.replace(' ', 'T') + 'Z';
+/** Parse timestamps from PostgreSQL (TIMESTAMP WITHOUT TIME ZONE) reliably. */
+function parseStoredTimestamp(value) {
+  if (value == null) return new Date(0);
+  if (value instanceof Date) {
+    // node-pg reads TIMESTAMP columns as local Date — treat wall time as UTC
+    return new Date(Date.UTC(
+      value.getFullYear(),
+      value.getMonth(),
+      value.getDate(),
+      value.getHours(),
+      value.getMinutes(),
+      value.getSeconds(),
+      value.getMilliseconds()
+    ));
   }
-  return new Date(value);
+  if (typeof value === 'number') {
+    return new Date(value);
+  }
+  let text = String(value).trim();
+  if (!text.includes('T')) {
+    text = text.replace(' ', 'T');
+  }
+  if (!text.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(text)) {
+    text += 'Z';
+  }
+  return new Date(text);
+}
+
+function parseExpiresAt(expiresAt) {
+  return parseStoredTimestamp(expiresAt);
 }
 
 async function confirmCheckoutWithIdempotency({ email, otp, idempotencyKey }) {
   const normalizedEmail = email.trim();
   const normalizedOtp = String(otp).trim();
 
-  return db.transaction(async () => {
+  const runConfirm = db.transaction(async () => {
     if (idempotencyKey) {
       const cached = await db.prepare(
         'SELECT response FROM checkout_idempotency WHERE idempotency_key = ?'
@@ -1783,9 +2373,12 @@ async function confirmCheckoutWithIdempotency({ email, otp, idempotencyKey }) {
       }
     }
 
-    const pending = await db.prepare(
-      'SELECT * FROM checkout_pending WHERE email = ? FOR UPDATE'
-    ).get(normalizedEmail);
+    const pending = await db.prepare(`
+      SELECT *, (expires_at > NOW()) AS otp_valid
+      FROM checkout_pending
+      WHERE email = ?
+      FOR UPDATE
+    `).get(normalizedEmail);
 
     if (!pending) {
       const err = new Error('No pending checkout found. Please request a verification code first.');
@@ -1815,7 +2408,7 @@ async function confirmCheckoutWithIdempotency({ email, otp, idempotencyKey }) {
       throw err;
     }
 
-    if (new Date() > parseExpiresAt(pending.expires_at)) {
+    if (pending.otp_valid === false) {
       await db.prepare('DELETE FROM checkout_pending WHERE email = ?').run(normalizedEmail);
       const err = new Error('Verification code expired. Please request a new one.');
       err.status = 400;
@@ -1842,6 +2435,8 @@ async function confirmCheckoutWithIdempotency({ email, otp, idempotencyKey }) {
 
     return result;
   });
+
+  return runConfirm();
 }
 
 async function sendCheckoutOtpEmail({ to, name, otp }) {
@@ -1871,18 +2466,19 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.pickup_time}</td>
     </tr>`).join('');
 
-  const ordersWithPayment = placedOrders.map(o => ({ ...o, payment_method: 'Cash at Pickup' }));
-  const receiptPdf = await generateReceiptBuffer(ordersWithPayment, { name, email, phone });
+  let attachments = [];
+  try {
+    const orderGroups = groupOrdersByTenant(placedOrders);
+    attachments = await buildReceiptAttachments(orderGroups, { name, email, phone });
+  } catch (pdfErr) {
+    console.error('[Checkout Confirm] Receipt PDF generation failed:', pdfErr.message);
+  }
 
   try {
     await sendEmail({
       to: email,
       subject: `Your ${brandName} Order is Confirmed! 🎉 #${placedOrders.map(o => o.id).join(', #')}`,
-      attachments: [{
-        filename: receiptFilename,
-        content: receiptPdf,
-        contentType: 'application/pdf'
-      }],
+      attachments,
       html: `
       <!DOCTYPE html>
       <html>
@@ -1961,17 +2557,26 @@ app.post('/api/public/checkout/send-otp', async (req, res) => {
     if (preview.length === 0) {
       return res.status(400).json({ error: 'No valid items could be ordered (check stock levels)' });
     }
+    if (preview.length !== items.length) {
+      return res.status(400).json({ error: 'Some items in your cart are no longer available. Please refresh and try again.' });
+    }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-    const payload = JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), items });
+    const normalizedPhone = normalizePhone(phone.trim());
+    const payload = JSON.stringify({
+      name: name.trim(),
+      email: email.trim(),
+      phone: normalizedPhone || phone.trim(),
+      items,
+    });
 
     await db.transaction(async () => {
       await db.prepare('DELETE FROM checkout_pending WHERE email = ?').run(email.trim());
-      await db.prepare(
-        'INSERT INTO checkout_pending (email, otp, expires_at, payload, status) VALUES (?, ?, ?, ?, ?)'
-      ).run(email.trim(), otp, expiresAt, payload, 'pending');
-    });
+      await db.prepare(`
+        INSERT INTO checkout_pending (email, otp, expires_at, payload, status)
+        VALUES (?, ?, NOW() + INTERVAL '5 minutes', ?, ?)
+      `).run(email.trim(), otp, payload, 'pending');
+    })();
 
     await sendCheckoutOtpEmail({ to: email.trim(), name: name.trim(), otp });
 
@@ -1979,7 +2584,7 @@ app.post('/api/public/checkout/send-otp', async (req, res) => {
   } catch (err) {
     console.error('[Checkout Send OTP Error]', err);
     try { await db.prepare('DELETE FROM checkout_pending WHERE email = ?').run((req.body.email || '').trim()); } catch (_) {}
-    res.status(500).json({ error: err.message || 'Failed to send verification code' });
+    res.status(err.status || 500).json({ error: err.message || 'Failed to send verification code' });
   }
 });
 
@@ -2006,14 +2611,15 @@ app.post('/api/public/checkout/resend-otp', async (req, res) => {
 
       const { name } = JSON.parse(pending.payload);
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-      await db.prepare(
-        "UPDATE checkout_pending SET otp = ?, expires_at = ?, status = 'pending' WHERE email = ?"
-      ).run(otp, expiresAt, email.trim());
+      await db.prepare(`
+        UPDATE checkout_pending
+        SET otp = ?, expires_at = NOW() + INTERVAL '5 minutes', status = 'pending'
+        WHERE email = ?
+      `).run(otp, email.trim());
 
       otpPayload = { to: email.trim(), name, otp };
-    });
+    })();
 
     await sendCheckoutOtpEmail(otpPayload);
 
@@ -2033,12 +2639,16 @@ app.post('/api/public/checkout/confirm', async (req, res) => {
   try {
     const result = await confirmCheckoutWithIdempotency({ email, otp, idempotencyKey });
 
-    if (!result.replayed) {
+    const orders = Array.isArray(result?.orders) ? result.orders : [];
+    if (!result.replayed && orders.length > 0) {
+      for (const o of orders) {
+        await notifyNewOrder(o.id, result.customerId);
+      }
       await sendCheckoutConfirmationEmail({
         name: result.name,
         email: result.email,
         phone: result.phone,
-        placedOrders: result.orders
+        placedOrders: orders
       });
     }
 
@@ -2051,10 +2661,13 @@ app.post('/api/public/checkout/confirm', async (req, res) => {
 });
 
 app.get('/api/public/orders', async (req, res) => {
-  const { email, phone } = req.query;
-  if (!email || !phone) return res.status(400).json({ error: 'email and phone are required' });
+  const email = req.query.email?.trim();
+  const phone = req.query.phone?.trim();
+  if (!email && !phone) {
+    return res.status(400).json({ error: 'email or phone is required' });
+  }
   try {
-    const user = await db.prepare('SELECT id FROM users WHERE email = ? AND phone = ?').get(email, phone);
+    const user = await findUserForOrderLookup({ email, phone });
     if (!user) return res.json([]);
     const orders = await db.prepare(`
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,

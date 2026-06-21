@@ -52,9 +52,10 @@
   },
   "scripts": {
     "start": "expo start",
+    "start:localhost": "expo start --localhost",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
-    "ios": "expo start --ios",
+    "ios": "xcrun simctl launch booted host.exp.Exponent 2>/dev/null; expo start --ios --localhost",
     "web": "expo start --web",
     "lint": "expo lint"
   },

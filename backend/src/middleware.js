@@ -46,8 +46,32 @@ const requireRole = (resource, action) => {
   };
 };
 
+const optionalVerifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token.' });
+  }
+};
+
+const blockInProduction = (req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next();
+};
+
 module.exports = {
   verifyToken,
+  optionalVerifyToken,
   requireRole,
+  blockInProduction,
   JWT_SECRET
 };

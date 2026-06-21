@@ -113,3 +113,45 @@ export const TrashIcon = ({ size = 14, color = 'currentColor' }) => (
     <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
   </svg>
 );
+
+export const BrandsIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l2.5-5h13L21 9" />
+    <path d="M5 9v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9" />
+    <path d="M9 13h6M9 17h4" />
+  </svg>
+);
+
+export const RestaurantIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 2v7a4 4 0 0 0 4 4h1V22" />
+    <path d="M7 2v7a4 4 0 0 0 4 4" />
+    <path d="M17 2v20" />
+    <path d="M21 2v20" />
+  </svg>
+);
+
+export const SupermarketIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="20" r="1.5" fill={color} stroke="none" />
+    <circle cx="18" cy="20" r="1.5" fill={color} stroke="none" />
+    <path d="M2 3h3l2.2 11.4a2 2 0 0 0 2 1.6h9.6a2 2 0 0 0 2-1.6L22 7H6" />
+  </svg>
+);
+
+export const BakeryIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 14c0-4 3.5-7 8-7s8 3 8 7" />
+    <path d="M6 14h12v3a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-3z" />
+    <path d="M8 10c1-2 3-3 4-3s3 1 4 3" />
+  </svg>
+);
+
+export const CafeIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 8h12v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z" />
+    <path d="M16 10h2a3 3 0 0 1 0 6h-2" />
+    <path d="M6 4c0 2 1.5 3 3 3" />
+    <path d="M10 4c0 2 1.5 3 3 3" />
+  </svg>
+);

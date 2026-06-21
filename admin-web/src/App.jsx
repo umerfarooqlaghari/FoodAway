@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Routes, Route, Navigate, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
+import ProtectedRoute from './components/ProtectedRoute';
+import { ROUTES, activeTabFromPath } from './routePaths';
 import Map, { Marker } from 'react-map-gl';
 import HeroPagePeelTeaser from './components/HeroPagePeelTeaser';
 import SupermarketHeroVisual from './components/SupermarketHeroVisual';
@@ -16,6 +19,19 @@ import DoNotSell from './pages/DoNotSell';
 import FoodWasteSources from './pages/FoodWasteSources';
 import Status from './pages/Status';
 import CustomerPage from './pages/CustomerPage';
+import TenantExplorePage from './pages/TenantExplorePage';
+import { grabengoFavicon, grabengoWordmark } from './brandAssets';
+import {
+  getSubdomain,
+  isMainSite,
+  isTenantSite,
+  mainSiteRegisterUrl,
+  mainSiteUrl,
+  slugifySubdomain,
+  shortSubdomainFromName,
+  tenantStoreUrl,
+  DEV_TENANT_PARAM,
+} from './host';
 
 // Note: Replace with actual MapBox token in production
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
@@ -45,11 +61,36 @@ const TabLoading = ({ label = 'Loading...' }) => (
   </div>
 );
 
+function ExternalRedirect({ to }) {
+  useEffect(() => {
+    window.location.replace(to);
+  }, [to]);
+  return (
+    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
+      Redirecting...
+    </div>
+  );
+}
+
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('adminToken'));
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('adminUser')));
-  const [view, setView] = useState(token ? 'app' : 'landing');
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const tenantSubdomain = getSubdomain();
+  const onMainSite = isMainSite();
+  const onTenantSite = isTenantSite();
+  const [token, setToken] = useState(() => localStorage.getItem('adminToken'));
+  const [user, setUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem('adminUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const activeTab = useMemo(
+    () => activeTabFromPath(location.pathname) || 'dashboard',
+    [location.pathname]
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [heroSlide, setHeroSlide] = useState(0);
@@ -59,13 +100,32 @@ function App() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
+  // Dev: redirect localhost?tenant=x → x.localhost (real subdomain URLs)
   useEffect(() => {
-    if (token) {
-      setView('app');
-    } else if (view === 'app') {
-      setView('landing');
+    if (typeof window === 'undefined') return;
+    const host = window.location.hostname.toLowerCase();
+    if (host !== 'localhost' && host !== '127.0.0.1') return;
+    const tenant = new URLSearchParams(window.location.search).get(DEV_TENANT_PARAM);
+    if (!tenant) return;
+    const port = window.location.port ? `:${window.location.port}` : '';
+    const path = window.location.pathname || '/';
+    const hash = window.location.hash || '';
+    window.location.replace(`http://${tenant}.localhost${port}${path}${hash}`);
+  }, []);
+
+  useEffect(() => {
+    if (!token || !user?.role || !location.pathname.startsWith('/dashboard')) return;
+    const tab = activeTabFromPath(location.pathname);
+    if (user?.role === 'SuperAdmin' && ['stores', 'orders', 'reviews', 'chats', 'staff'].includes(tab)) {
+      navigate(ROUTES.dashboard, { replace: true });
+    } else if (tab === 'superadmin' && user?.role !== 'SuperAdmin') {
+      navigate(ROUTES.dashboard, { replace: true });
+    } else if (tab === 'appreviews' && user?.role !== 'SuperAdmin') {
+      navigate(ROUTES.dashboard, { replace: true });
+    } else if (tab === 'staff' && user?.role !== 'SellersAdmin') {
+      navigate(ROUTES.dashboard, { replace: true });
     }
-  }, [token]);
+  }, [token, location.pathname, user?.role, navigate]);
 
   useEffect(() => {
     if (!token) return;
@@ -76,6 +136,33 @@ function App() {
       })
       .catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    if (!axios.defaults.headers) return;
+    if (tenantSubdomain) {
+      axios.defaults.headers.common = axios.defaults.headers.common || {};
+      axios.defaults.headers.common['X-Tenant-Subdomain'] = tenantSubdomain;
+    } else if (axios.defaults.headers.common) {
+      delete axios.defaults.headers.common['X-Tenant-Subdomain'];
+    }
+  }, [tenantSubdomain]);
+
+  useEffect(() => {
+    if (!onTenantSite || !tenantSubdomain) {
+      setTenantBranding(null);
+      return;
+    }
+    axios.get(`${API_URL}/public/tenant/${tenantSubdomain}`)
+      .then(res => setTenantBranding(res.data))
+      .catch(() => setTenantBranding({ error: true, name: tenantSubdomain }));
+  }, [onTenantSite, tenantSubdomain]);
+
+  useEffect(() => {
+    if (!token || !user?.role || !onMainSite) return;
+    if ((user.role === 'SellersAdmin' || user.role === 'SellersStaff') && user.storeUrl) {
+      window.location.assign(`${user.storeUrl.replace(/\/$/, '')}/dashboard`);
+    }
+  }, [token, user, onMainSite]);
 
   // Password reset flow states
   const [showPassword, setShowPassword] = useState(false);
@@ -98,7 +185,14 @@ function App() {
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerError, setRegisterError] = useState('');
-  const [registerSuccess, setRegisterSuccess] = useState('');
+  const [registerComplete, setRegisterComplete] = useState(null);
+  const [registerSubdomainPreview, setRegisterSubdomainPreview] = useState('');
+  const [tenantBranding, setTenantBranding] = useState(null);
+  const [storeLinkCopied, setStoreLinkCopied] = useState(false);
+
+  useEffect(() => {
+    setRegisterSubdomainPreview(shortSubdomainFromName(registerBrand));
+  }, [registerBrand]);
 
   // Data state
   const [bags, setBags] = useState([]);
@@ -356,10 +450,16 @@ function App() {
     setLoginLoading(true);
     setAuthError('');
     try {
-      const res = await axios.post(`${API_URL}/auth/login`, { email, password });
+      const payload = { email, password };
+      if (tenantSubdomain) payload.subdomain = tenantSubdomain;
+      const res = await axios.post(`${API_URL}/auth/login`, payload);
       const { token, user } = res.data;
       if (user.role === 'Customers') {
         setAuthError('Access denied. Admin access only.');
+        return;
+      }
+      if (onMainSite && user.role !== 'SuperAdmin') {
+        setAuthError('Seller accounts must sign in on their store portal.');
         return;
       }
       setToken(token);
@@ -367,10 +467,34 @@ function App() {
       localStorage.setItem('adminToken', token);
       localStorage.setItem('adminUser', JSON.stringify(user));
       setAuthError('');
+      const redirectTo = location.state?.from?.pathname || ROUTES.dashboard;
+      navigate(redirectTo, { replace: true });
     } catch (err) {
-      setAuthError(err.response?.data?.error || 'Login failed');
+      const data = err.response?.data;
+      if (data?.storeUrl) {
+        setAuthError(
+          <>
+            {data.error}{' '}
+            <a href={data.storeUrl} style={{ color: 'var(--brand-orange)', fontWeight: 700 }}>
+              Open your store portal
+            </a>
+          </>
+        );
+      } else {
+        setAuthError(data?.error || 'Login failed');
+      }
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const copyStoreLink = async (url) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setStoreLinkCopied(true);
+      setTimeout(() => setStoreLinkCopied(false), 2000);
+    } catch {
+      setStoreLinkCopied(false);
     }
   };
 
@@ -378,33 +502,33 @@ function App() {
     e.preventDefault();
     setRegisterLoading(true);
     setRegisterError('');
-    setRegisterSuccess('');
     if (!registerBrand.trim() || !registerEmail.trim() || !registerPhone.trim() || !registerPassword) {
       setRegisterError('Please fill in all required fields.');
       setRegisterLoading(false);
       return;
     }
     try {
-      await axios.post(`${API_URL}/auth/register`, {
+      const res = await axios.post(`${API_URL}/auth/register`, {
         brand_name: registerBrand.trim(),
         email: registerEmail.trim(),
         password: registerPassword,
         phone: registerPhone.trim(),
         role: 'SellersAdmin',
-        logo: registerLogo || undefined
+        logo: registerLogo || undefined,
+        subdomain: registerSubdomainPreview || undefined,
       });
-      setRegisterSuccess('Seller account created! Redirecting to login...');
-      setTimeout(() => {
-        setEmail(registerEmail.trim());
-        setPassword('');
-        setRegisterBrand('');
-        setRegisterEmail('');
-        setRegisterPhone('');
-        setRegisterPassword('');
-        setRegisterLogo('');
-        setRegisterSuccess('');
-        setView('login');
-      }, 1500);
+      setRegisterComplete({
+        brandName: registerBrand.trim(),
+        storeUrl: res.data.storeUrl,
+        loginUrl: res.data.loginUrl || `${res.data.storeUrl}/login`,
+        subdomain: res.data.subdomain,
+        message: res.data.message,
+      });
+      setRegisterBrand('');
+      setRegisterEmail('');
+      setRegisterPhone('');
+      setRegisterPassword('');
+      setRegisterLogo('');
     } catch (err) {
       setRegisterError(err.response?.data?.error || 'Registration failed');
     } finally {
@@ -454,6 +578,7 @@ function App() {
     setUser(null);
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUser');
+    navigate(ROUTES.login);
   };
 
   const fetchBags = async () => {
@@ -527,14 +652,16 @@ function App() {
 
   const fetchReviews = async () => {
     try {
-      const res = await axios.get(`${API_URL}/reviews`);
+      const qs = user?.role === 'SuperAdmin' && selectedTenantId ? `?tenant_id=${selectedTenantId}` : '';
+      const res = await axios.get(`${API_URL}/reviews${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       setReviews(res.data);
     } catch (err) { }
   };
 
   const fetchOrders = async () => {
     try {
-      const res = await axios.get(`${API_URL}/seller/orders`, { headers: { Authorization: `Bearer ${token}` } });
+      const qs = selectedTenantId ? `?tenant_id=${selectedTenantId}` : '';
+      const res = await axios.get(`${API_URL}/seller/orders${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       setOrders(res.data);
     } catch (err) { }
   };
@@ -634,7 +761,8 @@ function App() {
           }
         } else if (payload.type === 'new_order') {
           const order = payload.order;
-          const isMyStore = user?.role === 'SuperAdmin' || !user?.tenant_id || Number(user.tenant_id) === Number(order.tenant_id) || Number(user.id) === Number(order.tenant_id);
+          const isMyStore = user?.role === 'SuperAdmin'
+            || Number(user?.tenant_id || user?.id) === Number(order.tenant_id);
 
           if (isMyStore) {
             playSound('/sounds/register.mp3');
@@ -787,8 +915,8 @@ function App() {
     reader.onload = async (event) => {
       const base64 = event.target.result;
       try {
-        await axios.put(`${API_URL}/users/${user.id}`, { logo: base64 }, { headers: { Authorization: `Bearer ${token}` } });
-        const updatedUser = { ...user, logo: base64 };
+        const res = await axios.put(`${API_URL}/users/${user.id}`, { logo: base64 }, { headers: { Authorization: `Bearer ${token}` } });
+        const updatedUser = res.data.user;
         setUser(updatedUser);
         localStorage.setItem('adminUser', JSON.stringify(updatedUser));
         alert('Brand logo updated successfully!');
@@ -981,9 +1109,8 @@ function App() {
       <div className="landing-page animate-fade-in">
         {/* Navigation */}
         <header className="landing-navbar">
-          <a href="#" className="landing-logo">
-            <img src="/favicon.png" alt="Grabengo Logo" style={{ height: '40px', objectFit: 'contain' }} />
-            <span>Grabengo</span>
+          <a href={ROUTES.home} className="landing-logo">
+            <img src={grabengoWordmark} alt="Grabengo" />
           </a>
           <nav className="landing-nav-links">
             <a href="#why-use" className="landing-nav-link">About</a>
@@ -991,7 +1118,7 @@ function App() {
             <a href="#join" className="landing-nav-link">Impact</a>
           </nav>
           <div className="landing-actions">
-            <button className="btn-landing-login" onClick={() => { setForgotPasswordStep('login'); setView('login'); }}>MyStore</button>
+            <Link to={ROUTES.register} className="btn-landing-login" onClick={() => { setRegisterError(''); setRegisterComplete(null); }}>Register as Seller</Link>
             <button className="btn-landing-download" onClick={() => setShowAppDownloadModal(true)}>Download app</button>
           </div>
           {/* Mobile hamburger */}
@@ -1008,7 +1135,7 @@ function App() {
             <a href="#why-use" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>About</a>
             <a href="#solutions" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>Solutions</a>
             <a href="#join" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>Impact</a>
-            <button className="btn-landing-login mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setForgotPasswordStep('login'); setView('login'); }}>MyStore</button>
+            <Link to={ROUTES.register} className="btn-landing-login mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setRegisterError(''); setRegisterComplete(null); }}>Register as Seller</Link>
             <button className="btn-landing-download mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setShowAppDownloadModal(true); }}>Download app</button>
           </div>
         )}
@@ -1037,7 +1164,7 @@ function App() {
                       Grabengo connects you with local stores, cafes, and bakeries offering delicious surplus food at unbeatable prices. Rescue meals and help protect the planet.
                     </p>
                     <div className="landing-hero-btns">
-                      <button className="btn-hero-outline" onClick={() => setView('customer')}>Explore Food</button>
+                      <Link to={ROUTES.explore} className="btn-hero-outline">Explore Food</Link>
                       <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Download the app</button>
                       <button className="btn-hero-outline" onClick={() => {
                         const element = document.getElementById("solutions");
@@ -1206,7 +1333,7 @@ function App() {
             <p className="join-subtitle">Download the Grabengo app today and start saving food or listing your surplus.</p>
             <div className="join-btns">
               <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Get the App</button>
-              <button className="btn-hero-outline" onClick={() => { setRegisterError(''); setRegisterSuccess(''); setView('register'); }}>Register as Seller</button>
+              <Link to={ROUTES.register} className="btn-hero-outline" onClick={() => { setRegisterError(''); setRegisterComplete(null); }}>Register as Seller</Link>
             </div>
           </div>
         </section>
@@ -1215,8 +1342,7 @@ function App() {
         <footer className="giant-footer">
           <div className="footer-top">
             <div className="footer-logo">
-              <img src="/favicon.png" alt="Grabengo Logo" style={{ height: '50px', objectFit: 'contain' }} />
-              <span>Grabengo</span>
+              <img src={grabengoWordmark} alt="Grabengo" />
             </div>
             <div className="footer-links-row">
             
@@ -1236,20 +1362,19 @@ function App() {
           <div className="footer-bottom">
             <div className="footer-legal-links">
               {[
-                ['Legal', 'legal'],
-                ['Privacy Policy', 'privacy'],
-                ['Cookie Policy', 'cookies'],
-                ['Terms & Conditions', 'terms'],
-                ['Contact us', 'contact'],
-                ['DSA Disclosure', 'dsa'],
-                ['Do Not Sell or Share My Data', 'donotsell'],
-                ['Food Waste Sources', 'foodwaste'],
-                ['Status', 'status'],
-              ].map(([label, page]) => (
-                <span key={page} className="footer-legal-link" style={{ cursor: 'pointer' }}
-                  onClick={() => setView(page)}>
+                ['Legal', ROUTES.legal],
+                ['Privacy Policy', ROUTES.privacy],
+                ['Cookie Policy', ROUTES.cookies],
+                ['Terms & Conditions', ROUTES.terms],
+                ['Contact us', ROUTES.contact],
+                ['DSA Disclosure', ROUTES.dsa],
+                ['Do Not Sell or Share My Data', ROUTES.doNotSell],
+                ['Food Waste Sources', ROUTES.foodWaste],
+                ['Status', ROUTES.status],
+              ].map(([label, path]) => (
+                <Link key={path} to={path} className="footer-legal-link">
                   {label}
-                </span>
+                </Link>
               ))}
             </div>
             <div>
@@ -1267,7 +1392,7 @@ function App() {
 
               <div className="app-modal-header">
                 <div className="app-modal-icon-wrap">
-                  <img src="/favicon.png" alt="Grabengo" />
+                  <img src={grabengoFavicon} alt="Grabengo" />
                 </div>
                 <span className="app-modal-badge">Coming Soon</span>
                 <h3 id="app-modal-title" className="app-modal-title">Mobile App In Development</h3>
@@ -1298,33 +1423,32 @@ function App() {
     );
   };
 
-  // ── Footer page routing ──────────────────────────────────────────────────────
-  const goHome = () => setView(token ? 'app' : 'landing');
-  const pageRoutes = {
-    legal:      <Legal onBack={goHome} />,
-    privacy:    <PrivacyPolicy onBack={goHome} />,
-    cookies:    <CookiePolicy onBack={goHome} />,
-    terms:      <TermsAndConditions onBack={goHome} />,
-    contact:    <ContactUs onBack={goHome} />,
-    dsa:        <DsaDisclosure onBack={goHome} />,
-    donotsell:  <DoNotSell onBack={goHome} />,
-    foodwaste:  <FoodWasteSources onBack={goHome} />,
-    status:     <Status onBack={goHome} />,
-    customer:   <CustomerPage onBack={goHome} />,
-  };
-  if (pageRoutes[view]) return pageRoutes[view];
+  const goHome = () => navigate(token ? ROUTES.dashboard : ROUTES.home);
 
-  if (!token) {
-    if (view === 'login') {
-      return (
+  const renderLoginPage = () => {
+    const portalTitle = onTenantSite
+      ? (tenantBranding?.name ? `${tenantBranding.name} Portal` : 'Store Portal')
+      : 'Platform Admin';
+    const portalSubtitle = onTenantSite
+      ? 'Sign in to manage your stores, orders, and inventory'
+      : 'Super admin sign-in for the Grabengo platform';
+    const loginLogo = onTenantSite && tenantBranding?.logo ? tenantBranding.logo : grabengoFavicon;
+
+    return (
         <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%)' }}>
           <div className="glass-card animate-fade-in" style={{ padding: '2.5rem', width: '420px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
-            <img src="/favicon.png" alt="Grabengo Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
+            <img src={loginLogo} alt="Portal Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain', borderRadius: onTenantSite && tenantBranding?.logo ? '12px' : undefined }} />
 
             {forgotPasswordStep === 'login' && (
               <>
-                <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Admin Portal</h2>
-                <p style={{ color: '#6B7280', marginBottom: '2rem' }}>Sign in to manage the platform</p>
+                <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>{portalTitle}</h2>
+                <p style={{ color: '#6B7280', marginBottom: '2rem' }}>{portalSubtitle}</p>
+
+                {onTenantSite && tenantBranding?.error && (
+                  <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>
+                    Store not found. Check your store link or contact support.
+                  </div>
+                )}
 
                 {authError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{authError}</div>}
 
@@ -1368,28 +1492,32 @@ function App() {
                     {loginLoading ? 'Signing in...' : 'Login'}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setView('register')}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      borderRadius: 'var(--radius-md)',
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'var(--brand-orange)',
-                      cursor: 'pointer',
-                      fontWeight: '700',
-                      marginTop: '0.75rem'
-                    }}
-                  >
-                    Register your business
-                  </button>
+                  {onMainSite && (
+                    <Link
+                      to={ROUTES.register}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '0.75rem',
+                        borderRadius: 'var(--radius-md)',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--brand-orange)',
+                        cursor: 'pointer',
+                        fontWeight: '700',
+                        marginTop: '0.75rem',
+                        textDecoration: 'none',
+                        textAlign: 'center',
+                      }}
+                    >
+                      Register your business
+                    </Link>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => setView('landing')}
+                  <Link
+                    to={onMainSite ? ROUTES.home : ROUTES.login}
                     style={{
+                      display: 'block',
                       width: '100%',
                       padding: '0.75rem',
                       borderRadius: 'var(--radius-md)',
@@ -1399,11 +1527,13 @@ function App() {
                       cursor: 'pointer',
                       fontWeight: '600',
                       marginTop: '1rem',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      textDecoration: 'none',
+                      textAlign: 'center',
                     }}
                   >
-                    Back to Home
-                  </button>
+                    Back to {onMainSite ? 'Home' : 'Login'}
+                  </Link>
                 </form>
               </>
             )}
@@ -1488,22 +1618,58 @@ function App() {
             )}
           </div>
         </div>
-      );
-    }
-    if (view === 'register') {
-      return (
+    );
+  };
+
+  const renderRegisterCompleteModal = () => {
+    if (!registerComplete) return null;
+    return (
+      <div className="app-modal-overlay" onClick={() => setRegisterComplete(null)}>
+        <div className="app-modal-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="register-complete-title" aria-modal="true">
+          <button type="button" className="app-modal-close" onClick={() => setRegisterComplete(null)} aria-label="Close">×</button>
+          <div className="app-modal-header">
+            <div className="app-modal-icon-wrap">
+              <img src={grabengoFavicon} alt="Grabengo" />
+            </div>
+            <span className="app-modal-badge">Store ready</span>
+            <h3 id="register-complete-title" className="app-modal-title">Your store portal is live</h3>
+          </div>
+          <p className="app-modal-text">
+            {registerComplete.message || `We've emailed the link to your store portal.`}{' '}
+            <strong>{registerComplete.brandName}</strong> can sign in using the link below.
+          </p>
+          <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '12px', marginBottom: '1rem', wordBreak: 'break-all', fontSize: '0.9rem', textAlign: 'left' }}>
+            <div style={{ color: '#6B7280', fontSize: '0.8rem', marginBottom: '4px' }}>Your store link</div>
+            <a href={registerComplete.storeUrl} style={{ color: 'var(--brand-orange)', fontWeight: 700 }}>{registerComplete.storeUrl}</a>
+          </div>
+          <button type="button" className="app-modal-btn" onClick={() => copyStoreLink(registerComplete.storeUrl)}>
+            {storeLinkCopied ? 'Copied!' : 'Copy store link'}
+          </button>
+          <a href={registerComplete.loginUrl || registerComplete.storeUrl} className="app-modal-btn" style={{ display: 'block', marginTop: '0.75rem', textDecoration: 'none', textAlign: 'center' }}>
+            Open store portal
+          </a>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRegisterPage = () => (
         <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%)' }}>
           <div className="glass-card animate-fade-in" style={{ padding: '2.5rem', width: '460px', maxWidth: '95vw', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
-            <img src="/favicon.png" alt="Grabengo Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
+            <img src={grabengoFavicon} alt="Grabengo Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
             <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Register as Seller</h2>
             <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on Grabengo and start selling surplus food</p>
 
             {registerError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerError}</div>}
-            {registerSuccess && <div style={{ color: '#065F46', marginBottom: '1rem', padding: '0.5rem', background: '#D1FAE5', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerSuccess}</div>}
 
             <form onSubmit={handleSellerRegister} style={{ width: '100%', textAlign: 'left' }}>
               <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Name *</label>
-              <input type="text" placeholder="e.g. KFC, Starbucks" value={registerBrand} onChange={e => setRegisterBrand(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
+              <input type="text" placeholder="e.g. KFC, Starbucks" value={registerBrand} onChange={e => setRegisterBrand(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '0.5rem' }} required />
+              {registerSubdomainPreview && (
+                <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '1rem' }}>
+                  Your store link: <strong style={{ color: 'var(--brand-orange)' }}>{tenantStoreUrl(registerSubdomainPreview)}</strong>
+                </p>
+              )}
 
               <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Email Address *</label>
               <input type="email" placeholder="admin@brand.com" value={registerEmail} onChange={e => setRegisterEmail(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
@@ -1538,21 +1704,19 @@ function App() {
                 {registerLoading ? 'Creating account...' : 'Create Seller Account'}
               </button>
 
-              <button type="button" onClick={() => setView('login')} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7EB', background: 'transparent', color: '#374151', cursor: 'pointer', fontWeight: '600', marginTop: '1rem' }}>
-                Already have an account? Login
-              </button>
-              <button type="button" onClick={() => setView('landing')} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: 'none', background: 'transparent', color: '#6B7280', cursor: 'pointer', fontWeight: '600', marginTop: '0.5rem' }}>
+              <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#6B7280', textAlign: 'center' }}>
+                After registration, your store link will be emailed to you. Sign in on your dedicated store portal — not on this page.
+              </p>
+              <Link to={ROUTES.home} style={{ display: 'block', width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: 'none', background: 'transparent', color: '#6B7280', cursor: 'pointer', fontWeight: '600', marginTop: '0.5rem', textDecoration: 'none', textAlign: 'center' }}>
                 Back to Home
-              </button>
+              </Link>
             </form>
+            {renderRegisterCompleteModal()}
           </div>
         </div>
-      );
-    }
-    return renderLandingPage();
-  }
+  );
 
-  return (
+  const renderDashboardPortal = () => (
     <div className="app-container">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
@@ -1563,7 +1727,7 @@ function App() {
             {user?.logo ? (
               <img src={user.logo} alt="Brand Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }} />
             ) : (
-              <img src="/favicon.png" alt="Grabengo Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'contain', flexShrink: 0 }} />
+              <img src={grabengoFavicon} alt="Grabengo Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'contain', flexShrink: 0 }} />
             )}
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <span className="sidebar-logo" style={{ fontSize: '1.35rem', fontWeight: '800', lineHeight: '1.1', margin: 0, padding: 0 }}>Grabengo</span>
@@ -1580,22 +1744,22 @@ function App() {
 
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); }}>Dashboard</div>
+          <NavLink to={ROUTES.dashboard} end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Dashboard</NavLink>
           {user?.role !== 'SuperAdmin' && (
             <>
-              <div className={`nav-item ${activeTab === 'stores' ? 'active' : ''}`} onClick={() => { setActiveTab('stores'); setSidebarOpen(false); }}>Store Management</div>
-              <div className={`nav-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => { setActiveTab('orders'); setSidebarOpen(false); }}>Order Management</div>
-              <div className={`nav-item ${activeTab === 'reviews' ? 'active' : ''}`} onClick={() => { setActiveTab('reviews'); setSidebarOpen(false); }}>Customer Reviews</div>
-              <div className={`nav-item ${activeTab === 'chats' ? 'active' : ''}`} onClick={() => { setActiveTab('chats'); setSidebarOpen(false); }}>Chat Support</div>
+              <NavLink to={ROUTES.dashboardStores} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Store Management</NavLink>
+              <NavLink to={ROUTES.dashboardOrders} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Order Management</NavLink>
+              <NavLink to={ROUTES.dashboardReviews} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Customer Reviews</NavLink>
+              <NavLink to={ROUTES.dashboardChats} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Chat Support</NavLink>
             </>
           )}
           {user?.role === 'SellersAdmin' && (
-            <div className={`nav-item ${activeTab === 'staff' ? 'active' : ''}`} onClick={() => { setActiveTab('staff'); setSidebarOpen(false); }}>Staff Management</div>
+            <NavLink to={ROUTES.dashboardStaff} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Staff Management</NavLink>
           )}
           {user?.role === 'SuperAdmin' && (
             <>
-              <div className={`nav-item ${activeTab === 'superadmin' ? 'active' : ''}`} onClick={() => { setActiveTab('superadmin'); setSidebarOpen(false); }}>Platform Users</div>
-              <div className={`nav-item ${activeTab === 'appreviews' ? 'active' : ''}`} onClick={() => { setActiveTab('appreviews'); setSidebarOpen(false); }}>App Reviews</div>
+              <NavLink to={ROUTES.dashboardUsers} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Platform Users</NavLink>
+              <NavLink to={ROUTES.dashboardAppReviews} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>App Reviews</NavLink>
             </>
           )}
           {user?.role !== 'SuperAdmin' && (
@@ -2799,9 +2963,9 @@ function App() {
           borderLeftWidth: '6px'
         }} onClick={() => {
           if (toastNotification.type === 'order') {
-            setActiveTab('orders');
+            navigate(ROUTES.dashboardOrders);
           } else {
-            setActiveTab('chats');
+            navigate(ROUTES.dashboardChats);
             selectChat(toastNotification.chat);
           }
           setToastNotification(null);
@@ -2864,6 +3028,74 @@ function App() {
 
 
     </div>
+  );
+
+  const sharedPublicRoutes = (
+    <>
+      <Route path={ROUTES.explore} element={<TenantExplorePage onBack={goHome} />} />
+      <Route path={ROUTES.order} element={<Navigate to={ROUTES.explore} replace />} />
+      <Route path={ROUTES.legal} element={<Legal onBack={goHome} />} />
+      <Route path={ROUTES.privacy} element={<PrivacyPolicy onBack={goHome} />} />
+      <Route path={ROUTES.cookies} element={<CookiePolicy onBack={goHome} />} />
+      <Route path={ROUTES.terms} element={<TermsAndConditions onBack={goHome} />} />
+      <Route path={ROUTES.contact} element={<ContactUs onBack={goHome} />} />
+      <Route path={ROUTES.dsa} element={<DsaDisclosure onBack={goHome} />} />
+      <Route path={ROUTES.doNotSell} element={<DoNotSell onBack={goHome} />} />
+      <Route path={ROUTES.foodWaste} element={<FoodWasteSources onBack={goHome} />} />
+      <Route path={ROUTES.status} element={<Status onBack={goHome} />} />
+    </>
+  );
+
+  return (
+    <Routes>
+      {onMainSite ? (
+        <>
+          <Route path={ROUTES.home} element={token && user?.role === 'SuperAdmin' ? <Navigate to={ROUTES.dashboard} replace /> : renderLandingPage()} />
+          <Route path={ROUTES.login} element={token && user?.role === 'SuperAdmin' ? <Navigate to={ROUTES.dashboard} replace /> : renderLoginPage()} />
+          <Route path={ROUTES.register} element={token ? <Navigate to={ROUTES.home} replace /> : renderRegisterPage()} />
+          {sharedPublicRoutes}
+          <Route
+            path="/dashboard/*"
+            element={
+              token && user?.role === 'SuperAdmin' ? (
+                <ProtectedRoute token={token}>{renderDashboardPortal()}</ProtectedRoute>
+              ) : (
+                <Navigate to={ROUTES.home} replace />
+              )
+            }
+          />
+        </>
+      ) : (
+        <>
+          <Route
+            path={ROUTES.shop}
+            element={
+              <CustomerPage
+                tenantSubdomain={tenantSubdomain}
+                tenantId={tenantBranding?.id}
+                tenantName={tenantBranding?.name}
+                tenantLogo={tenantBranding?.logo}
+                sellerLoginUrl={ROUTES.login}
+                onBack={() => window.location.assign(mainSiteUrl('/explore'))}
+              />
+            }
+          />
+          <Route path={ROUTES.home} element={token ? <Navigate to={ROUTES.dashboard} replace /> : <Navigate to={ROUTES.shop} replace />} />
+          <Route path={ROUTES.login} element={token ? <Navigate to={ROUTES.dashboard} replace /> : renderLoginPage()} />
+          <Route path={ROUTES.register} element={<ExternalRedirect to={mainSiteRegisterUrl()} />} />
+          {sharedPublicRoutes}
+          <Route
+            path="/dashboard/*"
+            element={
+              <ProtectedRoute token={token}>
+                {renderDashboardPortal()}
+              </ProtectedRoute>
+            }
+          />
+        </>
+      )}
+      <Route path="*" element={<Navigate to={onTenantSite ? ROUTES.shop : ROUTES.home} replace />} />
+    </Routes>
   );
 }
 

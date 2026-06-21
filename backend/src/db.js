@@ -39,8 +39,14 @@ class AsyncPostgresDB {
     let index = 1;
     pgSql = pgSql.replace(/\?/g, () => `$${index++}`);
 
+    // Tables with non-id primary keys must not get RETURNING id
+    const INSERT_TABLES_WITHOUT_ID = new Set(['checkout_idempotency', 'favorites']);
     if (pgSql.trim().toUpperCase().startsWith('INSERT') && !pgSql.toUpperCase().includes('RETURNING')) {
-      pgSql += ' RETURNING id';
+      const tableMatch = pgSql.match(/INSERT\s+INTO\s+([^\s(]+)/i);
+      const tableName = tableMatch?.[1]?.replace(/"/g, '').toLowerCase();
+      if (!tableName || !INSERT_TABLES_WITHOUT_ID.has(tableName)) {
+        pgSql += ' RETURNING id';
+      }
     }
 
     return {
@@ -94,6 +100,15 @@ const db = new AsyncPostgresDB(pgPool);
 const initDB = async () => {
   // Create tables
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS tenants (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      subdomain TEXT,
+      logo TEXT,
+      phone TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -105,8 +120,7 @@ const initDB = async () => {
       logo TEXT,
       push_token TEXT,
       phone TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (tenant_id) REFERENCES users (id)
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS stores (
@@ -118,8 +132,7 @@ const initDB = async () => {
       lng REAL DEFAULT 0,
       is_active BOOLEAN DEFAULT TRUE,
       image TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (tenant_id) REFERENCES users (id)
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS surprise_bags (
@@ -264,6 +277,8 @@ const initDB = async () => {
   try { await db.exec("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT '[]'"); } catch (e) {}
   try { await db.exec("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE"); } catch (e) {}
 
+  await migrateToTenantsTable(db);
+
   // Pre-populate random locations for stores missing coordinates
   await db.exec(`
     UPDATE stores
@@ -274,5 +289,90 @@ const initDB = async () => {
 
   console.log('Database initialized successfully in postgres mode.');
 };
+
+async function migrateToTenantsTable(db) {
+  try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS subdomain TEXT"); } catch (e) {}
+
+  try {
+    await db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS tenants_subdomain_unique
+      ON tenants (subdomain)
+      WHERE subdomain IS NOT NULL AND subdomain <> ''
+    `);
+  } catch (e) {}
+
+  // Backfill tenant rows from legacy SellersAdmin users (preserve ids for existing store FKs)
+  await db.exec(`
+    INSERT INTO tenants (id, name, subdomain, logo, phone, created_at)
+    SELECT u.id, u.name, u.subdomain, u.logo, u.phone, u.created_at
+    FROM users u
+    WHERE u.role = 'SellersAdmin'
+      AND NOT EXISTS (SELECT 1 FROM tenants t WHERE t.id = u.id)
+  `);
+
+  try {
+    await db.exec(`
+      SELECT setval(
+        pg_get_serial_sequence('tenants', 'id'),
+        GREATEST(COALESCE((SELECT MAX(id) FROM tenants), 1), 1),
+        true
+      )
+    `);
+  } catch (e) {}
+
+  // Point seller users at tenant rows
+  await db.exec(`
+    UPDATE users u
+    SET tenant_id = t.id
+    FROM tenants t
+    WHERE u.role = 'SellersAdmin'
+      AND t.id = u.id
+      AND (u.tenant_id IS NULL OR u.tenant_id = u.id)
+  `);
+
+  // Staff users: tenant_id was admin user id (= tenant id after backfill)
+  await db.exec(`
+    UPDATE users staff
+    SET tenant_id = t.id
+    FROM users admin
+    JOIN tenants t ON t.id = admin.id
+    WHERE staff.role = 'SellersStaff'
+      AND admin.role = 'SellersAdmin'
+      AND staff.tenant_id = admin.id
+      AND staff.tenant_id IS DISTINCT FROM t.id
+  `);
+
+  // Stores already reference admin user ids; those match tenant ids after backfill
+  await db.exec(`
+    UPDATE stores s
+    SET tenant_id = t.id
+    FROM tenants t
+    WHERE s.tenant_id = t.id
+      AND NOT EXISTS (SELECT 1 FROM tenants WHERE id = s.tenant_id)
+  `);
+
+  try { await db.exec('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_tenant_id_fkey'); } catch (e) {}
+  try { await db.exec('ALTER TABLE stores DROP CONSTRAINT IF EXISTS stores_tenant_id_fkey'); } catch (e) {}
+  try {
+    await db.exec(`
+      ALTER TABLE users
+      ADD CONSTRAINT users_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+    `);
+  } catch (e) {}
+  try {
+    await db.exec(`
+      ALTER TABLE stores
+      ADD CONSTRAINT stores_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+    `);
+  } catch (e) {}
+
+  try { await db.exec('DROP INDEX IF EXISTS users_subdomain_unique'); } catch (e) {}
+
+  const { backfillTenantSubdomains, shortenTenantSubdomains } = require('./subdomain');
+  await backfillTenantSubdomains(db);
+  await shortenTenantSubdomains(db);
+}
 
 module.exports = { db, initDB };

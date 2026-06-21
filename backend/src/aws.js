@@ -1,5 +1,4 @@
 const { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { SESv2Client, SendEmailCommand } = require('@aws-sdk/client-sesv2');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
@@ -60,9 +59,26 @@ if (hasCredentials && !isTestEnv) {
 
 const base64Regex = /^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/;
 
+function extractS3Key(url) {
+  if (!url || typeof url !== 'string') return null;
+  const withoutQuery = url.split('?')[0];
+  const bucketPrefix = `https://${bucketName}.s3.${region}.amazonaws.com/`;
+  const altPrefix = `https://s3.${region}.amazonaws.com/${bucketName}/`;
+  const regionalPrefix = `https://${bucketName}.s3.amazonaws.com/`;
+  if (withoutQuery.startsWith(bucketPrefix)) return decodeURIComponent(withoutQuery.slice(bucketPrefix.length));
+  if (withoutQuery.startsWith(altPrefix)) return decodeURIComponent(withoutQuery.slice(altPrefix.length));
+  if (withoutQuery.startsWith(regionalPrefix)) return decodeURIComponent(withoutQuery.slice(regionalPrefix.length));
+  return null;
+}
+
+function canonicalS3Url(url) {
+  const key = extractS3Key(url);
+  return key ? publicS3Url(key) : null;
+}
+
 /**
  * Uploads a base64 encoded image to AWS S3.
- * If the input is not base64 (e.g. already a URL), it returns the input as-is.
+ * If the input is already a canonical or presigned S3 URL for this bucket, returns the canonical URL.
  * If AWS credentials are not set or in test mode, it falls back to a dry-run local mode.
  * 
  * @param {string} base64OrUrl 
@@ -71,9 +87,12 @@ const base64Regex = /^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/;
 async function uploadImageToS3(base64OrUrl) {
   if (typeof base64OrUrl !== 'string') return base64OrUrl;
 
+  const existing = canonicalS3Url(base64OrUrl);
+  if (existing) return existing;
+
   const matches = base64OrUrl.match(base64Regex);
   if (!matches) {
-    return base64OrUrl; // Return as-is (already a URL or file path)
+    return base64OrUrl;
   }
 
   const ext = matches[1];
@@ -161,31 +180,40 @@ async function sendEmail({ to, subject, html, text, attachments = [] }) {
 }
 
 /**
- * Converts a raw S3 URL to a presigned URL valid for 7 days.
- * If the URL is not an S3 URL for this bucket, returns it unchanged.
- * If S3 is not configured, returns the original URL.
+ * Browser-safe image URL — proxies private S3 objects through our API.
  */
-async function getPresignedUrl(url, expiresIn = 604800) {
-  if (!s3Client || !url || typeof url !== 'string') return url;
-
-  const bucketPrefix = `https://${bucketName}.s3.${region}.amazonaws.com/`;
-  const altPrefix = `https://s3.${region}.amazonaws.com/${bucketName}/`;
-
-  let key = null;
-  if (url.startsWith(bucketPrefix)) {
-    key = url.slice(bucketPrefix.length);
-  } else if (url.startsWith(altPrefix)) {
-    key = url.slice(altPrefix.length);
-  }
-
+function getClientImageUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  if (url.startsWith('data:')) return url;
+  const key = extractS3Key(url);
   if (!key) return url;
+  const base = (process.env.API_PUBLIC_URL || process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  return `${base}/api/public/media?key=${encodeURIComponent(key)}`;
+}
 
+/**
+ * Converts a raw S3 URL to a client-accessible URL (proxied when S3 is configured).
+ */
+async function getPresignedUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  const key = extractS3Key(url);
+  if (!key) return url;
+  if (s3Client) return getClientImageUrl(url);
+  return url;
+}
+
+async function streamS3Object(key, res) {
+  if (!s3Client || !key || key.includes('..')) return false;
   try {
-    const command = new GetObjectCommand({ Bucket: bucketName, Key: key });
-    return await getSignedUrl(s3Client, command, { expiresIn });
+    const response = await s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
+    res.set('Content-Type', response.ContentType || 'application/octet-stream');
+    res.set('Cache-Control', 'public, max-age=86400');
+    if (response.ETag) res.set('ETag', response.ETag);
+    response.Body.pipe(res);
+    return true;
   } catch (err) {
-    console.warn('Failed to generate presigned URL for', key, err.message);
-    return url;
+    console.warn('S3 stream failed for', key, err.message);
+    return false;
   }
 }
 
@@ -252,5 +280,8 @@ module.exports = {
   publicS3Url,
   sendEmail,
   getPresignedUrl,
+  getClientImageUrl,
+  streamS3Object,
+  extractS3Key,
   presignImages
 };

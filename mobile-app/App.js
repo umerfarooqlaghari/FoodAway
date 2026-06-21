@@ -66,7 +66,8 @@ import * as Sharing from 'expo-sharing';
 
 // --- Receipt HTML Generator ---
 const generateReceiptHTML = (receiptData, currencySymbol) => {
-  const { orderIds, storeName, items, total, pickupTime, customerName, dateTime, paymentMethod } = receiptData;
+  const { orderIds, storeName, tenantName, items, total, pickupTime, customerName, dateTime, paymentMethod } = receiptData;
+  const brandLabel = tenantName || storeName || 'Grabengo';
 
   const orderRef = Array.isArray(orderIds)
     ? orderIds.map(id => `GTG-${String(id).padStart(5, '0')}`).join(' · ')
@@ -139,7 +140,7 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
   <div class="receipt">
     <div class="hdr">
       <div class="check">✓</div>
-      <div class="brand">Grabengo</div>
+      <div class="brand">${brandLabel}</div>
       <div class="confirmed">Booking Confirmed</div>
       <div class="ref-pill"><span class="ref-text">${orderRef}</span></div>
     </div>
@@ -173,12 +174,19 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
 };
 
 // Resolve API base URL:
-// - In production/preview EAS builds: use EXPO_PUBLIC_API_URL set in eas.json env
-// - In local Expo Go / development: derive the packager host IP dynamically
+// - EXPO_PUBLIC_API_URL from .env or eas.json (production)
+// - Fallback in dev: derive host from Metro bundler
 const getDevApiUrl = () => {
-  const hostUri = Constants.expoConfig?.hostUri || '';
-  const ip = hostUri ? hostUri.split(':')[0] : 'localhost';
-  return `http://${ip}:3000/api`;
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    Constants.expoGoConfig?.debuggerHost ||
+    Constants.manifest2?.extra?.expoGo?.debuggerHost ||
+    '';
+  const ip = hostUri.split(':')[0];
+  if (ip && ip !== 'localhost') return `http://${ip}:3000/api`;
+  if (Platform.OS === 'ios' && !Constants.isDevice) return 'http://localhost:3000/api';
+  if (Platform.OS === 'android' && !Constants.isDevice) return 'http://10.0.2.2:3000/api';
+  return ip ? `http://${ip}:3000/api` : 'http://localhost:3000/api';
 };
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || getDevApiUrl();
@@ -319,6 +327,28 @@ const registerForPushNotificationsAsync = async () => {
 const AuthContext = createContext();
 const CartContext = createContext();
 const ChatContext = createContext();
+
+const CURRENCIES = [
+  { code: 'GBP', symbol: '£' },
+  { code: 'USD', symbol: '$' },
+  { code: 'EUR', symbol: '€' },
+  { code: 'PKR', symbol: 'Rs' },
+  { code: 'AED', symbol: 'AED ' },
+  { code: 'SAR', symbol: 'SAR ' },
+  { code: 'CAD', symbol: 'CA$' },
+  { code: 'AUD', symbol: 'A$' },
+  { code: 'INR', symbol: 'Rs' },
+];
+
+function formatMoney(amount, symbol = '£') {
+  const n = Number(amount);
+  const safe = Number.isFinite(n) ? n : 0;
+  return `${symbol}${safe.toFixed(2)}`;
+}
+
+function currencySymbolFor(code) {
+  return CURRENCIES.find((c) => c.code === code)?.symbol || '£';
+}
 
 function ChatProvider({ children }) {
   const { token, user, currencySymbol } = useContext(AuthContext);
@@ -1661,10 +1691,182 @@ function ForgotPasswordScreen({ navigation }) {
   );
 }
 
+function tenantInitials(name) {
+  return String(name || 'G')
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+}
+
+function TenantBrandLogo({ tenant, size = 56 }) {
+  const [failed, setFailed] = useState(false);
+  if (tenant.logo && !failed) {
+    return (
+      <Image
+        source={{ uri: tenant.logo }}
+        style={{ width: size, height: size, borderRadius: 14, resizeMode: 'contain', backgroundColor: '#FFF7ED' }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={{ width: size, height: size, borderRadius: 14, backgroundColor: '#EA580C', justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ color: '#fff', fontWeight: '900', fontSize: size * 0.32 }}>{tenantInitials(tenant.name)}</Text>
+    </View>
+  );
+}
+
+function ExploreTenantsScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const [tenants, setTenants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [coords, setCoords] = useState(null);
+
+  const fetchTenants = async () => {
+    setLoading(true);
+    setLoadError(null);
+    let lat;
+    let lng;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({});
+        lat = loc.coords.latitude;
+        lng = loc.coords.longitude;
+        setCoords({ lat, lng });
+      }
+    } catch (_) {}
+
+    try {
+      const params = new URLSearchParams();
+      if (lat != null && lng != null) {
+        params.set('lat', String(lat));
+        params.set('lng', String(lng));
+        params.set('sort', 'nearest');
+      }
+      const qs = params.toString();
+      const url = `${API_URL}/public/tenants${qs ? `?${qs}` : ''}`;
+      const res = await axios.get(url);
+      if (!Array.isArray(res.data)) {
+        throw new Error(`Unexpected response from ${API_URL}`);
+      }
+      setTenants(res.data);
+    } catch (e) {
+      const message = e.response?.data?.error
+        || e.message
+        || 'Could not load brands. Check that the backend is running.';
+      setLoadError(message);
+      setTenants([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTenants();
+  }, []);
+
+  const filtered = tenants.filter((t) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (t.name || '').toLowerCase().includes(q) || (t.subdomain || '').toLowerCase().includes(q);
+  });
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }} edges={['top']}>
+      <StatusBar style="dark" />
+      <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
+        <Text style={{ fontSize: 28, fontWeight: '900', color: '#111827' }}>Explore Brands</Text>
+        <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>
+          Choose a brand to browse their stores and offers{coords ? ' · sorted by nearest' : ''}.
+        </Text>
+        <View style={{ backgroundColor: '#F3F4F6', borderRadius: 30, paddingHorizontal: 20, paddingVertical: 14, marginTop: 16, flexDirection: 'row', alignItems: 'center' }}>
+          <Ionicons name="search" size={18} color="#9CA3AF" style={{ marginRight: 10 }} />
+          <TextInput
+            placeholder="Search KFC, Naheed, Galaxy..."
+            placeholderTextColor="#9CA3AF"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={{ flex: 1, fontSize: 15, color: '#111827' }}
+          />
+        </View>
+      </View>
+
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#EA580C" />
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={{ padding: 20, paddingBottom: Math.max(insets.bottom + 20, 40) }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 }}>
+              <Text style={{ fontSize: 40 }}>{loadError ? '⚠️' : '🏪'}</Text>
+              <Text style={{ color: '#111827', marginTop: 8, fontWeight: '700', textAlign: 'center' }}>
+                {loadError ? 'Could not load brands' : 'No brands found'}
+              </Text>
+              <Text style={{ color: '#6B7280', marginTop: 6, textAlign: 'center', fontSize: 13 }}>
+                {loadError
+                  ? `${loadError}\n\nAPI: ${API_URL}`
+                  : searchQuery.trim()
+                    ? 'Try a different search term.'
+                    : 'No active stores are listed yet.'}
+              </Text>
+              {loadError ? (
+                <TouchableOpacity
+                  onPress={fetchTenants}
+                  style={{ marginTop: 16, backgroundColor: '#EA580C', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => navigation.replace('Discover', { tenant: item })}
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 20,
+                padding: 16,
+                marginBottom: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.06,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
+              <TenantBrandLogo tenant={item} size={56} />
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827' }}>{item.name}</Text>
+                <Text style={{ fontSize: 12, color: '#EA580C', fontWeight: '600', marginTop: 2 }}>{item.subdomain}.grabengo.store</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                  {item.store_count} store{item.store_count !== 1 ? 's' : ''}
+                  {item.distance_km != null ? ` · ${item.distance_km < 1 ? `${Math.round(item.distance_km * 1000)} m` : `${item.distance_km.toFixed(1)} km`}` : ''}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+            </TouchableOpacity>
+          )}
+        />
+      )}
+    </SafeAreaView>
+  );
+}
+
 function SplashScreen({ navigation }) {
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigation.replace('Discover');
+      navigation.replace('ExploreTenants');
     }, 2000);
     return () => clearTimeout(timer);
   }, []);
@@ -1681,23 +1883,24 @@ function SplashScreen({ navigation }) {
 }
 
 // --- Shared Bottom Nav ---
-const SharedBottomNav = ({ navigation, activeTab, cartTotalCount, onMapPress, onReviewsPress }) => {
+const SharedBottomNav = ({ navigation, activeTab, cartTotalCount, onMapPress, onReviewsPress, navParams }) => {
+  const discoverParams = navParams || {};
   return (
     <View style={styles.bottomNavContainer}>
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Home' && navigation.navigate('Discover')}>
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Home' && navigation.navigate('Discover', discoverParams)}>
           <View style={{ backgroundColor: activeTab === 'Home' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
             <Ionicons name={activeTab === 'Home' ? "home" : "home-outline"} size={activeTab === 'Home' ? 20 : 24} color={activeTab === 'Home' ? "white" : "#9CA3AF"} />
           </View>
           <Text style={{ color: activeTab === 'Home' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Home' ? '700' : '600' }}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={onMapPress || (() => navigation.navigate('Discover', { openMap: true }))}>
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={onMapPress || (() => navigation.navigate('Discover', { ...discoverParams, openMap: true }))}>
           <View style={{ backgroundColor: activeTab === 'Map' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
             <Ionicons name={activeTab === 'Map' ? "map" : "map-outline"} size={activeTab === 'Map' ? 20 : 24} color={activeTab === 'Map' ? "white" : "#9CA3AF"} />
           </View>
           <Text style={{ color: activeTab === 'Map' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Map' ? '700' : '600' }}>Map</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Cart' && navigation.navigate('Cart')}>
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Cart' && navigation.navigate('Cart', discoverParams)}>
           <View style={{ backgroundColor: activeTab === 'Cart' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
             <Ionicons name={activeTab === 'Cart' ? "cart" : "cart-outline"} size={activeTab === 'Cart' ? 20 : 24} color={activeTab === 'Cart' ? "white" : "#9CA3AF"} />
             {cartTotalCount > 0 && (
@@ -1730,6 +1933,8 @@ const PRESET_TAGS = ["Friendly Staff", "Great Value", "Fresh Quality", "Clean St
 // --- App Screens ---
 function DiscoverScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const selectedTenant = route.params?.tenant;
+  const tenantQuery = selectedTenant?.id ? `?tenant_id=${selectedTenant.id}` : '';
   const [bags, setBags] = useState([]);
   const [stores, setStores] = useState([]);
   const [foodItems, setFoodItems] = useState([]);
@@ -1810,7 +2015,7 @@ function DiscoverScreen({ navigation, route }) {
 
   const fetchBags = async () => {
     try {
-      const response = await axios.get(`${API_URL}/bags`, {
+      const response = await axios.get(`${API_URL}/bags${tenantQuery}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBags(response.data);
@@ -1828,7 +2033,7 @@ function DiscoverScreen({ navigation, route }) {
 
   const fetchFoodItems = async () => {
     try {
-      const response = await axios.get(`${API_URL}/food-items`, {
+      const response = await axios.get(`${API_URL}/food-items${tenantQuery}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setFoodItems(response.data);
@@ -1844,7 +2049,7 @@ function DiscoverScreen({ navigation, route }) {
 
   const fetchStores = async () => {
     try {
-      const response = await axios.get(`${API_URL}/stores`, {
+      const response = await axios.get(`${API_URL}/stores${tenantQuery}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStores(response.data);
@@ -1893,6 +2098,10 @@ function DiscoverScreen({ navigation, route }) {
   };
 
   useEffect(() => {
+    if (!selectedTenant) {
+      navigation.replace('ExploreTenants');
+      return;
+    }
     fetchBags();
     fetchFoodItems();
     fetchStores();
@@ -1916,7 +2125,7 @@ function DiscoverScreen({ navigation, route }) {
         setAddressName('Current Location');
       }
     })();
-  }, []);
+  }, [selectedTenant?.id]);
 
   useEffect(() => {
     if (route.params?.openMap) {
@@ -1934,7 +2143,7 @@ function DiscoverScreen({ navigation, route }) {
 
   const fetchReviews = async () => {
     try {
-      const res = await axios.get(`${API_URL}/reviews`);
+      const res = await axios.get(`${API_URL}/public/reviews?limit=50`);
       setReviewsList(res.data);
     } catch (error) {
       console.log("Error fetching reviews", error.message);
@@ -2351,6 +2560,25 @@ function DiscoverScreen({ navigation, route }) {
 
         {/* ── Stable top bar: location + search ── */}
         <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, backgroundColor: '#FAFAFA' }}>
+          {selectedTenant && (
+            <TouchableOpacity
+              onPress={() => navigation.replace('ExploreTenants')}
+              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, backgroundColor: '#FFF7ED', borderRadius: 16, padding: 12 }}
+            >
+              {selectedTenant.logo ? (
+                <Image source={{ uri: selectedTenant.logo }} style={{ width: 40, height: 40, borderRadius: 10, marginRight: 12 }} />
+              ) : (
+                <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFEDD5', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ fontSize: 20 }}>🏪</Text>
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: '#EA580C', fontWeight: '700', textTransform: 'uppercase' }}>Shopping from</Text>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827' }}>{selectedTenant.name}</Text>
+              </View>
+              <Text style={{ fontSize: 12, color: '#EA580C', fontWeight: '700' }}>Change</Text>
+            </TouchableOpacity>
+          )}
           {/* Location row */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -2435,7 +2663,8 @@ function DiscoverScreen({ navigation, route }) {
       <SharedBottomNav 
         navigation={navigation} 
         activeTab="Home" 
-        cartTotalCount={cartTotalCount} 
+        cartTotalCount={cartTotalCount}
+        navParams={selectedTenant ? { tenant: selectedTenant } : undefined}
         onMapPress={() => setMapVisible(true)} 
         onReviewsPress={() => setReviewsVisible(true)} 
       />
@@ -2789,11 +3018,11 @@ function StoreDetailsScreen({ navigation, route }) {
       const [bagsRes, foodRes, reviewsRes] = await Promise.all([
         axios.get(`${API_URL}/bags?all=true`, { headers }),
         axios.get(`${API_URL}/food-items?all=true&store_id=${store.id}`, { headers }),
-        axios.get(`${API_URL}/reviews`, { headers })
+        axios.get(`${API_URL}/public/reviews?store_id=${store.id}&limit=50`)
       ]);
       setBags(bagsRes.data.filter(b => b.store_id === store.id));
       setFoodItems(foodRes.data);
-      setReviews(reviewsRes.data.filter(r => r.store_id === store.id));
+      setReviews(reviewsRes.data);
     } catch (err) {
       console.log("Error fetching store details data:", err.message);
     } finally {
@@ -3828,7 +4057,7 @@ function StoreDetailsScreen({ navigation, route }) {
 }
 
 // --- Cart Screen ---
-function CartScreen({ navigation }) {
+function CartScreen({ navigation, route }) {
   const { cartItems, updateQuantity, removeFromCart, cartTotalPrice, cartTotalCount, clearCart } = useContext(CartContext);
   const { token, currencySymbol, user } = useContext(AuthContext);
   const { openReceipt } = useContext(ChatContext);
@@ -3857,20 +4086,49 @@ function CartScreen({ navigation }) {
         paymentMethod: 'Cash at Pickup'
       };
       const response = await axios.post(`${API_URL}/orders`, payload, { headers: { Authorization: `Bearer ${token}` } });
-      const orderIds = response.data?.order_ids || [];
-      const receiptData = {
-        orderIds,
-        storeName,
-        items: cartSnapshot,
-        total: totalPrice,
-        pickupTime: null,
-        customerName: user?.name || null,
-        dateTime: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        paymentMethod: 'Cash at Pickup',
-      };
+      const receiptGroups = response.data?.receipt_groups || [];
+      const tenantParam = route.params?.tenant || (cartItems[0]?.tenant_id ? {
+        id: cartItems[0].tenant_id,
+        name: cartItems[0].tenant_name || storeName,
+      } : null);
       clearCart();
-      navigation.navigate('Discover');
-      openReceipt(receiptData);
+      navigation.navigate('Discover', tenantParam ? { tenant: tenantParam } : undefined);
+
+      if (receiptGroups.length > 0) {
+        receiptGroups.forEach((group) => {
+          const groupItems = group.orders.map((o) => ({
+            name: o.item_name || (o.type === 'bag' ? `${o.store_name} Surprise Bag` : o.item_name),
+            quantity: o.quantity,
+            price: o.price,
+            type: o.type,
+          }));
+          const groupTotal = group.orders.reduce((s, o) => s + Number(o.price) * (o.quantity || 1), 0);
+          openReceipt({
+            orderIds: group.orders.map((o) => o.id),
+            storeName: group.orders[0]?.store_name || storeName,
+            tenantName: group.tenant_name || storeName,
+            items: groupItems,
+            total: groupTotal,
+            pickupTime: group.orders[0]?.pickup_time || null,
+            customerName: user?.name || null,
+            dateTime: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            paymentMethod: 'Cash at Pickup',
+          });
+        });
+      } else {
+        const orderIds = response.data?.order_ids || [];
+        openReceipt({
+          orderIds,
+          storeName,
+          tenantName: storeName,
+          items: cartSnapshot,
+          total: totalPrice,
+          pickupTime: null,
+          customerName: user?.name || null,
+          dateTime: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          paymentMethod: 'Cash at Pickup',
+        });
+      }
     } catch (e) {
       Alert.alert("Checkout Failed", e.response?.data?.error || e.message);
     } finally {
@@ -4255,7 +4513,12 @@ function SellerDashboardScreen() {
   const fetchStats = async () => {
     try {
       const response = await axios.get(`${API_URL}/seller/stats`, { headers: { Authorization: `Bearer ${token}` } });
-      setStats(response.data);
+      const data = response.data || {};
+      setStats({
+        totalRevenue: Number(data.totalRevenue) || 0,
+        bagsSold: Number(data.bagsSold) || 0,
+        dailySales: data.dailySales || [],
+      });
     } catch (e) {
       console.log("Error fetching stats:", e.message);
     }
@@ -4657,7 +4920,7 @@ function SellerDashboardScreen() {
 
       {/* KPI Strip */}
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 12, marginBottom: 8 }}>
-        <SellerStatCard label="Revenue" value={`${currencySymbol}${stats.totalRevenue.toFixed(2)}`} />
+        <SellerStatCard label="Revenue" value={formatMoney(stats.totalRevenue, currencySymbol)} />
         <SellerStatCard label="Bags Sold" value={String(stats.bagsSold)} />
         <SellerStatCard label="Stores" value={String(stores.length)} />
       </View>
@@ -4668,7 +4931,9 @@ function SellerDashboardScreen() {
           {CURRENCIES.map(c => (
             <TouchableOpacity key={c.code} onPress={() => changeCurrency(c.code)}
               style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, marginRight: 6, borderWidth: 1, borderColor: currencyCode === c.code ? '#EA580C' : '#E5E7EB', backgroundColor: currencyCode === c.code ? '#FFF7ED' : '#F9FAFB' }}>
-              <Text style={{ fontWeight: '700', fontSize: 12, color: currencyCode === c.code ? '#EA580C' : '#6B7280' }}>{c.symbol} {c.code}</Text>
+              <Text style={{ fontWeight: '700', fontSize: 12, color: currencyCode === c.code ? '#EA580C' : '#6B7280' }}>
+                {c.symbol.trim()} {c.code}
+              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -4729,9 +4994,9 @@ function SellerDashboardScreen() {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   {bag.original_price ? (
-                    <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{currencySymbol}{bag.original_price.toFixed(2)}</Text>
+                    <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{formatMoney(bag.original_price, currencySymbol)}</Text>
                   ) : null}
-                  <Text style={{ color: '#EA580C', fontWeight: '800', fontSize: 18 }}>{currencySymbol}{bag.price.toFixed(2)}</Text>
+                  <Text style={{ color: '#EA580C', fontWeight: '800', fontSize: 18 }}>{formatMoney(bag.price, currencySymbol)}</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
@@ -4790,9 +5055,9 @@ function SellerDashboardScreen() {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   {item.original_price ? (
-                    <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{currencySymbol}{parseFloat(item.original_price).toFixed(2)}</Text>
+                    <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{formatMoney(item.original_price, currencySymbol)}</Text>
                   ) : null}
-                  <Text style={{ color: '#059669', fontWeight: '800', fontSize: 18 }}>{currencySymbol}{parseFloat(item.price).toFixed(2)}</Text>
+                  <Text style={{ color: '#059669', fontWeight: '800', fontSize: 18 }}>{formatMoney(item.price, currencySymbol)}</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
@@ -4851,7 +5116,7 @@ function SellerDashboardScreen() {
                   <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{order.store_name} · Ref #{order.id}</Text>
                   <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>{order.customer_name || order.customer_email || 'Customer'}</Text>
                 </View>
-                <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 17 }}>{currencySymbol}{(order.price * (order.quantity || 1)).toFixed(2)}</Text>
+                <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 17 }}>{formatMoney(Number(order.price) * (order.quantity || 1), currencySymbol)}</Text>
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
                 <Text style={{ color: '#6B7280', fontSize: 12 }}>Qty: {order.quantity || 1} · {order.payment_method || 'Cash at Pickup'}</Text>
@@ -5276,20 +5541,15 @@ export default function App() {
     await AsyncStorage.setItem('currencyCode', code);
   };
 
-  const CURRENCIES = [
-    { code: 'GBP', symbol: '£' }, { code: 'USD', symbol: '$' }, { code: 'EUR', symbol: '€' },
-    { code: 'PKR', symbol: '₨' }, { code: 'AED', symbol: 'AED' }, { code: 'SAR', symbol: 'SAR' },
-    { code: 'CAD', symbol: 'C$' }, { code: 'AUD', symbol: 'A$' }, { code: 'INR', symbol: '₹' },
-  ];
-  const currencySymbol = CURRENCIES.find(c => c.code === currencyCode)?.symbol || '£';
+  const CURRENCIES_LIST = CURRENCIES;
+  const currencySymbol = currencySymbolFor(currencyCode);
 
   // Cart Functions
   const addToCart = (item, type) => {
-    // Check single store constraint
-    if (cartItems.length > 0 && cartItems[0].store_id !== item.store_id) {
+    if (cartItems.length > 0 && item.tenant_id && cartItems[0].tenant_id && cartItems[0].tenant_id !== item.tenant_id) {
       Alert.alert(
-        "Different Store",
-        "Your cart contains items from another store. Do you want to clear your cart and start a new order?",
+        "Different Brand",
+        "Your cart contains items from another brand. Clear your cart to shop from this brand.",
         [
           { text: "Cancel", style: "cancel" },
           { text: "Clear Cart & Add", onPress: () => {
@@ -5407,9 +5667,9 @@ export default function App() {
       currencyCode,
       currencySymbol,
       changeCurrency,
-      CURRENCIES
+      CURRENCIES: CURRENCIES_LIST
     }),
-    [state, currencyCode, currencySymbol]
+    [state, currencyCode, currencySymbol, changeCurrency]
   );
 
   if (state.isLoading) {
@@ -5438,6 +5698,7 @@ export default function App() {
                 // App Stack
                 <>
                   <Stack.Screen name="Splash" component={SplashScreen} />
+                  <Stack.Screen name="ExploreTenants" component={ExploreTenantsScreen} />
                   <Stack.Screen name="Discover" component={DiscoverScreen} />
                   <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} />
                   <Stack.Screen name="Cart" component={CartScreen} />

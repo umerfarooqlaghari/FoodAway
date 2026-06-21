@@ -1,4 +1,5 @@
 import React from 'react';
+import { grabengoFavicon } from '../brandAssets';
 
 export default function PageWrapper({ onBack, children }) {
   return (
@@ -12,7 +13,7 @@ export default function PageWrapper({ onBack, children }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }} onClick={onBack}>
-          <img src="/favicon.png" alt="Grabengo" style={{ height: '32px', objectFit: 'contain' }} />
+          <img src={grabengoFavicon} alt="Grabengo" style={{ height: '32px', objectFit: 'contain' }} />
           <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#fff' }}>Grabengo</span>
         </div>
         <button

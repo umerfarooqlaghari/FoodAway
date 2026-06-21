@@ -13,9 +13,12 @@ const CURRENCY = '£';
  * @param {Array}  orders       Array of order objects:
  *   { id, item_name, store_name, type, quantity, price, pickup_time, created_at }
  * @param {Object} customer     { name, email, phone }
+ * @param {Object} branding     { brandName, tagline } — tenant-specific header when set
  * @returns {Promise<Buffer>}   PDF file as a Buffer
  */
-function generateReceiptBuffer(orders, customer = {}) {
+function generateReceiptBuffer(orders, customer = {}, branding = {}) {
+  const headerBrand = branding.brandName || brandName;
+  const headerTagline = branding.tagline || tagline;
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: 'A4', autoFirstPage: true });
     const chunks = [];
@@ -36,10 +39,10 @@ function generateReceiptBuffer(orders, customer = {}) {
 
     doc.fillColor('#ffffff')
        .fontSize(28).font('Helvetica-Bold')
-       .text(brandName, 50, 28, { align: 'left' });
+       .text(headerBrand, 50, 28, { align: 'left' });
 
     doc.fontSize(11).font('Helvetica')
-       .text(tagline, 50, 62, { align: 'left' });
+       .text(headerTagline, 50, 62, { align: 'left' });
 
     doc.fontSize(20).font('Helvetica-Bold')
        .text('ORDER RECEIPT', 0, 36, { align: 'right', width: pageWidth - 50 });
@@ -135,7 +138,7 @@ function generateReceiptBuffer(orders, customer = {}) {
     doc.moveTo(50, footerY - 12).lineTo(pageWidth - 50, footerY - 12)
        .strokeColor('#e0e0e0').lineWidth(0.5).stroke();
     doc.fillColor('#aaaaaa').font('Helvetica').fontSize(8)
-       .text(`© ${new Date().getFullYear()} ${brandName} — ${tagline}`, 50, footerY - 4, { align: 'center', width: innerWidth });
+       .text(`© ${new Date().getFullYear()} ${headerBrand} — ${headerTagline}`, 50, footerY - 4, { align: 'center', width: innerWidth });
 
     doc.end();
   });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {
   SearchIcon, XIcon, ArrowLeftIcon, CartIcon,
@@ -6,14 +6,24 @@ import {
   ClipboardIcon, CheckCircleIcon,
   ClockIcon, TrashIcon
 } from './Icons';
+import TenantBrandLogo from '../components/TenantBrandLogo';
+import { grabengoLogo, grabengoWordmark } from '../brandAssets';
+import { mainSiteUrl } from '../host';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 const CURRENCY = '£';
 
-function downloadReceipt(orders, contactInfo) {
+function formatDistance(km) {
+  if (km == null || !Number.isFinite(km)) return null;
+  if (km < 1) return `${Math.round(km * 1000)} m away`;
+  return `${km.toFixed(1)} km away`;
+}
+
+function downloadReceipt(orders, contactInfo, tenantName) {
   const total = orders.reduce((s, o) => s + (o.price * (o.quantity || 1)), 0);
   const date = new Date().toLocaleString('en-GB', { dateStyle: 'long', timeStyle: 'short' });
   const refNos = orders.map(o => `#${o.id}`).join(', ');
+  const brandLabel = tenantName || 'Grabengo';
 
   const rows = orders.map(o => `
     <tr>
@@ -29,7 +39,7 @@ function downloadReceipt(orders, contactInfo) {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Grabengo Receipt ${refNos}</title>
+  <title>${brandLabel} Receipt ${refNos}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f5f5f5; padding: 40px 20px; color: #1a1a1a; }
@@ -70,7 +80,7 @@ function downloadReceipt(orders, contactInfo) {
     <div class="header">
       <div class="header-icon">🛍️</div>
       <h1>Order Confirmed!</h1>
-      <p>Grabengo — Thank you for your order</p>
+      <p>${brandLabel} — Thank you for your order</p>
     </div>
     <div class="body">
       <div class="ref-box">
@@ -197,13 +207,23 @@ function ItemCard({ item, type, cart, onAdd, onQtyChange }) {
   );
 }
 
-export default function CustomerPage({ onBack }) {
+export default function CustomerPage({
+  onBack,
+  tenantId = null,
+  tenantSubdomain = null,
+  tenantName = null,
+  tenantLogo = null,
+  sellerLoginUrl = null,
+}) {
   const [bags, setBags] = useState([]);
   const [foods, setFoods] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [activeStore, setActiveStore] = useState('all');
-  const [stores, setStores] = useState([]);
+  const [menuFilter, setMenuFilter] = useState('all');
+  const [selectedStoreId, setSelectedStoreId] = useState(null);
+  const [branchStores, setBranchStores] = useState([]);
+  const [sortNearest, setSortNearest] = useState(false);
+  const [coords, setCoords] = useState(null);
 
   const [cart, setCart] = useState([]);
   const [panelTab, setPanelTab] = useState('cart');
@@ -228,26 +248,44 @@ export default function CustomerPage({ onBack }) {
 
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
 
+  const [catalogError, setCatalogError] = useState('');
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    setCatalogError('');
     try {
-      const [bagsRes, foodsRes] = await Promise.all([
-        axios.get(`${API}/public/bags`),
-        axios.get(`${API}/public/food-items`),
+      const params = new URLSearchParams();
+      if (tenantId) params.set('tenant_id', String(tenantId));
+      else if (tenantSubdomain) params.set('subdomain', tenantSubdomain);
+      if (coords?.lat != null && coords?.lng != null) {
+        params.set('lat', String(coords.lat));
+        params.set('lng', String(coords.lng));
+        if (sortNearest) params.set('sort', 'nearest');
+      }
+      const qs = params.toString() ? `?${params.toString()}` : '';
+
+      const [bagsRes, foodsRes, storesRes] = await Promise.all([
+        axios.get(`${API}/public/bags${qs}`),
+        axios.get(`${API}/public/food-items${qs}`),
+        axios.get(`${API}/public/stores${qs}`),
       ]);
       setBags(bagsRes.data || []);
       setFoods(foodsRes.data || []);
-      const seen = new Set();
-      const uniqueStores = [];
-      [...(bagsRes.data || []), ...(foodsRes.data || [])].forEach(i => {
-        if (!seen.has(i.store_id)) {
-          seen.add(i.store_id);
-          uniqueStores.push({ id: i.store_id, name: i.store_name });
-        }
-      });
-      setStores(uniqueStores);
-    } catch {}
+      setBranchStores(storesRes.data || []);
+    } catch (err) {
+      setCatalogError(err.response?.data?.error || 'Could not load menu. Please refresh the page.');
+    }
     setLoading(false);
+  }, [tenantId, tenantSubdomain, coords, sortNearest]);
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
+        { timeout: 8000, maximumAge: 300000 }
+      );
+    }
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -263,6 +301,13 @@ export default function CustomerPage({ onBack }) {
 
   const addToCart = (item, type) => {
     setCart(prev => {
+      if (prev.length > 0 && item.tenant_id) {
+        const cartTenant = prev[0].item.tenant_id;
+        if (cartTenant && cartTenant !== item.tenant_id) {
+          setCatalogError('Your cart contains items from another brand. Clear your cart or checkout first.');
+          return prev;
+        }
+      }
       const idx = prev.findIndex(c => c.item.id === item.id && c.type === type);
       if (idx >= 0) {
         const u = [...prev];
@@ -374,10 +419,19 @@ export default function CustomerPage({ onBack }) {
   const handleLookup = async (e) => {
     e.preventDefault();
     setLookupError('');
+    const email = lookupForm.email.trim();
+    const phone = lookupForm.phone.trim();
+    if (!email && !phone) {
+      setLookupError('Enter your email or phone number.');
+      return;
+    }
     setLookupLoading(true);
     setLookupDone(false);
     try {
-      const res = await axios.get(`${API}/public/orders?email=${encodeURIComponent(lookupForm.email)}&phone=${encodeURIComponent(lookupForm.phone)}`);
+      const params = new URLSearchParams();
+      if (email) params.set('email', email);
+      if (phone) params.set('phone', phone);
+      const res = await axios.get(`${API}/public/orders?${params.toString()}`);
       setMyOrders(res.data || []);
       setLookupDone(true);
     } catch {
@@ -387,8 +441,8 @@ export default function CustomerPage({ onBack }) {
   };
 
   const filteredBags = bags.filter(b => {
-    if (activeStore === 'foods') return false;
-    if (activeStore !== 'all' && activeStore !== 'bags' && String(b.store_id) !== String(activeStore)) return false;
+    if (menuFilter === 'foods') return false;
+    if (selectedStoreId != null && String(b.store_id) !== String(selectedStoreId)) return false;
     if (search) {
       const q = search.toLowerCase();
       return (b.store_name || '').toLowerCase().includes(q) || (b.description || '').toLowerCase().includes(q);
@@ -397,8 +451,8 @@ export default function CustomerPage({ onBack }) {
   });
 
   const filteredFoods = foods.filter(f => {
-    if (activeStore === 'bags') return false;
-    if (activeStore !== 'all' && activeStore !== 'foods' && String(f.store_id) !== String(activeStore)) return false;
+    if (menuFilter === 'bags') return false;
+    if (selectedStoreId != null && String(f.store_id) !== String(selectedStoreId)) return false;
     if (search) {
       const q = search.toLowerCase();
       return (f.name || '').toLowerCase().includes(q) || (f.store_name || '').toLowerCase().includes(q) || (f.category || '').toLowerCase().includes(q);
@@ -406,7 +460,40 @@ export default function CustomerPage({ onBack }) {
     return true;
   });
 
+  const storeItemCounts = useMemo(() => {
+    const counts = new Map();
+    bags.forEach((b) => counts.set(b.store_id, (counts.get(b.store_id) || 0) + 1));
+    foods.forEach((f) => counts.set(f.store_id, (counts.get(f.store_id) || 0) + 1));
+    return counts;
+  }, [bags, foods]);
+
+  const sortedBranches = useMemo(() => {
+    const list = [...branchStores];
+    if (coords && sortNearest) {
+      list.sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity));
+    }
+    return list;
+  }, [branchStores, coords, sortNearest]);
+
+  const selectedBranch = selectedStoreId != null
+    ? branchStores.find((s) => String(s.id) === String(selectedStoreId))
+    : null;
+
   const totalItemCount = filteredBags.length + filteredFoods.length;
+
+  const receiptTenantName = tenantName || cart[0]?.item?.tenant_name || 'Grabengo';
+
+  const downloadReceiptsGrouped = (orders, contact) => {
+    const groups = new Map();
+    for (const o of orders) {
+      const key = o.tenant_name || receiptTenantName;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(o);
+    }
+    for (const [name, groupOrders] of groups) {
+      downloadReceipt(groupOrders, contact, name);
+    }
+  };
 
   return (
     <div className="pos-root">
@@ -416,8 +503,15 @@ export default function CustomerPage({ onBack }) {
         <button className="pos-back-btn" onClick={onBack}>
           <ArrowLeftIcon size={14} /> Back
         </button>
-        <div className="pos-logo">
-          <img src="/Grabengo-V1-transparent.png" alt="Grabengo" className="pos-logo-img" />
+        <div className="pos-logo pos-logo--tenant">
+          {tenantName ? (
+            <>
+              <TenantBrandLogo name={tenantName} logo={tenantLogo} size={44} variant="header" />
+              <span className="pos-tenant-name">{tenantName}</span>
+            </>
+          ) : (
+            <img src={grabengoWordmark} alt="Grabengo" className="pos-logo-img" />
+          )}
         </div>
         <div className="pos-search-wrap">
           <span className="pos-search-icon"><SearchIcon size={15} color="#aaa" /></span>
@@ -434,39 +528,105 @@ export default function CustomerPage({ onBack }) {
             </button>
           )}
         </div>
+        {sellerLoginUrl && (
+          <a href={sellerLoginUrl} style={{ fontSize: 12, color: '#888', marginLeft: 8, whiteSpace: 'nowrap' }}>Seller login</a>
+        )}
         <button className="pos-mobile-cart-btn" onClick={() => setMobileCartOpen(true)}>
           <CartIcon size={20} color="#fff" />
           {cartCount > 0 && <span className="pos-mobile-cart-badge">{cartCount}</span>}
         </button>
       </header>
 
+      {/* ── Store picker (branches) ─────────────────── */}
+      {(tenantName || tenantSubdomain) && branchStores.length > 0 && (
+        <section className="pos-store-picker" aria-label="Choose a store">
+          <div className="pos-store-picker-head">
+            <div>
+              <h2 className="pos-store-picker-title">Choose a store</h2>
+              <p className="pos-store-picker-sub">
+                {selectedBranch
+                  ? `Showing items from ${selectedBranch.name}`
+                  : `${branchStores.length} location${branchStores.length !== 1 ? 's' : ''} · pick one or browse all`}
+              </p>
+            </div>
+            <a href={mainSiteUrl('/explore')} className="pos-change-brand">Change brand</a>
+          </div>
+          <div className="pos-store-picker-track">
+            <button
+              type="button"
+              className={`pos-store-card ${selectedStoreId == null ? 'active' : ''}`}
+              onClick={() => setSelectedStoreId(null)}
+            >
+              <div className="pos-store-card-img pos-store-card-img--all">
+                <GridIcon size={28} color={selectedStoreId == null ? '#FF5A00' : '#888'} />
+              </div>
+              <div className="pos-store-card-body">
+                <span className="pos-store-card-name">All stores</span>
+                <span className="pos-store-card-meta">{bags.length + foods.length} items</span>
+              </div>
+            </button>
+            {sortedBranches.map((store) => {
+              const count = storeItemCounts.get(store.id) || 0;
+              const isActive = String(selectedStoreId) === String(store.id);
+              return (
+                <button
+                  key={store.id}
+                  type="button"
+                  className={`pos-store-card ${isActive ? 'active' : ''}`}
+                  onClick={() => setSelectedStoreId(store.id)}
+                >
+                  <div className="pos-store-card-img">
+                    {store.image ? (
+                      <img src={store.image} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <StoreIcon size={28} color={isActive ? '#FF5A00' : '#888'} />
+                    )}
+                  </div>
+                  <div className="pos-store-card-body">
+                    <span className="pos-store-card-name">{store.name}</span>
+                    {store.address && (
+                      <span className="pos-store-card-address">{store.address}</span>
+                    )}
+                    <span className="pos-store-card-meta">
+                      {count} item{count !== 1 ? 's' : ''}
+                      {store.distance_km != null && (
+                        <> · <strong>{formatDistance(store.distance_km)}</strong></>
+                      )}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* ── Category Chips ─────────────────────────── */}
       <div className="pos-categories">
-        <button className={`pos-cat-chip ${activeStore === 'all' ? 'active' : ''}`} onClick={() => setActiveStore('all')}>
-          <span className="pos-cat-icon"><GridIcon size={20} color={activeStore === 'all' ? '#FF5A00' : '#888'} /></span>
-          <span className="pos-cat-label">All</span>
-          <span className="pos-cat-count">{bags.length + foods.length} Items</span>
-        </button>
-        <button className={`pos-cat-chip ${activeStore === 'bags' ? 'active' : ''}`} onClick={() => setActiveStore('bags')}>
-          <span className="pos-cat-icon"><BagIcon size={20} color={activeStore === 'bags' ? '#FF5A00' : '#888'} /></span>
-          <span className="pos-cat-label">Surprise Bags</span>
-          <span className="pos-cat-count">{bags.length} Items</span>
-        </button>
-        <button className={`pos-cat-chip ${activeStore === 'foods' ? 'active' : ''}`} onClick={() => setActiveStore('foods')}>
-          <span className="pos-cat-icon"><FoodIcon size={20} color={activeStore === 'foods' ? '#FF5A00' : '#888'} /></span>
-          <span className="pos-cat-label">Food Items</span>
-          <span className="pos-cat-count">{foods.length} Items</span>
-        </button>
-        {stores.map(s => (
+        {coords && (
           <button
-            key={s.id}
-            className={`pos-cat-chip ${String(activeStore) === String(s.id) ? 'active' : ''}`}
-            onClick={() => setActiveStore(String(s.id))}
+            type="button"
+            className={`pos-cat-chip ${sortNearest ? 'active' : ''}`}
+            onClick={() => setSortNearest((v) => !v)}
           >
-            <span className="pos-cat-icon"><StoreIcon size={20} color={String(activeStore) === String(s.id) ? '#FF5A00' : '#888'} /></span>
-            <span className="pos-cat-label">{s.name}</span>
+            <span className="pos-cat-label">Nearest</span>
           </button>
-        ))}
+        )}
+        <button className={`pos-cat-chip ${menuFilter === 'all' ? 'active' : ''}`} onClick={() => setMenuFilter('all')}>
+          <span className="pos-cat-icon"><GridIcon size={20} color={menuFilter === 'all' ? '#FF5A00' : '#888'} /></span>
+          <span className="pos-cat-label">All</span>
+          <span className="pos-cat-count">{filteredBags.length + filteredFoods.length} Items</span>
+        </button>
+        <button className={`pos-cat-chip ${menuFilter === 'bags' ? 'active' : ''}`} onClick={() => setMenuFilter('bags')}>
+          <span className="pos-cat-icon"><BagIcon size={20} color={menuFilter === 'bags' ? '#FF5A00' : '#888'} /></span>
+          <span className="pos-cat-label">Surprise Bags</span>
+          <span className="pos-cat-count">{filteredBags.length} Items</span>
+        </button>
+        <button className={`pos-cat-chip ${menuFilter === 'foods' ? 'active' : ''}`} onClick={() => setMenuFilter('foods')}>
+          <span className="pos-cat-icon"><FoodIcon size={20} color={menuFilter === 'foods' ? '#FF5A00' : '#888'} /></span>
+          <span className="pos-cat-label">Food Items</span>
+          <span className="pos-cat-count">{filteredFoods.length} Items</span>
+        </button>
       </div>
 
       {/* ── Body ───────────────────────────────────── */}
@@ -479,11 +639,22 @@ export default function CustomerPage({ onBack }) {
               <div className="pos-spinner" />
               <p>Loading fresh deals...</p>
             </div>
+          ) : catalogError ? (
+            <div className="pos-loading">
+              <p style={{ color: '#DC2626', marginBottom: 12 }}>{catalogError}</p>
+              <button type="button" className="pos-place-order-btn" onClick={fetchAll}>Retry</button>
+            </div>
           ) : totalItemCount === 0 ? (
             <div className="pos-empty">
-              <img src="/Grabengo-V1-transparent.png" alt="" style={{ height: 56, opacity: 0.2 }} />
+              <img src={grabengoLogo} alt="" style={{ height: 56, opacity: 0.2 }} />
               <h3>No items found</h3>
-              <p>{search ? `No results for "${search}"` : 'Check back soon for fresh deals!'}</p>
+              <p>
+                {search
+                  ? `No results for "${search}"`
+                  : selectedBranch
+                    ? `No items at ${selectedBranch.name} right now. Try another store or check back soon.`
+                    : 'Check back soon for fresh deals!'}
+              </p>
               {search && <button className="pos-outline-btn" onClick={() => setSearch('')}>Clear search</button>}
             </div>
           ) : (
@@ -601,7 +772,7 @@ export default function CustomerPage({ onBack }) {
                     </div>
                     <button
                       className="pos-receipt-btn"
-                      onClick={() => downloadReceipt(confirmedOrders, form)}
+                      onClick={() => downloadReceiptsGrouped(confirmedOrders, form)}
                     >
                       Download Receipt
                     </button>
@@ -611,11 +782,11 @@ export default function CustomerPage({ onBack }) {
                 {!lookupDone ? (
                   <form className="pos-lookup-form" onSubmit={handleLookup}>
                     <p className="pos-lookup-title">View Your Orders</p>
-                    <p className="pos-lookup-sub">Enter the email and phone number you used when ordering.</p>
-                    <input className="pos-input" type="email" placeholder="Email address"
-                      value={lookupForm.email} onChange={e => setLookupForm(p => ({ ...p, email: e.target.value }))} required />
-                    <input className="pos-input" type="tel" placeholder="Phone number"
-                      value={lookupForm.phone} onChange={e => setLookupForm(p => ({ ...p, phone: e.target.value }))} required />
+                    <p className="pos-lookup-sub">Enter the email or phone number you used when ordering.</p>
+                    <input className="pos-input" type="email" placeholder="Email address (optional)"
+                      value={lookupForm.email} onChange={e => setLookupForm(p => ({ ...p, email: e.target.value }))} />
+                    <input className="pos-input" type="tel" placeholder="Phone e.g. +923001234567 or 0300… (optional)"
+                      value={lookupForm.phone} onChange={e => setLookupForm(p => ({ ...p, phone: e.target.value }))} />
                     {lookupError && <p className="pos-error">{lookupError}</p>}
                     <button className="pos-place-order-btn" type="submit" disabled={lookupLoading}>
                       {lookupLoading ? 'Looking up...' : 'Find My Orders'}
@@ -663,7 +834,7 @@ export default function CustomerPage({ onBack }) {
                         </p>
                         <button
                           className="pos-receipt-btn-sm"
-                          onClick={() => downloadReceipt([o], lookupDone && !confirmedOrders ? lookupForm : null)}
+                          onClick={() => downloadReceipt([o], lookupDone && !confirmedOrders ? lookupForm : null, o.tenant_name || receiptTenantName)}
                         >
                           Download Receipt
                         </button>

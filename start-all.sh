@@ -26,4 +26,12 @@ sleep 2
 # 4. Start Mobile App
 echo "📱 Starting Mobile App Expo Server..."
 cd mobile-app
+
+# Pre-launch Expo Go on a booted iOS simulator so pressing "i" does not time out (NSPOSIX 60).
+if xcrun simctl list devices booted 2>/dev/null | grep -q "Booted"; then
+  echo "📲 Warming up Expo Go on booted simulator..."
+  xcrun simctl launch booted host.exp.Exponent >/dev/null 2>&1 || true
+  sleep 2
+fi
+
 EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK=1 npx expo start -c
