@@ -1515,7 +1515,7 @@ function App() {
                   )}
 
                   <Link
-                    to={onMainSite ? ROUTES.home : ROUTES.login}
+                    to={onMainSite ? ROUTES.home : ROUTES.shop}
                     style={{
                       display: 'block',
                       width: '100%',
@@ -1532,7 +1532,7 @@ function App() {
                       textAlign: 'center',
                     }}
                   >
-                    Back to {onMainSite ? 'Home' : 'Login'}
+                    Back to {onMainSite ? 'Home' : 'Storefront'}
                   </Link>
                 </form>
               </>
