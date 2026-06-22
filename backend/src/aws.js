@@ -14,6 +14,15 @@ function publicS3Url(key) {
 const hasCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
 const isTestEnv = process.env.NODE_ENV === 'test';
 
+function getApiPublicBase() {
+  return (
+    process.env.API_PUBLIC_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    process.env.APP_URL ||
+    'http://localhost:3000'
+  ).replace(/\/$/, '');
+}
+
 let s3Client = null;
 let sesClient = null;
 
@@ -187,8 +196,7 @@ function getClientImageUrl(url) {
   if (url.startsWith('data:')) return url;
   const key = extractS3Key(url);
   if (!key) return url;
-  const base = (process.env.API_PUBLIC_URL || process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-  return `${base}/api/public/media?key=${encodeURIComponent(key)}`;
+  return `${getApiPublicBase()}/api/public/media?key=${encodeURIComponent(key)}`;
 }
 
 /**

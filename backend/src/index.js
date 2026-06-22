@@ -266,6 +266,8 @@ app.get('/api/public/media', async (req, res) => {
   if (!key || typeof key !== 'string' || key.includes('..')) {
     return res.status(400).json({ error: 'Invalid media key' });
   }
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   const ok = await streamS3Object(decodeURIComponent(key), res);
   if (!ok) res.status(404).json({ error: 'Image not found' });
 });
