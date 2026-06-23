@@ -129,7 +129,10 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
   const [pickupDays, setPickupDays] = useState([]);
   const [pickupFrom, setPickupFrom] = useState('18:00');
   const [pickupTo, setPickupTo] = useState('20:00');
-  const FOOD_CATEGORIES = ['Bakery', 'Meals', 'Drinks', 'Snacks', 'Desserts', 'Coffee & Tea', 'Sandwiches', 'Pizza', 'Other'];
+  const FOOD_CATEGORIES = [
+    'Groceries', 'Household', 'Fresh Food', 'Bakery', 'Drinks', 'Snacks',
+    'Frozen', 'Personal Care', 'Meals', 'Desserts', 'Coffee & Tea', 'Sandwiches', 'Other',
+  ];
 
   const buildPickupTime = (days, from, to) => days.length === 0 ? `${from} - ${to}` : `${days.join(', ')} ${from} - ${to}`;
   const togglePickupDay = (day) => {
@@ -565,7 +568,7 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
           data={sellerFoodItems}
           keyExtractor={i => i.id.toString()}
           contentContainerStyle={s.listPad}
-          ListEmptyComponent={renderEmpty('fast-food-outline', 'No open food items yet.')}
+          ListEmptyComponent={renderEmpty('cart-outline', 'No products yet.')}
           renderItem={({ item }) => (
             <View style={s.card}>
               <View style={s.cardRow}>

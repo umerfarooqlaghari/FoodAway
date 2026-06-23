@@ -78,6 +78,17 @@ if (!hasTestDb) {
       expect(res.body.user.storeUrl).toContain('test-kfc');
     });
 
+    it('allows seller login from Grabengo mobile app without subdomain', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .set('X-Grabengo-Client', 'mobile')
+        .send({ email: sellerEmail, password: sellerPassword });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.user.role).toBe('SellersAdmin');
+      expect(res.body.user.subdomain).toBe('test-kfc');
+    });
+
     it('blocks seller login on wrong tenant subdomain', async () => {
       const res = await request(app)
         .post('/api/auth/login')

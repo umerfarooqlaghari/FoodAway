@@ -500,8 +500,8 @@ export default function CustomerPage({
 
       {/* ── Header ─────────────────────────────────── */}
       <header className="pos-header">
-        <button className="pos-back-btn" onClick={onBack}>
-          <ArrowLeftIcon size={14} /> Back
+        <button type="button" className="pos-back-btn" onClick={onBack} aria-label="Go back">
+          <ArrowLeftIcon size={14} /> <span className="pos-back-label">Back</span>
         </button>
         <div className="pos-logo pos-logo--tenant">
           {tenantName ? (
@@ -529,7 +529,7 @@ export default function CustomerPage({
           )}
         </div>
         {sellerLoginUrl && (
-          <a href={sellerLoginUrl} style={{ fontSize: 12, color: '#888', marginLeft: 8, whiteSpace: 'nowrap' }}>Seller login</a>
+          <a href={sellerLoginUrl} className="pos-seller-link">Seller login</a>
         )}
         <button className="pos-mobile-cart-btn" onClick={() => setMobileCartOpen(true)}>
           <CartIcon size={20} color="#fff" />

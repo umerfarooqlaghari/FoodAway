@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "Grabengo",
-    "slug": "grabengo",
-    "version": "1.0.4",
+    "slug": "mobile-app",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "grabengo",
@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.alphadevs.mobileapp",
-      "buildNumber": "5",
+      "buildNumber": "8",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -51,10 +51,19 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FF5A00",
-          "android": {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "ios": {
+            "backgroundColor": "#FFFFFF",
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "imageWidth": 220
+          },
+          "android": {
+            "backgroundColor": "#FFFFFF",
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 220
           }
         }
       ],

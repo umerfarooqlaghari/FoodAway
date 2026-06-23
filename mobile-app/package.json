@@ -51,11 +51,11 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
-    "start:localhost": "expo start --localhost",
+    "start": "EXPO_PUBLIC_API_URL=http://localhost:3000/api ./node_modules/.bin/expo start --lan --go",
+    "start:localhost": "EXPO_PUBLIC_API_URL=http://localhost:3000/api ./node_modules/.bin/expo start --lan --go",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
-    "ios": "xcrun simctl launch booted host.exp.Exponent 2>/dev/null; expo start --ios --localhost",
+    "ios": "EXPO_PUBLIC_API_URL=http://localhost:3000/api ./node_modules/.bin/expo start --ios --lan --go",
     "web": "expo start --web",
     "lint": "expo lint"
   },

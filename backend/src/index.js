@@ -86,6 +86,10 @@ function resolveRequestSubdomain(req) {
   return validation.ok ? validation.subdomain : null;
 }
 
+function isMobileAppClient(req) {
+  return req.headers['x-grabengo-client'] === 'mobile';
+}
+
 async function fetchOrderForNotification(orderId) {
   return db.prepare(`
     SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
@@ -372,13 +376,14 @@ app.post('/api/auth/login', async (req, res) => {
       await ensureTenantSubdomain(db, tenant);
       const storeUrl = tenantStoreUrl(tenant.subdomain);
       if (!requestSubdomain) {
-        return res.status(403).json({
-          error: 'Please sign in on your store portal.',
-          storeUrl,
-          subdomain: tenant.subdomain,
-        });
-      }
-      if (requestSubdomain !== tenant.subdomain) {
+        if (!isMobileAppClient(req)) {
+          return res.status(403).json({
+            error: 'Please sign in on your store portal.',
+            storeUrl,
+            subdomain: tenant.subdomain,
+          });
+        }
+      } else if (requestSubdomain !== tenant.subdomain) {
         return res.status(403).json({
           error: 'This account belongs to a different store.',
           storeUrl,

@@ -61,7 +61,7 @@ export default function ContactUs({ onBack }) {
         Have a question, issue, or idea? Fill in the form below and our team will get back to you as soon as possible.
       </PageSubtitle>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '3rem', alignItems: 'start' }}>
+      <div className="contact-page-grid">
 
         {/* Form column */}
         <div>
@@ -86,7 +86,7 @@ export default function ContactUs({ onBack }) {
             </div>
           ) : (
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="contact-form-row">
                 <div>
                   <label style={labelStyle}>Full Name *</label>
                   <input type="text" required value={form.name} onChange={set('name')}

@@ -1435,8 +1435,8 @@ function App() {
     const loginLogo = onTenantSite && tenantBranding?.logo ? tenantBranding.logo : grabengoFavicon;
 
     return (
-        <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%)' }}>
-          <div className="glass-card animate-fade-in" style={{ padding: '2.5rem', width: '420px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
+        <div className="auth-page">
+          <div className="glass-card animate-fade-in auth-card">
             <img src={loginLogo} alt="Portal Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain', borderRadius: onTenantSite && tenantBranding?.logo ? '12px' : undefined }} />
 
             {forgotPasswordStep === 'login' && (
@@ -1654,8 +1654,8 @@ function App() {
   };
 
   const renderRegisterPage = () => (
-        <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%)' }}>
-          <div className="glass-card animate-fade-in" style={{ padding: '2.5rem', width: '460px', maxWidth: '95vw', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
+        <div className="auth-page">
+          <div className="glass-card animate-fade-in auth-card auth-card--wide">
             <img src={grabengoFavicon} alt="Grabengo Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
             <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Register as Seller</h2>
             <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on Grabengo and start selling surplus food</p>
@@ -2586,17 +2586,17 @@ function App() {
                       parsedTags = [];
                     }
                     return (
-                      <div key={r.id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
-                        <div style={{ width: '48px', height: '48px', borderRadius: '24px', backgroundColor: '#FFF7ED', color: '#EA580C', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '1.2rem', flexShrink: 0 }}>
+                      <div key={r.id} className="glass-card portal-review-card">
+                        <div className="portal-review-avatar">
                           {r.customer_name ? r.customer_name.charAt(0).toUpperCase() : 'U'}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div className="portal-review-body">
+                          <div className="portal-review-header">
                             <div>
                               <strong style={{ fontSize: '1.1rem' }}>{r.customer_name}</strong>
                               <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginLeft: '0.8rem' }}>for <strong style={{ color: 'var(--text-primary)' }}>{r.store_name}</strong></span>
                             </div>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                            <span className="portal-review-date">
                               {new Date(r.created_at).toLocaleDateString()}
                             </span>
                           </div>

@@ -52,13 +52,7 @@ export default function Status({ onBack }) {
       <PageSubtitle>Real-time status of Grabengo platform services.</PageSubtitle>
 
       {/* Overall status banner */}
-      <div style={{
-        background: allOperational ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-        border: `1px solid ${allOperational ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
-        borderRadius: '14px', padding: '1.25rem 1.5rem',
-        display: 'flex', alignItems: 'center', gap: '0.75rem',
-        marginBottom: '2.5rem'
-      }}>
+      <div className={`status-banner ${allOperational ? 'status-banner--ok' : 'status-banner--warn'}`}>
         <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: allOperational ? '#10B981' : '#F59E0B', flexShrink: 0 }} />
         <div>
           <p style={{ fontWeight: '700', color: allOperational ? '#10B981' : '#F59E0B', fontSize: '1.05rem' }}>
@@ -75,11 +69,7 @@ export default function Status({ onBack }) {
           {services.map(({ name, key }) => {
             const s = statusConfig[getStatus(key)];
             return (
-              <div key={key} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-                borderRadius: '10px', padding: '0.9rem 1.2rem'
-              }}>
+              <div key={key} className="status-service-row">
                 <span style={{ color: '#e5e7eb', fontWeight: '500' }}>{name}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: s.bg, border: `1px solid ${s.border}`, borderRadius: '999px', padding: '3px 12px', fontSize: '0.8rem', fontWeight: '600', color: s.color }}>
                   <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: s.dot }} />

@@ -190,6 +190,21 @@ const getDevApiUrl = () => {
 };
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || getDevApiUrl();
+axios.defaults.headers.common['X-Grabengo-Client'] = 'mobile';
+
+const PRODUCT_CATEGORIES = [
+  'Groceries', 'Household', 'Fresh Food', 'Bakery', 'Drinks', 'Snacks',
+  'Frozen', 'Personal Care', 'Meals', 'Desserts', 'Coffee & Tea', 'Sandwiches', 'Other',
+];
+const LEGACY_PRODUCT_CATEGORIES = ['Pizza', 'Coffee & Drinks', 'Sushi', 'Salads'];
+const BROWSE_PRODUCT_FILTERS = ['All', ...PRODUCT_CATEGORIES, ...LEGACY_PRODUCT_CATEGORIES.filter((c) => !PRODUCT_CATEGORIES.includes(c))];
+
+const CATEGORY_COLORS = {
+  Groceries: '#DCFCE7', Household: '#E0E7FF', 'Fresh Food': '#D1FAE5',
+  Bakery: '#FEF3C7', Meals: '#D1FAE5', Drinks: '#DBEAFE', Snacks: '#FCE7F3',
+  Frozen: '#E0F2FE', 'Personal Care': '#F3E8FF', Desserts: '#EDE9FE',
+  'Coffee & Tea': '#FFEDD5', Sandwiches: '#FEE2E2', Other: '#F3F4F6',
+};
 
 // Play satisfying coin sound and trigger vibration feedback
 const playSoundAndHaptic = async (type) => {
@@ -1382,7 +1397,7 @@ function LoginScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.authContainer}>
         <Text style={styles.headerTitle}>Welcome Back</Text>
-        <Text style={styles.headerSubtitle}>Login to rescue surplus food.</Text>
+        <Text style={styles.headerSubtitle}>Login as a customer or seller.</Text>
 
         <TextInput
           style={styles.input}
@@ -1718,13 +1733,84 @@ function TenantBrandLogo({ tenant, size = 56 }) {
   );
 }
 
+function CustomerProfileSheet({ visible, onClose, user, logout, updateUser, token }) {
+  const insets = useSafeAreaInsets();
+  const [editName, setEditName] = useState(user?.name || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible) setEditName(user?.name || '');
+  }, [visible, user?.name]);
+
+  const handleSave = async () => {
+    if (!user?.id) return;
+    if (!editName.trim()) return Alert.alert('Required', 'Please enter your name.');
+    setSaving(true);
+    try {
+      await axios.put(`${API_URL}/users/${user.id}`, { name: editName.trim() }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await updateUser({ name: editName.trim() });
+      Alert.alert('Saved', 'Profile updated.');
+      onClose();
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || 'Could not save profile.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} activeOpacity={1} onPress={onClose}>
+        <TouchableWithoutFeedback>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 24, paddingBottom: Math.max(insets.bottom, 24) }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>My Profile</Text>
+              <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <Ionicons name="close" size={24} color="#111827" />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 6 }}>Email</Text>
+            <Text style={{ fontSize: 16, color: '#111827', fontWeight: '600', marginBottom: 16 }}>{user?.email}</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 6 }}>Name</Text>
+            <TextInput
+              style={styles.input}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Your name"
+              placeholderTextColor="#94a3b8"
+            />
+            <TouchableOpacity style={[styles.primaryButton, { marginTop: 8 }]} onPress={handleSave} disabled={saving}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Changes</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: '#FEE2E2', borderRadius: 30 }}
+              onPress={() => { onClose(); logout(); }}
+            >
+              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 16 }}>Log Out</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableWithoutFeedback>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
 function ExploreTenantsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { user, logout, updateUser, token } = useContext(AuthContext);
+  const { cartTotalCount } = useContext(CartContext);
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [coords, setCoords] = useState(null);
+  const [locationLabel, setLocationLabel] = useState('Using your location');
+  const [sortMode, setSortMode] = useState('nearest');
+  const [maxDistance, setMaxDistance] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const fetchTenants = async () => {
     setLoading(true);
@@ -1738,8 +1824,22 @@ function ExploreTenantsScreen({ navigation }) {
         lat = loc.coords.latitude;
         lng = loc.coords.longitude;
         setCoords({ lat, lng });
+        try {
+          const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+          if (place) {
+            setLocationLabel([place.city, place.region].filter(Boolean).join(', ') || 'Near you');
+          }
+        } catch (_) {
+          setLocationLabel('Near you');
+        }
+      } else {
+        setCoords(null);
+        setLocationLabel('Location off — enable for nearby brands');
       }
-    } catch (_) {}
+    } catch (_) {
+      setCoords(null);
+      setLocationLabel('Location unavailable');
+    }
 
     try {
       const params = new URLSearchParams();
@@ -1751,14 +1851,10 @@ function ExploreTenantsScreen({ navigation }) {
       const qs = params.toString();
       const url = `${API_URL}/public/tenants${qs ? `?${qs}` : ''}`;
       const res = await axios.get(url);
-      if (!Array.isArray(res.data)) {
-        throw new Error(`Unexpected response from ${API_URL}`);
-      }
+      if (!Array.isArray(res.data)) throw new Error(`Unexpected response from ${API_URL}`);
       setTenants(res.data);
     } catch (e) {
-      const message = e.response?.data?.error
-        || e.message
-        || 'Could not load brands. Check that the backend is running.';
+      const message = e.response?.data?.error || e.message || 'Could not load brands. Check that the backend is running.';
       setLoadError(message);
       setTenants([]);
     } finally {
@@ -1770,96 +1866,223 @@ function ExploreTenantsScreen({ navigation }) {
     fetchTenants();
   }, []);
 
-  const filtered = tenants.filter((t) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (t.name || '').toLowerCase().includes(q) || (t.subdomain || '').toLowerCase().includes(q);
-  });
+  const filtered = tenants
+    .filter((t) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (t.name || '').toLowerCase().includes(q) || (t.subdomain || '').toLowerCase().includes(q);
+    })
+    .filter((t) => {
+      if (maxDistance == null || t.distance_km == null) return true;
+      return t.distance_km <= maxDistance;
+    })
+    .sort((a, b) => {
+      if (sortMode === 'name') return (a.name || '').localeCompare(b.name || '');
+      if (sortMode === 'stores') return (b.store_count || 0) - (a.store_count || 0);
+      if (a.distance_km != null && b.distance_km != null) return a.distance_km - b.distance_km;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+  const avatarUri = user?.logo || `https://i.pravatar.cc/100?img=${user?.id || 12}`;
+  const SORT_OPTIONS = [
+    { key: 'nearest', label: 'Nearest', icon: 'navigate-outline' },
+    { key: 'name', label: 'A–Z', icon: 'text-outline' },
+    { key: 'stores', label: 'Most stores', icon: 'storefront-outline' },
+  ];
+  const DISTANCE_OPTIONS = [
+    { key: null, label: 'Any distance' },
+    { key: 5, label: 'Within 5 km' },
+    { key: 15, label: 'Within 15 km' },
+    { key: 50, label: 'Within 50 km' },
+  ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }} edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <StatusBar style="dark" />
-      <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
-        <Text style={{ fontSize: 28, fontWeight: '900', color: '#111827' }}>Explore Brands</Text>
-        <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>
-          Choose a brand to browse their stores and offers{coords ? ' · sorted by nearest' : ''}.
-        </Text>
-        <View style={{ backgroundColor: '#F3F4F6', borderRadius: 30, paddingHorizontal: 20, paddingVertical: 14, marginTop: 16, flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="search" size={18} color="#9CA3AF" style={{ marginRight: 10 }} />
-          <TextInput
-            placeholder="Search KFC, Naheed, Galaxy..."
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={{ flex: 1, fontSize: 15, color: '#111827' }}
-          />
-        </View>
-      </View>
-
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#EA580C" />
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ padding: 20, paddingBottom: Math.max(insets.bottom + 20, 40) }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 }}>
-              <Text style={{ fontSize: 40 }}>{loadError ? '⚠️' : '🏪'}</Text>
-              <Text style={{ color: '#111827', marginTop: 8, fontWeight: '700', textAlign: 'center' }}>
-                {loadError ? 'Could not load brands' : 'No brands found'}
-              </Text>
-              <Text style={{ color: '#6B7280', marginTop: 6, textAlign: 'center', fontSize: 13 }}>
-                {loadError
-                  ? `${loadError}\n\nAPI: ${API_URL}`
-                  : searchQuery.trim()
-                    ? 'Try a different search term.'
-                    : 'No active stores are listed yet.'}
-              </Text>
-              {loadError ? (
-                <TouchableOpacity
-                  onPress={fetchTenants}
-                  style={{ marginTop: 16, backgroundColor: '#EA580C', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => navigation.replace('Discover', { tenant: item })}
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: 20,
-                padding: 16,
-                marginBottom: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.06,
-                shadowRadius: 8,
-                elevation: 2,
-              }}
-            >
-              <TenantBrandLogo tenant={item} size={56} />
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827' }}>{item.name}</Text>
-                <Text style={{ fontSize: 12, color: '#EA580C', fontWeight: '600', marginTop: 2 }}>{item.subdomain}.grabengo.store</Text>
-                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                  {item.store_count} store{item.store_count !== 1 ? 's' : ''}
-                  {item.distance_km != null ? ` · ${item.distance_km < 1 ? `${Math.round(item.distance_km * 1000)} m` : `${item.distance_km.toFixed(1)} km`}` : ''}
-                </Text>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Header */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <Image source={require('./assets/images/icon.png')} style={{ width: 36, height: 36, borderRadius: 10, marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: '#111827' }}>Grabengo</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280' }} numberOfLines={1}>Hi, {user?.name?.split(' ')[0] || 'there'}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+            </View>
+            <TouchableOpacity onPress={() => setProfileOpen(true)} style={{ marginRight: 10 }}>
+              <Image source={{ uri: avatarUri }} style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: '#EA580C' }} />
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setMenuOpen(true)}
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Ionicons name="menu" size={22} color="#111827" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Location row */}
+          <TouchableOpacity onPress={fetchTenants} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, backgroundColor: '#FFF7ED', borderRadius: 14, padding: 12 }}>
+            <Ionicons name="location" size={20} color="#EA580C" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#EA580C', textTransform: 'uppercase' }}>Your location</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }} numberOfLines={1}>{locationLabel}</Text>
+            </View>
+            <Ionicons name="refresh" size={18} color="#EA580C" />
+          </TouchableOpacity>
+
+          {/* Search */}
+          <View style={{ backgroundColor: '#F3F4F6', borderRadius: 30, paddingHorizontal: 18, paddingVertical: 12, marginTop: 12, flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="search" size={18} color="#9CA3AF" style={{ marginRight: 10 }} />
+            <TextInput
+              placeholder="Search brands..."
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={{ flex: 1, fontSize: 15, color: '#111827' }}
+            />
+          </View>
+
+          {/* Sort filters */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+            {SORT_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                onPress={() => setSortMode(opt.key)}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                  backgroundColor: sortMode === opt.key ? '#EA580C' : '#F3F4F6',
+                }}
+              >
+                <Ionicons name={opt.icon} size={14} color={sortMode === opt.key ? '#fff' : '#6B7280'} />
+                <Text style={{ fontWeight: '700', fontSize: 13, color: sortMode === opt.key ? '#fff' : '#6B7280' }}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Distance filters */}
+          {coords && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+              {DISTANCE_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={String(opt.key)}
+                  onPress={() => setMaxDistance(opt.key)}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    backgroundColor: maxDistance === opt.key ? '#111827' : '#F9FAFB',
+                    borderWidth: 1, borderColor: maxDistance === opt.key ? '#111827' : '#E5E7EB',
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', fontSize: 12, color: maxDistance === opt.key ? '#fff' : '#6B7280' }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           )}
-        />
-      )}
-    </SafeAreaView>
+        </View>
+
+        {/* Quick access: orders without picking a brand */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Bookings')}
+          style={{ marginHorizontal: 20, marginTop: 16, backgroundColor: '#111827', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+            <Ionicons name="receipt" size={22} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>View my orders</Text>
+            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 2 }}>Check past bookings — no brand needed</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827', marginHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
+          Browse brands
+        </Text>
+
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#EA580C" />
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 }}>
+                <Text style={{ fontSize: 40 }}>{loadError ? '⚠️' : '🏪'}</Text>
+                <Text style={{ color: '#111827', marginTop: 8, fontWeight: '700', textAlign: 'center' }}>
+                  {loadError ? 'Could not load brands' : 'No brands found'}
+                </Text>
+                <Text style={{ color: '#6B7280', marginTop: 6, textAlign: 'center', fontSize: 13 }}>
+                  {loadError ? `${loadError}\n\nAPI: ${API_URL}` : searchQuery.trim() ? 'Try a different search.' : 'No active stores listed yet.'}
+                </Text>
+                {loadError ? (
+                  <TouchableOpacity onPress={fetchTenants} style={{ marginTop: 16, backgroundColor: '#EA580C', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 }}>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            }
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Discover', { tenant: item })}
+                style={{
+                  backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12,
+                  flexDirection: 'row', alignItems: 'center',
+                  borderWidth: 1, borderColor: '#F3F4F6',
+                  shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+                }}
+              >
+                <TenantBrandLogo tenant={item} size={56} />
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827' }}>{item.name}</Text>
+                  <Text style={{ fontSize: 12, color: '#EA580C', fontWeight: '600', marginTop: 2 }}>{item.subdomain}.grabengo.store</Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                    {item.store_count} store{item.store_count !== 1 ? 's' : ''}
+                    {item.distance_km != null ? ` · ${item.distance_km < 1 ? `${Math.round(item.distance_km * 1000)} m` : `${item.distance_km.toFixed(1)} km`}` : ''}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+            )}
+          />
+        )}
+      </SafeAreaView>
+
+      <SharedBottomNav navigation={navigation} activeTab="Explore" cartTotalCount={cartTotalCount} />
+
+      <CustomerProfileSheet visible={profileOpen} onClose={() => setProfileOpen(false)} user={user} logout={logout} updateUser={updateUser} token={token} />
+
+      {/* Side menu */}
+      <Modal visible={menuOpen} animationType="fade" transparent onRequestClose={() => setMenuOpen(false)}>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} activeOpacity={1} onPress={() => setMenuOpen(false)} />
+          <View style={{ width: '78%', backgroundColor: '#fff', paddingTop: Math.max(insets.top, 20), paddingHorizontal: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 16, elevation: 10 }}>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 24 }}>Menu</Text>
+            {[
+              { icon: 'home-outline', label: 'Browse brands', action: () => { setMenuOpen(false); navigation.navigate('ExploreTenants'); } },
+              { icon: 'receipt-outline', label: 'My orders', action: () => { setMenuOpen(false); navigation.navigate('Bookings'); } },
+              { icon: 'cart-outline', label: 'Cart', action: () => { setMenuOpen(false); navigation.navigate('Cart'); } },
+              { icon: 'person-outline', label: 'Profile', action: () => { setMenuOpen(false); setProfileOpen(true); } },
+            ].map((item) => (
+              <TouchableOpacity key={item.label} onPress={item.action} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', gap: 14 }}>
+                <Ionicons name={item.icon} size={22} color="#374151" />
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              onPress={() => { setMenuOpen(false); logout(); }}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, marginTop: 12, gap: 14 }}
+            >
+              <Ionicons name="log-out-outline" size={22} color="#DC2626" />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#DC2626' }}>Log out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -1867,17 +2090,15 @@ function SplashScreen({ navigation }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       navigation.replace('ExploreTenants');
-    }, 2000);
+    }, 800);
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#EA580C', justifyContent: 'center', alignItems: 'center' }}>
-      <StatusBar style="light" />
-      <Image source={require('./assets/images/grabengo_landing.png')} style={{ width: 250, height: 250, resizeMode: 'contain', marginBottom: 30 }} />
-      <Text style={{ fontSize: 40, fontWeight: '900', color: '#FFFFFF', letterSpacing: 2 }}>Grabengo</Text>
-      <Text style={{ fontSize: 16, color: '#FDE68A', marginTop: 10, letterSpacing: 1 }}>Grab & Go</Text>
-      <ActivityIndicator color="#FFFFFF" size="large" style={{ marginTop: 40 }} />
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+      <StatusBar style="dark" />
+      <Image source={require('./assets/images/splash-icon.png')} style={{ width: 260, height: 260, resizeMode: 'contain' }} />
+      <ActivityIndicator color="#EA580C" size="large" style={{ marginTop: 32 }} />
     </View>
   );
 }
@@ -1885,16 +2106,27 @@ function SplashScreen({ navigation }) {
 // --- Shared Bottom Nav ---
 const SharedBottomNav = ({ navigation, activeTab, cartTotalCount, onMapPress, onReviewsPress, navParams }) => {
   const discoverParams = navParams || {};
+  const goHome = () => {
+    if (activeTab === 'Explore' || activeTab === 'Home') return;
+    if (discoverParams?.tenant) {
+      navigation.navigate('Discover', discoverParams);
+    } else {
+      navigation.navigate('ExploreTenants');
+    }
+  };
   return (
     <View style={styles.bottomNavContainer}>
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Home' && navigation.navigate('Discover', discoverParams)}>
-          <View style={{ backgroundColor: activeTab === 'Home' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name={activeTab === 'Home' ? "home" : "home-outline"} size={activeTab === 'Home' ? 20 : 24} color={activeTab === 'Home' ? "white" : "#9CA3AF"} />
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={goHome}>
+          <View style={{ backgroundColor: (activeTab === 'Home' || activeTab === 'Explore') ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+            <Ionicons name={(activeTab === 'Home' || activeTab === 'Explore') ? "home" : "home-outline"} size={(activeTab === 'Home' || activeTab === 'Explore') ? 20 : 24} color={(activeTab === 'Home' || activeTab === 'Explore') ? "white" : "#9CA3AF"} />
           </View>
-          <Text style={{ color: activeTab === 'Home' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Home' ? '700' : '600' }}>Home</Text>
+          <Text style={{ color: (activeTab === 'Home' || activeTab === 'Explore') ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: (activeTab === 'Home' || activeTab === 'Explore') ? '700' : '600' }}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={onMapPress || (() => navigation.navigate('Discover', { ...discoverParams, openMap: true }))}>
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={onMapPress || (() => {
+          if (discoverParams?.tenant) navigation.navigate('Discover', { ...discoverParams, openMap: true });
+          else Alert.alert('Pick a brand', 'Select a brand first to view stores on the map.');
+        })}>
           <View style={{ backgroundColor: activeTab === 'Map' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
             <Ionicons name={activeTab === 'Map' ? "map" : "map-outline"} size={activeTab === 'Map' ? 20 : 24} color={activeTab === 'Map' ? "white" : "#9CA3AF"} />
           </View>
@@ -1917,7 +2149,10 @@ const SharedBottomNav = ({ navigation, activeTab, cartTotalCount, onMapPress, on
           </View>
           <Text style={{ color: activeTab === 'Bookings' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Bookings' ? '700' : '600' }}>Bookings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={onReviewsPress || (() => navigation.navigate('Discover', { openReviews: true }))}>
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={onReviewsPress || (() => {
+          if (discoverParams?.tenant) navigation.navigate('Discover', { openReviews: true, ...discoverParams });
+          else Alert.alert('Pick a brand', 'Select a brand first to browse store reviews.');
+        })}>
           <View style={{ backgroundColor: activeTab === 'Reviews' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
             <Ionicons name={activeTab === 'Reviews' ? "star" : "star-outline"} size={activeTab === 'Reviews' ? 20 : 24} color={activeTab === 'Reviews' ? "white" : "#9CA3AF"} />
           </View>
@@ -1939,6 +2174,7 @@ function DiscoverScreen({ navigation, route }) {
   const [stores, setStores] = useState([]);
   const [foodItems, setFoodItems] = useState([]);
   const [activeTab, setActiveTab] = useState('bags'); // 'bags' | 'food'
+  const [productCategoryFilter, setProductCategoryFilter] = useState('All');
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(null);
   const [addressName, setAddressName] = useState('Locating...');
@@ -2262,11 +2498,7 @@ function DiscoverScreen({ navigation, route }) {
       ? JSON.parse(item.images)[0]
       : 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?q=80&w=400&auto=format&fit=crop';
 
-    const categoryColors = {
-      'Bakery': '#FEF3C7', 'Meals': '#D1FAE5', 'Drinks': '#DBEAFE',
-      'Snacks': '#FCE7F3', 'Desserts': '#EDE9FE', 'Other': '#F3F4F6'
-    };
-    const catColor = categoryColors[item.category] || '#F3F4F6';
+    const catColor = CATEGORY_COLORS[item.category] || '#F3F4F6';
 
     const handleNavigate = () => {
       setMapVisible(true);
@@ -2348,13 +2580,14 @@ function DiscoverScreen({ navigation, route }) {
   const filteredFoodItems = foodItems.filter(item => {
     const matchesStore = selectedStoreId ? item.store_id === selectedStoreId : true;
     const matchesFavorite = favoritesOnly ? item.is_favorited === 1 : true;
+    const matchesCategory = productCategoryFilter === 'All' || item.category === productCategoryFilter;
     const matchesSearch = searchQuery
       ? item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.store_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.category?.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
-    return matchesStore && matchesFavorite && matchesSearch;
+    return matchesStore && matchesFavorite && matchesCategory && matchesSearch;
   });
 
   const filteredStores = stores.filter(store => {
@@ -2533,17 +2766,17 @@ function DiscoverScreen({ navigation, route }) {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 32, marginBottom: 16, alignItems: 'center', gap: 8 }}>
         <Text numberOfLines={1} style={{ fontSize: 20, fontWeight: '800', color: '#111827', flex: 1 }}>
           {selectedStoreId
-            ? `${stores.find(s => s.id === selectedStoreId)?.name || 'Store'} ${activeTab === 'bags' ? 'Bags' : 'Food'}`
-            : activeTab === 'bags' ? 'All Surprise Bags' : 'Open Food'}
+            ? `${stores.find(s => s.id === selectedStoreId)?.name || 'Store'} ${activeTab === 'bags' ? 'Bags' : 'Products'}`
+            : activeTab === 'bags' ? 'All Surprise Bags' : 'All Products'}
         </Text>
         <Text style={{ fontSize: 13, color: '#EA580C', fontWeight: '700', flexShrink: 0 }}>{activeCount} available</Text>
       </View>
 
       {activeCount === 0 && !loading && (
         <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-          <Text style={{ fontSize: 48 }}>{activeTab === 'bags' ? '🛍️' : '🍽️'}</Text>
+          <Text style={{ fontSize: 48 }}>{activeTab === 'bags' ? '🛍️' : '🛒'}</Text>
           <Text style={{ color: '#374151', fontSize: 16, fontWeight: '700', marginTop: 12 }}>
-            {activeTab === 'bags' ? 'No Bags Available' : 'No Food Listings'}
+            {activeTab === 'bags' ? 'No Bags Available' : 'No Products Listed'}
           </Text>
           <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 6, textAlign: 'center' }}>
             {selectedStoreId ? 'Nothing here from this store yet.' : 'Check back later!'}
@@ -2628,7 +2861,7 @@ function DiscoverScreen({ navigation, route }) {
             {/* Tab Toggle */}
             <View style={{ flexDirection: 'row', marginHorizontal: 20, marginBottom: 4, backgroundColor: '#F3F4F6', borderRadius: 28, padding: 4 }}>
               <TouchableOpacity
-                onPress={() => setActiveTab('bags')}
+                onPress={() => { setActiveTab('bags'); setProductCategoryFilter('All'); }}
                 style={{ flex: 1, paddingVertical: 10, borderRadius: 24, alignItems: 'center', backgroundColor: activeTab === 'bags' ? '#EA580C' : 'transparent' }}
               >
                 <Text style={{ fontWeight: '700', fontSize: 14, color: activeTab === 'bags' ? 'white' : '#6B7280' }}>🎁 Surprise Bags</Text>
@@ -2637,9 +2870,27 @@ function DiscoverScreen({ navigation, route }) {
                 onPress={() => setActiveTab('food')}
                 style={{ flex: 1, paddingVertical: 10, borderRadius: 24, alignItems: 'center', backgroundColor: activeTab === 'food' ? '#EA580C' : 'transparent' }}
               >
-                <Text style={{ fontWeight: '700', fontSize: 14, color: activeTab === 'food' ? 'white' : '#6B7280' }}>🍽️ Open Food</Text>
+                <Text style={{ fontWeight: '700', fontSize: 14, color: activeTab === 'food' ? 'white' : '#6B7280' }}>🛒 Products</Text>
               </TouchableOpacity>
             </View>
+
+            {activeTab === 'food' && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, marginBottom: 4 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
+                {BROWSE_PRODUCT_FILTERS.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => setProductCategoryFilter(cat)}
+                    style={{
+                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                      backgroundColor: productCategoryFilter === cat ? '#111827' : '#FFFFFF',
+                      borderWidth: 1, borderColor: productCategoryFilter === cat ? '#111827' : '#E5E7EB',
+                    }}
+                  >
+                    <Text style={{ fontWeight: '600', fontSize: 12, color: productCategoryFilter === cat ? '#fff' : '#6B7280' }}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
 
             <FlatList
               data={activeItems}
@@ -3400,8 +3651,8 @@ function StoreDetailsScreen({ navigation, route }) {
               iconName = isActive ? 'gift' : 'gift-outline';
               labelText = 'Bags';
             } else if (tab === 'menu') {
-              iconName = isActive ? 'fast-food' : 'fast-food-outline';
-              labelText = 'Menu';
+              iconName = isActive ? 'cart' : 'cart-outline';
+              labelText = 'Products';
             } else {
               iconName = isActive ? 'star' : 'star-outline';
               labelText = 'Reviews';
@@ -3563,19 +3814,28 @@ function StoreDetailsScreen({ navigation, route }) {
               <View>
                 {foodItems.length === 0 ? (
                   <View style={{ marginHorizontal: 20, marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontSize: 40, marginBottom: 8 }}>🍽️</Text>
-                    <Text style={{ color: '#64748B', fontWeight: '600', textAlign: 'center' }}>No menu items listed right now.</Text>
+                    <Text style={{ fontSize: 40, marginBottom: 8 }}>🛒</Text>
+                    <Text style={{ color: '#64748B', fontWeight: '600', textAlign: 'center' }}>No products listed right now.</Text>
                   </View>
                 ) : (
                   foodItems.map(item => {
-                    let gradColors = ['#F59E0B', '#D97706']; // Bakery (Gold/Amber)
-                    let catIcon = 'pizza';
-                    if (item.category === 'Drinks') {
-                      gradColors = ['#3B82F6', '#1D4ED8']; // Drinks (Blue)
+                    let gradColors = ['#F59E0B', '#D97706'];
+                    let catIcon = 'cart';
+                    if (item.category === 'Drinks' || item.category === 'Coffee & Tea') {
+                      gradColors = ['#3B82F6', '#1D4ED8'];
                       catIcon = 'cafe';
-                    } else if (item.category === 'Meals') {
-                      gradColors = ['#10B981', '#059669']; // Meals (Emerald)
+                    } else if (item.category === 'Meals' || item.category === 'Fresh Food') {
+                      gradColors = ['#10B981', '#059669'];
                       catIcon = 'restaurant';
+                    } else if (item.category === 'Groceries' || item.category === 'Household') {
+                      gradColors = ['#6366F1', '#4F46E5'];
+                      catIcon = 'basket';
+                    } else if (item.category === 'Personal Care') {
+                      gradColors = ['#EC4899', '#DB2777'];
+                      catIcon = 'sparkles';
+                    } else if (item.category === 'Frozen') {
+                      gradColors = ['#0EA5E9', '#0284C7'];
+                      catIcon = 'snow';
                     }
 
                     return (
@@ -4152,7 +4412,7 @@ function CartScreen({ navigation, route }) {
                 <Ionicons name="trash-outline" size={20} color="#EF4444" />
               </TouchableOpacity>
             </View>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{item.type === 'bag' ? 'Surprise Bag' : item.category}</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{item.type === 'bag' ? 'Surprise Bag' : (item.category || 'Product')}</Text>
           </View>
           
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -4342,10 +4602,7 @@ function BookingsScreen({ navigation }) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 10 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, backgroundColor: '#FFFFFF', borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}>
-          <Ionicons name="arrow-back" size={20} color="#111827" />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827', marginLeft: 16 }}>Your Bookings</Text>
+        <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827', flex: 1 }}>Your Bookings</Text>
       </View>
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color="#EA580C" /></View>
@@ -4373,7 +4630,7 @@ const SELLER_BRAND = '#FF5A00';
 const SELLER_NAV_ITEMS = (isAdmin) => [
   { key: 'stores', icon: 'storefront-outline', label: 'Stores' },
   { key: 'bags', icon: 'bag-handle-outline', label: 'Surprise Bags' },
-  { key: 'food', icon: 'restaurant-outline', label: 'Open Food' },
+  { key: 'food', icon: 'cart-outline', label: 'Products' },
   { key: 'orders', icon: 'receipt-outline', label: 'Orders' },
   { key: 'reviews', icon: 'star-outline', label: 'Reviews' },
   { key: 'chats', icon: 'chatbubbles-outline', label: 'Chat Support' },
@@ -4459,7 +4716,7 @@ function SellerDashboardScreen() {
   const [showBagModal, setShowBagModal] = useState(false);
   const [showFoodModal, setShowFoodModal] = useState(false);
 
-  const FOOD_CATEGORIES = ['Bakery', 'Meals', 'Drinks', 'Snacks', 'Desserts', 'Coffee & Tea', 'Sandwiches', 'Pizza', 'Other'];
+  const FOOD_CATEGORIES = PRODUCT_CATEGORIES;
 
   // Currency
   const { currencyCode, currencySymbol, changeCurrency, CURRENCIES } = useContext(AuthContext);
@@ -5045,7 +5302,7 @@ function SellerDashboardScreen() {
           data={sellerFoodItems}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          ListEmptyComponent={<SellerEmptyState icon="restaurant-outline" title="No food items yet" subtitle="Add open food items to sell surplus stock" />}
+          ListEmptyComponent={<SellerEmptyState icon="cart-outline" title="No products yet" subtitle="Add grocery, household, and other store items" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -5393,7 +5650,7 @@ function SellerDashboardScreen() {
                 ))}
               </ScrollView>
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Item Name *</Text>
-              <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. Sourdough Loaf" placeholderTextColor="#9CA3AF" value={foodName} onChangeText={setFoodName} />
+              <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. Organic Milk 1L" placeholderTextColor="#9CA3AF" value={foodName} onChangeText={setFoodName} />
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                 {FOOD_CATEGORIES.map(cat => (
@@ -5697,12 +5954,12 @@ export default function App() {
               ) : (
                 // App Stack
                 <>
-                  <Stack.Screen name="Splash" component={SplashScreen} />
                   <Stack.Screen name="ExploreTenants" component={ExploreTenantsScreen} />
                   <Stack.Screen name="Discover" component={DiscoverScreen} />
                   <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} />
                   <Stack.Screen name="Cart" component={CartScreen} />
                   <Stack.Screen name="Bookings" component={BookingsScreen} />
+                  <Stack.Screen name="Splash" component={SplashScreen} />
                 </>
               )}
             </Stack.Navigator>

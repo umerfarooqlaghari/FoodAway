@@ -74,6 +74,7 @@ export default function TenantExplorePage({ onBack }) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [coords, setCoords] = useState(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const fetchTenants = useCallback(async (lat, lng) => {
     setLoading(true);
@@ -144,6 +145,17 @@ export default function TenantExplorePage({ onBack }) {
             <span className="explore-nav-active">Explore</span>
             <Link to={ROUTES.contact}>Contact</Link>
           </nav>
+          <button
+            type="button"
+            className="explore-hamburger"
+            aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((o) => !o)}
+          >
+            <span className="ham-bar" />
+            <span className="ham-bar" />
+            <span className="ham-bar" />
+          </button>
           <div className="explore-nav-search">
             <SearchIcon size={16} color="#888" />
             <input
@@ -155,6 +167,13 @@ export default function TenantExplorePage({ onBack }) {
             />
           </div>
         </div>
+        {mobileNavOpen && (
+          <nav className="explore-mobile-nav" aria-label="Mobile">
+            <Link to={ROUTES.home} onClick={() => setMobileNavOpen(false)}>Home</Link>
+            <span className="explore-nav-active">Explore</span>
+            <Link to={ROUTES.contact} onClick={() => setMobileNavOpen(false)}>Contact</Link>
+          </nav>
+        )}
       </header>
 
       {/* ── Hero ── */}
