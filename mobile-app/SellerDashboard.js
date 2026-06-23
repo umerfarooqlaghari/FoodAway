@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 
-const { PRODUCT_CATEGORIES } = require('../shared/productCategories');
+const { PRODUCT_CATEGORIES } = require('./shared/productCategories');
 
 const ORANGE = '#FF5A00';
 const ORANGE_DARK = '#EA580C';

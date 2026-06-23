@@ -197,7 +197,7 @@ const {
   BROWSE_PRODUCT_FILTERS,
   CATEGORY_COLORS,
   categoriesMatch,
-} = require('../shared/productCategories');
+} = require('./shared/productCategories');
 
 // Play satisfying coin sound and trigger vibration feedback
 const playSoundAndHaptic = async (type) => {
