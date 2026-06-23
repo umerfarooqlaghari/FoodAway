@@ -515,7 +515,6 @@ function App() {
         phone: registerPhone.trim(),
         role: 'SellersAdmin',
         logo: registerLogo || undefined,
-        subdomain: registerSubdomainPreview || undefined,
       });
       setRegisterComplete({
         brandName: registerBrand.trim(),
@@ -1667,7 +1666,8 @@ function App() {
               <input type="text" placeholder="e.g. KFC, Starbucks" value={registerBrand} onChange={e => setRegisterBrand(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '0.5rem' }} required />
               {registerSubdomainPreview && (
                 <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '1rem' }}>
-                  Your store link: <strong style={{ color: 'var(--brand-orange)' }}>{tenantStoreUrl(registerSubdomainPreview)}</strong>
+                  Your store link will be similar to: <strong style={{ color: 'var(--brand-orange)' }}>{tenantStoreUrl(registerSubdomainPreview)}</strong>
+                  <span style={{ display: 'block', marginTop: '0.25rem' }}>If that URL is already in use, we&apos;ll assign a unique variant (e.g. melbrew-2).</span>
                 </p>
               )}
 
