@@ -1,6 +1,6 @@
 /**
  * Canonical product categories for food, grocery, and supermarket items.
- * Shared across backend, admin-web, and mobile-app.
+ * Shared across admin-web and mobile-app. Mirror: backend/src/productCategories.js
  */
 
 const PRODUCT_CATEGORY_GROUPS = [
