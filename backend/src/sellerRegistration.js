@@ -20,7 +20,7 @@ async function deleteOrphanTenants(db) {
   await db.prepare(`
     DELETE FROM tenants t
     WHERE NOT EXISTS (
-      SELECT 1 FROM users u WHERE u.tenant_id = t.id AND u.role = 'SellersAdmin'
+      SELECT 1 FROM users u WHERE u.tenant_id = t.id
     )
     AND NOT EXISTS (
       SELECT 1 FROM stores s WHERE s.tenant_id = t.id

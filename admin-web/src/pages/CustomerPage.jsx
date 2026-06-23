@@ -624,7 +624,7 @@ export default function CustomerPage({
         </button>
         <button className={`pos-cat-chip ${menuFilter === 'foods' ? 'active' : ''}`} onClick={() => setMenuFilter('foods')}>
           <span className="pos-cat-icon"><FoodIcon size={20} color={menuFilter === 'foods' ? '#FF5A00' : '#888'} /></span>
-          <span className="pos-cat-label">Food Items</span>
+          <span className="pos-cat-label">Products</span>
           <span className="pos-cat-count">{filteredFoods.length} Items</span>
         </button>
       </div>

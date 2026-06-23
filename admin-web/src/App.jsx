@@ -20,7 +20,10 @@ import FoodWasteSources from './pages/FoodWasteSources';
 import Status from './pages/Status';
 import CustomerPage from './pages/CustomerPage';
 import TenantExplorePage from './pages/TenantExplorePage';
-import { grabengoFavicon, grabengoWordmark } from './brandAssets';
+import {
+  PRODUCT_CATEGORY_GROUPS,
+  normalizeProductCategory,
+} from '@shared/productCategories.js';
 import {
   getSubdomain,
   isMainSite,
@@ -288,6 +291,7 @@ function App() {
   // Store Management Sub-tabs
   const [storeSubTab, setStoreSubTab] = useState('stores');
   const [showStoreModal, setShowStoreModal] = useState(false);
+  const [storeSaving, setStoreSaving] = useState(false);
   const [showBagModal, setShowBagModal] = useState(false);
   const [showFoodModal, setShowFoodModal] = useState(false);
   const [showAppDownloadModal, setShowAppDownloadModal] = useState(false);
@@ -296,7 +300,6 @@ function App() {
   const [foodItems, setFoodItems] = useState([]);
   const [editingFood, setEditingFood] = useState(null);
   const [foodForm, setFoodForm] = useState({ store_id: '', name: '', price: '', original_price: '', quantity: '', description: '', category: 'Other', images: [] });
-  const FOOD_CATEGORIES = ['Bakery', 'Coffee & Drinks', 'Groceries', 'Meals', 'Sushi', 'Salads', 'Sandwiches', 'Pizza', 'Desserts', 'Other'];
 
   // User form state
   const [newUserName, setNewUserName] = useState('');
@@ -618,17 +621,17 @@ function App() {
       };
       if (editingFood) {
         await axios.put(`${API_URL}/food-items/${editingFood.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
-        alert('Food item updated!');
+        alert('Product updated!');
       } else {
         await axios.post(`${API_URL}/food-items`, payload, { headers: { Authorization: `Bearer ${token}` } });
-        alert('Food item created!');
+        alert('Product created!');
       }
       setShowFoodModal(false);
       setEditingFood(null);
       setFoodForm({ store_id: '', name: '', price: '', original_price: '', quantity: '', description: '', category: 'Other', images: [] });
       fetchFoodItems();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to save food item');
+      alert(err.response?.data?.error || 'Failed to save product');
     }
   };
 
@@ -1014,6 +1017,7 @@ function App() {
 
   const handleCreateStore = async (e) => {
     e.preventDefault();
+    setStoreSaving(true);
     try {
       await axios.post(`${API_URL}/stores`, {
         name: newStoreName,
@@ -1032,6 +1036,8 @@ function App() {
       setShowStoreModal(false);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to create store');
+    } finally {
+      setStoreSaving(false);
     }
   };
 
@@ -1050,6 +1056,7 @@ function App() {
 
   const handleUpdateStore = async (e) => {
     e.preventDefault();
+    setStoreSaving(true);
     try {
       await axios.put(`${API_URL}/stores/${editingStore.id}`, editingStore, {
         headers: { Authorization: `Bearer ${token}` }
@@ -1060,6 +1067,8 @@ function App() {
       fetchStores();
     } catch (err) {
       alert('Failed to update store');
+    } finally {
+      setStoreSaving(false);
     }
   };
 
@@ -2012,7 +2021,7 @@ function App() {
             {storeSubTab === 'food' && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                  <button className="btn-primary" style={{ background: '#059669' }} onClick={() => { setEditingFood(null); setFoodForm({ store_id: '', name: '', price: '', original_price: '', quantity: '', description: '', category: 'Other', images: [] }); setShowFoodModal(true); }}>+ Add Food Item</button>
+                  <button className="btn-primary" style={{ background: '#059669' }} onClick={() => { setEditingFood(null); setFoodForm({ store_id: '', name: '', price: '', original_price: '', quantity: '', description: '', category: 'Other', images: [] }); setShowFoodModal(true); }}>+ Add Product</button>
                 </div>
                 <div className="glass-card portal-table" style={{ padding: '0' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -2029,7 +2038,7 @@ function App() {
                     </thead>
                     <tbody>
                       {foodItems.length === 0 ? (
-                        <tr><td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No food items yet.</td></tr>
+                        <tr><td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No products yet.</td></tr>
                       ) : foodItems.map((item, idx) => (
                         <tr key={item.id} style={{ borderBottom: idx < foodItems.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
                           <td style={{ padding: '1rem', fontWeight: '600' }}>{item.name}</td>
@@ -2055,7 +2064,7 @@ function App() {
                                   parsedImgs = item.images ? (typeof item.images === 'string' ? JSON.parse(item.images) : item.images) : [];
                                 } catch (e) { }
                                 setEditingFood(item);
-                                setFoodForm({ store_id: item.store_id, name: item.name, price: item.price, original_price: item.original_price || '', quantity: item.quantity, description: item.description || '', category: item.category || 'Other', images: parsedImgs });
+                                setFoodForm({ store_id: item.store_id, name: item.name, price: item.price, original_price: item.original_price || '', quantity: item.quantity, description: item.description || '', category: normalizeProductCategory(item.category || 'Other'), images: parsedImgs });
                                 setShowFoodModal(true);
                               }} style={{ padding: '0.4rem 0.9rem', background: '#ECFDF5', color: '#065F46', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Edit</button>
                               <button onClick={() => handleDeleteFoodItem(item.id)} style={{ padding: '0.4rem 0.9rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Delete</button>
@@ -2075,30 +2084,30 @@ function App() {
                 <div className="glass-card portal-modal">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3 style={{ margin: 0 }}>{editingStore ? 'Edit Store' : 'Add New Store'}</h3>
-                    <button onClick={() => setShowStoreModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
+                    <button type="button" disabled={storeSaving} onClick={() => setShowStoreModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: storeSaving ? 'not-allowed' : 'pointer', color: 'var(--text-secondary)', opacity: storeSaving ? 0.5 : 1 }}>×</button>
                   </div>
                   <form onSubmit={editingStore ? handleUpdateStore : handleCreateStore}>
                     <div style={{ marginBottom: '1rem' }}>
                       <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Name *</label>
-                      <input type="text" value={editingStore ? editingStore.name : newStoreName} onChange={e => editingStore ? setEditingStore({ ...editingStore, name: e.target.value }) : setNewStoreName(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.95rem' }} required />
+                      <input type="text" value={editingStore ? editingStore.name : newStoreName} onChange={e => editingStore ? setEditingStore({ ...editingStore, name: e.target.value }) : setNewStoreName(e.target.value)} disabled={storeSaving} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.95rem' }} required />
                     </div>
                     <div style={{ marginBottom: '1rem' }}>
                       <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Address *</label>
-                      <input type="text" value={editingStore ? editingStore.address : newStoreAddress} onChange={e => editingStore ? setEditingStore({ ...editingStore, address: e.target.value }) : setNewStoreAddress(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.95rem' }} required />
+                      <input type="text" value={editingStore ? editingStore.address : newStoreAddress} onChange={e => editingStore ? setEditingStore({ ...editingStore, address: e.target.value }) : setNewStoreAddress(e.target.value)} disabled={storeSaving} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.95rem' }} required />
                     </div>
                     <div style={{ marginBottom: '1.5rem' }}>
                       <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Image</label>
                       {(editingStore ? editingStore.image : newStoreImage) ? (
                         <div style={{ position: 'relative', width: '100%', height: '160px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: '0.5rem' }}>
                           <img src={editingStore ? editingStore.image : newStoreImage} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          <button type="button" onClick={() => editingStore ? setEditingStore({ ...editingStore, image: null }) : setNewStoreImage(null)} style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}>×</button>
+                          <button type="button" onClick={() => editingStore ? setEditingStore({ ...editingStore, image: null }) : setNewStoreImage(null)} disabled={storeSaving} style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: storeSaving ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>×</button>
                         </div>
                       ) : (
-                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: 'pointer', textAlign: 'center' }}>
+                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: storeSaving ? 'not-allowed' : 'pointer', textAlign: 'center', opacity: storeSaving ? 0.6 : 1 }}>
                           <span style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>📸</span>
                           <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Choose store image</span>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Click or drag to upload</span>
-                          <input type="file" accept="image/*" onChange={(e) => editingStore ? handleSingleImageUpload(e, (b64) => setEditingStore({ ...editingStore, image: b64 })) : handleSingleImageUpload(e, setNewStoreImage)} style={{ display: 'none' }} />
+                          <input type="file" accept="image/*" disabled={storeSaving} onChange={(e) => editingStore ? handleSingleImageUpload(e, (b64) => setEditingStore({ ...editingStore, image: b64 })) : handleSingleImageUpload(e, setNewStoreImage)} style={{ display: 'none' }} />
                         </label>
                       )}
                     </div>
@@ -2134,11 +2143,13 @@ function App() {
                             <button
                               type="button"
                               onClick={useCurrentStoreLocationWeb}
+                              disabled={storeSaving}
                               style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
                                 width: '100%', marginTop: '0.6rem', padding: '0.6rem',
                                 background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '8px',
-                                color: '#FF5A00', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer',
+                                color: '#FF5A00', fontWeight: '700', fontSize: '0.85rem', cursor: storeSaving ? 'not-allowed' : 'pointer',
+                                opacity: storeSaving ? 0.6 : 1,
                               }}
                             >
                               Use Current Location
@@ -2151,8 +2162,26 @@ function App() {
                       })()}
                     </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                      <button type="button" onClick={() => setShowStoreModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
-                      <button type="submit" className="btn-primary" style={{ flex: 1 }}>{editingStore ? 'Save Changes' : 'Create Store'}</button>
+                      <button type="button" disabled={storeSaving} onClick={() => setShowStoreModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: storeSaving ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: storeSaving ? 0.6 : 1 }}>Cancel</button>
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={storeSaving}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          opacity: storeSaving ? 0.85 : 1,
+                          cursor: storeSaving ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {storeSaving && <span className="portal-spinner portal-spinner-sm" aria-hidden="true" />}
+                        {storeSaving
+                          ? (editingStore ? 'Saving changes…' : (newStoreImage || editingStore?.image ? 'Uploading & creating…' : 'Creating store…'))
+                          : (editingStore ? 'Save Changes' : 'Create Store')}
+                      </button>
                     </div>
                   </form>
                 </div>
@@ -2264,7 +2293,7 @@ function App() {
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
                 <div className="glass-card portal-modal">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h3 style={{ margin: 0 }}>{editingFood ? 'Edit Food Item' : 'Add Food Item'}</h3>
+                    <h3 style={{ margin: 0 }}>{editingFood ? 'Edit Product' : 'Add Product'}</h3>
                     <button onClick={() => setShowFoodModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
                   </div>
                   <form onSubmit={handleCreateFoodItem}>
@@ -2280,10 +2309,19 @@ function App() {
                       <input type="text" value={foodForm.name} onChange={e => setFoodForm(f => ({ ...f, name: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
                     </div>
                     <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Category</label>
-                      <select value={foodForm.category} onChange={e => setFoodForm(f => ({ ...f, category: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                        {FOOD_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Product category *</label>
+                      <select value={foodForm.category} onChange={e => setFoodForm(f => ({ ...f, category: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required>
+                        {PRODUCT_CATEGORY_GROUPS.map((group) => (
+                          <optgroup key={group.id} label={group.label}>
+                            {group.categories.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </optgroup>
+                        ))}
                       </select>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                        e.g. detergent → Household & Cleaning · milk → Dairy & Eggs · rice → Groceries
+                      </p>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                       <div>
@@ -2307,7 +2345,7 @@ function App() {
                       <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Images</label>
                       <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: 'pointer', textAlign: 'center', marginBottom: '1rem' }}>
                         <span style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>🍔</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Add food images</span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Add product images</span>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Click or drag multiple files</span>
                         <input type="file" multiple accept="image/*" onChange={e => { const files = Array.from(e.target.files); Promise.all(files.map(f => new Promise((res, rej) => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = rej; r.readAsDataURL(f); }))).then(imgs => setFoodForm(f => ({ ...f, images: [...(f.images || []), ...imgs] }))); }} style={{ display: 'none' }} />
                       </label>

@@ -10,6 +10,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 
+const { PRODUCT_CATEGORIES } = require('../shared/productCategories');
+
 const ORANGE = '#FF5A00';
 const ORANGE_DARK = '#EA580C';
 const ORANGE_LIGHT = '#FFF7ED';
@@ -17,7 +19,7 @@ const ORANGE_LIGHT = '#FFF7ED';
 const NAV_ITEMS = [
   { key: 'stores', label: 'Stores', icon: 'storefront-outline' },
   { key: 'bags', label: 'Bags', icon: 'bag-handle-outline' },
-  { key: 'food', label: 'Food', icon: 'fast-food-outline' },
+  { key: 'food', label: 'Products', icon: 'pricetag-outline' },
   { key: 'orders', label: 'Orders', icon: 'receipt-outline' },
   { key: 'staff', label: 'Staff', icon: 'people-outline', adminOnly: true },
   { key: 'reviews', label: 'Reviews', icon: 'star-outline' },
@@ -129,10 +131,6 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
   const [pickupDays, setPickupDays] = useState([]);
   const [pickupFrom, setPickupFrom] = useState('18:00');
   const [pickupTo, setPickupTo] = useState('20:00');
-  const FOOD_CATEGORIES = [
-    'Groceries', 'Household', 'Fresh Food', 'Bakery', 'Drinks', 'Snacks',
-    'Frozen', 'Personal Care', 'Meals', 'Desserts', 'Coffee & Tea', 'Sandwiches', 'Other',
-  ];
 
   const buildPickupTime = (days, from, to) => days.length === 0 ? `${from} - ${to}` : `${days.join(', ')} ${from} - ${to}`;
   const togglePickupDay = (day) => {
@@ -798,7 +796,7 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
               <TextInput style={s.input} value={foodName} onChangeText={setFoodName} />
               <Text style={s.label}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                {FOOD_CATEGORIES.map(cat => (
+                {PRODUCT_CATEGORIES.map(cat => (
                   <TouchableOpacity key={cat} onPress={() => setFoodCategory(cat)} style={[s.chip, foodCategory === cat && s.chipActive]}>
                     <Text style={[s.chipText, foodCategory === cat && s.chipTextActive]}>{cat}</Text>
                   </TouchableOpacity>

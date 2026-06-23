@@ -30,6 +30,11 @@ const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assert
 const { registerSellerAdmin, mapRegistrationError, deleteOrphanTenants } = require('./sellerRegistration');
 const { formatStoreReview, formatAppReview, stripStoreTenantId } = require('./serializers');
 const { normalizePhone, phoneDigits, phoneLookupVariants, phonesMatch } = require('./phone');
+const {
+  PRODUCT_CATEGORY_GROUPS,
+  PRODUCT_CATEGORIES,
+  normalizeProductCategory,
+} = require('./productCategories');
 
 async function findUserForOrderLookup({ email, phone }) {
   const trimmedEmail = email?.trim().toLowerCase();
@@ -220,6 +225,13 @@ app.get('/api/public/tenant/:subdomain', async (req, res) => {
   }
 });
 
+app.get('/api/public/product-categories', (_req, res) => {
+  res.json({
+    groups: PRODUCT_CATEGORY_GROUPS,
+    categories: PRODUCT_CATEGORIES,
+  });
+});
+
 app.get('/api/public/tenants', async (req, res) => {
   try {
     const lat = parseFloatParam(req.query.lat);
@@ -301,7 +313,11 @@ app.post('/api/auth/register', async (req, res) => {
 
       let logoUrl = null;
       if (logo) {
-        logoUrl = await uploadImageToS3(logo);
+        try {
+          logoUrl = await uploadImageToS3(logo);
+        } catch (uploadErr) {
+          return res.status(400).json({ error: 'Failed to upload brand logo. Try a smaller image or different format.' });
+        }
       }
 
       const { userId, tenantId, subdomain } = await registerSellerAdmin(db, {
@@ -829,10 +845,11 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
         s3Images = JSON.stringify(uploaded);
       }
     }
+    const normalizedCategory = normalizeProductCategory(category);
     const info = await db.prepare(
       'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(store_id, name, description, price, original_price || null, s3Images, quantity || 1, category || 'Other');
-    res.json({ id: info.lastInsertRowid, store_id, name, price, quantity, category });
+    ).run(store_id, name, description, price, original_price || null, s3Images, quantity || 1, normalizedCategory);
+    res.json({ id: info.lastInsertRowid, store_id, name, price, quantity, category: normalizedCategory });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -858,6 +875,8 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
     }
 
     const isAvailableBool = is_available !== undefined && is_available !== null ? Boolean(is_available) : null;
+    const normalizedCategory =
+      category !== undefined && category !== null ? normalizeProductCategory(category) : null;
     await db.prepare(
       `UPDATE food_items SET
         name = COALESCE(?, name),
@@ -869,7 +888,7 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
         category = COALESCE(?, category),
         is_available = COALESCE(?, is_available)
        WHERE id = ?`
-    ).run(name, description, price, original_price, s3Images, quantity, category, isAvailableBool, id);
+    ).run(name, description, price, original_price, s3Images, quantity, normalizedCategory, isAvailableBool, id);
     res.json({ message: 'Food item updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

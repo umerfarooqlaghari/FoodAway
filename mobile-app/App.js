@@ -192,19 +192,12 @@ const getDevApiUrl = () => {
 const API_URL = process.env.EXPO_PUBLIC_API_URL || getDevApiUrl();
 axios.defaults.headers.common['X-Grabengo-Client'] = 'mobile';
 
-const PRODUCT_CATEGORIES = [
-  'Groceries', 'Household', 'Fresh Food', 'Bakery', 'Drinks', 'Snacks',
-  'Frozen', 'Personal Care', 'Meals', 'Desserts', 'Coffee & Tea', 'Sandwiches', 'Other',
-];
-const LEGACY_PRODUCT_CATEGORIES = ['Pizza', 'Coffee & Drinks', 'Sushi', 'Salads'];
-const BROWSE_PRODUCT_FILTERS = ['All', ...PRODUCT_CATEGORIES, ...LEGACY_PRODUCT_CATEGORIES.filter((c) => !PRODUCT_CATEGORIES.includes(c))];
-
-const CATEGORY_COLORS = {
-  Groceries: '#DCFCE7', Household: '#E0E7FF', 'Fresh Food': '#D1FAE5',
-  Bakery: '#FEF3C7', Meals: '#D1FAE5', Drinks: '#DBEAFE', Snacks: '#FCE7F3',
-  Frozen: '#E0F2FE', 'Personal Care': '#F3E8FF', Desserts: '#EDE9FE',
-  'Coffee & Tea': '#FFEDD5', Sandwiches: '#FEE2E2', Other: '#F3F4F6',
-};
+const {
+  PRODUCT_CATEGORIES,
+  BROWSE_PRODUCT_FILTERS,
+  CATEGORY_COLORS,
+  categoriesMatch,
+} = require('../shared/productCategories');
 
 // Play satisfying coin sound and trigger vibration feedback
 const playSoundAndHaptic = async (type) => {
@@ -2580,7 +2573,7 @@ function DiscoverScreen({ navigation, route }) {
   const filteredFoodItems = foodItems.filter(item => {
     const matchesStore = selectedStoreId ? item.store_id === selectedStoreId : true;
     const matchesFavorite = favoritesOnly ? item.is_favorited === 1 : true;
-    const matchesCategory = productCategoryFilter === 'All' || item.category === productCategoryFilter;
+    const matchesCategory = categoriesMatch(productCategoryFilter, item.category);
     const matchesSearch = searchQuery
       ? item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.store_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -3827,10 +3820,10 @@ function StoreDetailsScreen({ navigation, route }) {
                     } else if (item.category === 'Meals' || item.category === 'Fresh Food') {
                       gradColors = ['#10B981', '#059669'];
                       catIcon = 'restaurant';
-                    } else if (item.category === 'Groceries' || item.category === 'Household') {
+                    } else if (item.category === 'Groceries' || item.category === 'Household' || item.category === 'Household & Cleaning' || item.category === 'Canned & Packaged') {
                       gradColors = ['#6366F1', '#4F46E5'];
                       catIcon = 'basket';
-                    } else if (item.category === 'Personal Care') {
+                    } else if (item.category === 'Personal Care' || item.category === 'Baby & Kids') {
                       gradColors = ['#EC4899', '#DB2777'];
                       catIcon = 'sparkles';
                     } else if (item.category === 'Frozen') {
