@@ -10,8 +10,6 @@ const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout, email
 const {
   validateSubdomain,
   slugifySubdomain,
-  allocateUniqueSubdomain,
-  isSubdomainTaken,
   parseSubdomainFromHost,
 } = require('./subdomain');
 const {
@@ -24,12 +22,12 @@ const {
 const {
   getTenantById,
   getTenantBySubdomain,
-  createTenant,
   getTenantForUser,
   ensureTenantSubdomain,
   listTenantsForSuperAdmin,
 } = require('./tenants');
 const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess } = require('./tenant');
+const { registerSellerAdmin, mapRegistrationError, deleteOrphanTenants } = require('./sellerRegistration');
 const { formatStoreReview, formatAppReview, stripStoreTenantId } = require('./serializers');
 const { normalizePhone, phoneDigits, phoneLookupVariants, phonesMatch } = require('./phone');
 
@@ -185,6 +183,10 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 (async () => {
   try {
     await initDB();
+    const cleaned = await deleteOrphanTenants(db);
+    if (cleaned.changes > 0) {
+      console.log(`Removed ${cleaned.changes} orphan tenant(s) from incomplete seller registrations`);
+    }
   } catch (err) {
     console.error("Database initialization failed:", err.message);
   }
@@ -297,28 +299,19 @@ app.post('/api/auth/register', async (req, res) => {
       if (!finalName) return res.status(400).json({ error: 'Brand name is required' });
       if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
 
-      let subdomain;
-      if (req.body.subdomain) {
-        const validation = validateSubdomain(req.body.subdomain);
-        if (!validation.ok) return res.status(400).json({ error: validation.error });
-        subdomain = validation.subdomain;
-        if (await isSubdomainTaken(db, subdomain)) {
-          return res.status(400).json({ error: 'This store URL is already taken. Please choose another.' });
-        }
-      } else {
-        subdomain = await allocateUniqueSubdomain(db, finalName);
+      let logoUrl = null;
+      if (logo) {
+        logoUrl = await uploadImageToS3(logo);
       }
 
-      const logoUrl = logo ? await uploadImageToS3(logo) : null;
-      const tenant = await createTenant(db, {
-        name: finalName,
-        subdomain,
-        logo: logoUrl,
-        phone: phone || null,
+      const { userId, tenantId, subdomain } = await registerSellerAdmin(db, {
+        brandName: finalName,
+        email,
+        hashedPassword,
+        phone,
+        logoUrl,
+        requestedSubdomain: req.body.subdomain,
       });
-      const info = await db.prepare(
-        'INSERT INTO users (name, email, password, role, phone, tenant_id) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(finalName, email, hashedPassword, 'SellersAdmin', phone || null, tenant.id);
 
       const storeUrl = tenantStoreUrl(subdomain);
       const loginUrl = tenantStoreUrl(subdomain, { path: '/login' });
@@ -331,8 +324,8 @@ app.post('/api/auth/register', async (req, res) => {
       }).catch(err => console.error('Failed to send seller welcome email:', err.message));
 
       return res.status(201).json({
-        id: info.lastInsertRowid,
-        tenant_id: tenant.id,
+        id: userId,
+        tenant_id: tenantId,
         subdomain,
         storeUrl,
         loginUrl,
@@ -344,13 +337,8 @@ app.post('/api/auth/register', async (req, res) => {
     const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'Customers', phone || null);
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === '23505') {
-      const detail = String(err.detail || err.message || '');
-      if (detail.includes('subdomain') || String(err.constraint || '').includes('subdomain')) {
-        return res.status(400).json({ error: 'This store URL is already taken. Please choose another.' });
-      }
-      return res.status(400).json({ error: 'Email already exists' });
-    }
+    const mapped = mapRegistrationError(err);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
     res.status(500).json({ error: err.message });
   }
 });
@@ -1191,28 +1179,28 @@ app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const finalName = brand_name || name;
-    const logoUrl = logo ? await uploadImageToS3(logo) : logo;
-    const subdomain = await allocateUniqueSubdomain(db, finalName);
-    const tenant = await createTenant(db, { name: finalName, subdomain, logo: logoUrl || null });
-    const info = await db.prepare(
-      'INSERT INTO users (name, email, password, role, tenant_id) VALUES (?, ?, ?, ?, ?)'
-    ).run(finalName, email, hashedPassword, 'SellersAdmin', tenant.id);
+    let logoUrl = null;
+    if (logo) {
+      logoUrl = await uploadImageToS3(logo);
+    }
+    const { userId, tenantId, subdomain } = await registerSellerAdmin(db, {
+      brandName: finalName,
+      email,
+      hashedPassword,
+      phone: null,
+      logoUrl,
+    });
     const storeUrl = tenantStoreUrl(subdomain);
     res.status(201).json({
-      id: tenant.id,
-      admin_user_id: info.lastInsertRowid,
+      id: tenantId,
+      admin_user_id: userId,
       subdomain,
       storeUrl,
       message: 'Tenant created successfully',
     });
   } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === '23505') {
-      const detail = String(err.detail || err.message || '');
-      if (detail.includes('subdomain') || String(err.constraint || '').includes('subdomain')) {
-        return res.status(400).json({ error: 'This store URL is already taken.' });
-      }
-      return res.status(400).json({ error: 'Email already exists' });
-    }
+    const mapped = mapRegistrationError(err);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
     res.status(500).json({ error: err.message });
   }
 });

@@ -1667,7 +1667,6 @@ function App() {
               {registerSubdomainPreview && (
                 <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '1rem' }}>
                   Your store link will be similar to: <strong style={{ color: 'var(--brand-orange)' }}>{tenantStoreUrl(registerSubdomainPreview)}</strong>
-                  <span style={{ display: 'block', marginTop: '0.25rem' }}>If that URL is already in use, we&apos;ll assign a unique variant (e.g. melbrew-2).</span>
                 </p>
               )}
 
