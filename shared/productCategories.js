@@ -118,7 +118,7 @@ function categoriesMatch(filter, itemCategory) {
   return filter === itemCategory || filter === normalized;
 }
 
-module.exports = {
+export {
   PRODUCT_CATEGORY_GROUPS,
   PRODUCT_CATEGORIES,
   LEGACY_PRODUCT_CATEGORIES,

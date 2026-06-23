@@ -35,6 +35,7 @@ import {
   tenantStoreUrl,
   DEV_TENANT_PARAM,
 } from './host';
+import { grabengoFavicon, grabengoWordmark } from './brandAssets';
 
 // Note: Replace with actual MapBox token in production
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
