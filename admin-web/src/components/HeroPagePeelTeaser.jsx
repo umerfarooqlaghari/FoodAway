@@ -6,7 +6,7 @@ export default function HeroPagePeelTeaser({ onClick }) {
       onClick={onClick}
       aria-label="Discover what's coming next"
     >
-      <svg viewBox="0 0 200 210" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="hero-page-peel-svg">
+      {/* <svg viewBox="0 0 200 210" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="hero-page-peel-svg">
         <path d="M200 0H108L200 92V0Z" fill="#FFFFFF" />
         <path d="M200 94C168 78 142 58 122 42" stroke="rgba(0,0,0,0.12)" strokeWidth="8" strokeLinecap="round" />
         <g className="peel-flap-group">
@@ -26,7 +26,7 @@ export default function HeroPagePeelTeaser({ onClick }) {
           <ellipse cx="-3" cy="61" rx="6.5" ry="3.5" fill="#FFFFFF" stroke="#E5E7EB" strokeWidth="0.8" />
           <ellipse cx="13" cy="61" rx="6.5" ry="3.5" fill="#FFFFFF" stroke="#E5E7EB" strokeWidth="0.8" />
         </g>
-      </svg>
+      </svg> */}
       <span className="hero-page-peel-label">What&apos;s next?</span>
       <span className="hero-page-peel-hint">Tap to turn the page</span>
     </button>

@@ -4,8 +4,6 @@ import axios from 'axios';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ROUTES, activeTabFromPath } from './routePaths';
 import Map, { Marker } from 'react-map-gl';
-import HeroPagePeelTeaser from './components/HeroPagePeelTeaser';
-import SupermarketHeroVisual from './components/SupermarketHeroVisual';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './index.css';
@@ -24,6 +22,8 @@ import {
   PRODUCT_CATEGORY_GROUPS,
   normalizeProductCategory,
 } from '@shared/productCategories.js';
+import GrabengoLogoMark from './components/GrabengoLogoMark';
+import { grabengoFavicon } from './brandAssets';
 import {
   getSubdomain,
   isMainSite,
@@ -35,7 +35,6 @@ import {
   tenantStoreUrl,
   DEV_TENANT_PARAM,
 } from './host';
-import { grabengoFavicon, grabengoWordmark } from './brandAssets';
 
 // Note: Replace with actual MapBox token in production
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
@@ -98,6 +97,10 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [heroSlide, setHeroSlide] = useState(0);
+  const [landingLoaded, setLandingLoaded] = useState(false);
+  const [heroCnt1, setHeroCnt1] = useState(0);
+  const [heroCnt2, setHeroCnt2] = useState(0);
+  const [heroCnt3, setHeroCnt3] = useState(0);
 
   // Auth state
   const [email, setEmail] = useState('');
@@ -197,6 +200,33 @@ function App() {
   useEffect(() => {
     setRegisterSubdomainPreview(shortSubdomainFromName(registerBrand));
   }, [registerBrand]);
+
+  useEffect(() => {
+    if (!onMainSite || location.pathname !== ROUTES.home) return undefined;
+    const loadedTimer = setTimeout(() => setLandingLoaded(true), 60);
+    const animCount = (setter, target, dur, delay) => {
+      const startTimer = setTimeout(() => {
+        const t0 = Date.now();
+        const tick = () => {
+          const p = Math.min((Date.now() - t0) / dur, 1);
+          const e = 1 - (1 - p) ** 3;
+          setter(Math.round(e * target));
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }, delay);
+      return startTimer;
+    };
+    const t1 = animCount(setHeroCnt1, 1300, 2200, 180);
+    const t2 = animCount(setHeroCnt2, 30, 1400, 340);
+    const t3 = animCount(setHeroCnt3, 70, 1600, 500);
+    return () => {
+      clearTimeout(loadedTimer);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [onMainSite, location.pathname]);
 
   // Data state
   const [bags, setBags] = useState([]);
@@ -1114,27 +1144,50 @@ function App() {
   };
 
   const renderLandingPage = () => {
+    const fi = (delay = 0) => ({
+      opacity: landingLoaded ? 1 : 0,
+      transform: landingLoaded ? 'translateY(0)' : 'translateY(22px)',
+      transition: `opacity 0.75s ${delay}ms cubic-bezier(0.22,1,0.36,1), transform 0.75s ${delay}ms cubic-bezier(0.22,1,0.36,1)`,
+    });
+    const marqueeItems = [
+      ['Sandwich', ''], ['Poke', 'green'], ['Burrito', ''], ['Salads', 'green'],
+      ['Donuts', ''], ['Pizza', ''], ['Pastries', 'green'], ['Groceries', ''],
+      ['Sushi', 'green'], ['Muffins', ''],
+    ];
+
     return (
-      <div className="landing-page animate-fade-in">
-        {/* Navigation */}
-        <header className="landing-navbar">
-          <a href={ROUTES.home} className="landing-logo">
-            <img src={grabengoWordmark} alt="Grabengo" />
-          </a>
-          <nav className="landing-nav-links">
-            <a href="#why-use" className="landing-nav-link">About</a>
-            <a href="#solutions" className="landing-nav-link">Solutions</a>
-            <a href="#join" className="landing-nav-link">Impact</a>
-          </nav>
-          <div className="landing-actions">
-            <Link to={ROUTES.register} className="btn-landing-login" onClick={() => { setRegisterError(''); setRegisterComplete(null); }}>Register as Seller</Link>
-            <button className="btn-landing-download" onClick={() => setShowAppDownloadModal(true)}>Download app</button>
+      <div className={`landing-page${landingLoaded ? ' landing-page--loaded' : ''}`}>
+
+        {/* ── Floating Glass Pill Navbar ── */}
+        <header className="landing-nav-floating">
+          {/* Left pill: logo + nav links */}
+          <div className="landing-nav-pill landing-nav-pill-left">
+            <a href={ROUTES.home} className="landing-logo-pill">
+              <GrabengoLogoMark size={20} textClassName="landing-logo-text" />
+            </a>
+            <div className="landing-nav-divider" />
+            <nav className="landing-nav-links">
+              <a href="#why-use" className="landing-nav-link">About</a>
+              <a href="#solutions" className="landing-nav-link">Solutions</a>
+              <a href="#join" className="landing-nav-link">Impact</a>
+            </nav>
           </div>
+
+          {/* Right pill: actions */}
+          <div className="landing-nav-pill landing-nav-pill-right">
+            <Link to={ROUTES.register} className="landing-nav-text-link" onClick={() => { setRegisterError(''); setRegisterComplete(null); }}>
+              Register as Seller
+            </Link>
+            <button className="btn-landing-download" onClick={() => setShowAppDownloadModal(true)}>
+              Download app
+            </button>
+          </div>
+
           {/* Mobile hamburger */}
-          <button className="landing-hamburger" onClick={() => setMobileNavOpen(v => !v)} aria-label="Toggle menu">
-            <span className={`ham-bar ${mobileNavOpen ? 'open' : ''}`} />
-            <span className={`ham-bar ${mobileNavOpen ? 'open' : ''}`} />
-            <span className={`ham-bar ${mobileNavOpen ? 'open' : ''}`} />
+          <button className="landing-hamburger" onClick={() => setMobileNavOpen(v => !v)} aria-label="Menu">
+            <svg width="17" height="13" viewBox="0 0 17 13" fill="none" aria-hidden="true">
+              <path d="M1 1h15M1 6.5h15M1 12h15" stroke="#1A1208" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
           </button>
         </header>
 
@@ -1144,64 +1197,119 @@ function App() {
             <a href="#why-use" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>About</a>
             <a href="#solutions" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>Solutions</a>
             <a href="#join" className="landing-mobile-nav-link" onClick={() => setMobileNavOpen(false)}>Impact</a>
-            <Link to={ROUTES.register} className="btn-landing-login mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setRegisterError(''); setRegisterComplete(null); }}>Register as Seller</Link>
-            <button className="btn-landing-download mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setShowAppDownloadModal(true); }}>Download app</button>
+            <div className="landing-mobile-nav-actions">
+              <Link to={ROUTES.register} className="landing-mobile-nav-register" onClick={() => { setMobileNavOpen(false); setRegisterError(''); setRegisterComplete(null); }}>
+                Register as Seller
+              </Link>
+              <button type="button" className="btn-landing-download mobile-nav-btn" onClick={() => { setMobileNavOpen(false); setShowAppDownloadModal(true); }}>
+                Download app
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Hero Section — sliding carousel */}
+        {/* ── Hero Section ── */}
         <section className="landing-hero">
           <div className="hero-slider-viewport">
             <div className={`hero-slider-track ${heroSlide === 1 ? 'hero-slider-track--next' : ''}`}>
 
-              {/* Slide 1 — Current hero */}
+              {/* Slide 1: Main Hero */}
               <div className="hero-slide hero-slide--primary">
-                <video
-                  className="landing-hero-video"
-                  src="/5780292-uhd_3840_2160_24fps.mp4"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                />
-                <div className="landing-hero-overlay" />
                 <div className="landing-hero-container">
+
+                  {/* Left: editorial content */}
                   <div className="landing-hero-content">
-                    <span className="landing-hero-badge">Grab & Go — Saving food from going to waste</span>
-                    <h1 className="landing-hero-title">Save good food<br />from going to waste</h1>
-                    <p className="landing-hero-subtitle">
-                      Grabengo connects you with local stores, cafes, and bakeries offering delicious surplus food at unbeatable prices. Rescue meals and help protect the planet.
+                    <div className="section-eyebrow" style={fi(0)}>
+                      <span className="section-dot"></span>
+                      <span>Food waste reduction</span>
+                    </div>
+                    <h1 className="landing-hero-title" style={fi(100)}>
+                      Rescue<br />good food.<br />
+                      <span className="hero-title-accent">Save the planet.</span>
+                    </h1>
+                    <p className="landing-hero-subtitle" style={fi(240)}>
+                      Grabengo connects you with local stores, cafes, and bakeries offering surplus food at unbeatable prices. Rescue meals. Help protect the planet.
                     </p>
-                    <div className="landing-hero-btns">
-                      <Link to={ROUTES.explore} className="btn-hero-outline">Explore Food</Link>
-                      <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Download the app</button>
-                      <button className="btn-hero-outline" onClick={() => {
-                        const element = document.getElementById("solutions");
-                        if (element) element.scrollIntoView({ behavior: 'smooth' });
-                      }}>Business solutions</button>
+                    <div className="landing-hero-btns" style={fi(380)}>
+                      <button type="button" className="btn-hero-primary" onClick={() => setShowAppDownloadModal(true)}>
+                        Download the app
+                      </button>
+                      <Link to={ROUTES.explore} className="btn-hero-explore">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.6" />
+                          <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        </svg>
+                        Explore food
+                      </Link>
+                      <a href="#solutions" className="btn-hero-text">
+                        For businesses
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </a>
+                    </div>
+                    <div className="hero-trust-row" style={fi(500)}>
+                      <span className="hero-trust-label">Aligned with</span>
+                      <span className="hero-trust-badge">UNEP</span>
+                      <span className="hero-trust-badge">FAO</span>
+                      <span className="hero-trust-badge">EU Farm-to-Fork</span>
                     </div>
                   </div>
-                  <div className="landing-hero-mockup-wrapper" />
+
+                  {/* Right: dark impact panel */}
+                  <div className="hero-dark" style={fi(280)}>
+                    <div className="hero-impact-panel">
+                      <div className="hero-panel-badge">
+                        <span className="hero-panel-dot"></span>
+                        <span>Global Impact Data</span>
+                      </div>
+                      <div className="hero-impact-stats">
+                        <div className="hero-impact-stat">
+                          <div className="hero-impact-num">{heroCnt1.toLocaleString()}<span className="hero-impact-suffix">M</span></div>
+                          <div className="hero-impact-label">tonnes wasted yearly</div>
+                        </div>
+                        <div className="hero-impact-stat">
+                          <div className="hero-impact-num hero-impact-num--amber">{heroCnt2}<span className="hero-impact-suffix">%</span></div>
+                          <div className="hero-impact-label">of food produced never eaten</div>
+                        </div>
+                        <div className="hero-impact-stat hero-impact-stat--last">
+                          <div className="hero-impact-num hero-impact-num--green">↓{heroCnt3}<span className="hero-impact-suffix">%</span></div>
+                          <div className="hero-impact-label">off retail price on rescued items</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
-                <HeroPagePeelTeaser onClick={() => setHeroSlide(1)} />
+                <button type="button" className="hero-coming-soon-pill" onClick={() => setHeroSlide(1)}>
+                  <div className="hero-coming-soon-icon">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M6 3l5 5-5 5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="hero-coming-soon-label">Coming soon</div>
+                    <div className="hero-coming-soon-title">Supermarkets on Grabengo</div>
+                  </div>
+                </button>
               </div>
 
-              {/* Slide 2 — Supermarkets announcement */}
+              {/* Slide 2: Supermarkets Announcement */}
               <div className="hero-slide hero-slide--announcement">
                 <div className="hero-announcement-accent" aria-hidden="true" />
                 <div className="hero-announcement-inner">
                   <button type="button" className="hero-back-btn" onClick={() => setHeroSlide(0)}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M10 3L5 8L10 13" stroke="#FF5A00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M10 3L5 8L10 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     Back
                   </button>
                   <div className="hero-announcement-grid">
                     <div className="hero-announcement-copy">
                       <span className="hero-announcement-badge">Coming Soon</span>
-                      <h2 className="hero-announcement-title">Supermarkets on Grabengo</h2>
+                      <h2 className="hero-announcement-title">Supermarkets<br />on Grabengo</h2>
                       <p className="hero-announcement-lead">
-                        We are expanding beyond surplus meals to bring leading supermarkets onto the platform. Premium discounts on fast-moving consumer goods, household essentials, and fresh groceries.
+                        We&apos;re expanding beyond surplus meals to bring leading supermarkets onto the platform — premium discounts on FMCG, groceries, and household essentials.
                       </p>
                       <div className="hero-announcement-tags">
                         <span>FMCG</span>
@@ -1226,8 +1334,25 @@ function App() {
                       </div>
                     </div>
                     <div className="hero-announcement-visual">
-                      <div className="hero-announcement-visual-card">
-                        <SupermarketHeroVisual className="hero-announcement-illustration" />
+                      <div className="hero-announcement-visual-card hero-announcement-visual-card--dark">
+                        <svg width="160" height="130" viewBox="0 0 160 130" fill="none" aria-hidden="true">
+                          <rect x="10" y="50" width="140" height="7" rx="3.5" fill="white" opacity="0.08" />
+                          <rect x="10" y="95" width="140" height="7" rx="3.5" fill="white" opacity="0.08" />
+                          <rect x="18" y="24" width="20" height="26" rx="5" fill="#D4651A" opacity="0.6" />
+                          <rect x="46" y="20" width="18" height="30" rx="5" fill="#7A9E6E" opacity="0.5" />
+                          <rect x="72" y="26" width="20" height="24" rx="5" fill="white" opacity="0.15" />
+                          <rect x="100" y="22" width="22" height="28" rx="5" fill="#D4651A" opacity="0.5" />
+                          <rect x="130" y="25" width="18" height="25" rx="5" fill="#7A9E6E" opacity="0.45" />
+                          <rect x="16" y="62" width="24" height="23" rx="5" fill="#7A9E6E" opacity="0.5" />
+                          <rect x="48" y="60" width="18" height="25" rx="5" fill="#D4651A" opacity="0.6" />
+                          <rect x="74" y="63" width="22" height="22" rx="5" fill="white" opacity="0.12" />
+                          <rect x="104" y="62" width="18" height="23" rx="5" fill="#7A9E6E" opacity="0.55" />
+                          <rect x="130" y="60" width="18" height="25" rx="5" fill="#D4651A" opacity="0.5" />
+                        </svg>
+                        <div className="hero-announcement-visual-caption">
+                          <span className="hero-announcement-visual-title">Coming to Grabengo</span>
+                          <span className="hero-announcement-visual-sub">Supermarkets, FMCG &amp; More</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1238,128 +1363,182 @@ function App() {
           </div>
         </section>
 
-        {/* Why Use Section */}
+        {/* ── Why Use Section ── */}
         <section id="why-use" className="why-use-section">
           <div className="section-container">
-            <span className="section-tag">Why use Grabengo</span>
-            <h2 className="section-title">WHY USE GRABENGO</h2>
-            <div className="why-grid">
-              <div className="why-features-col">
-                <div className="why-feature-card">
-                  <h3 className="why-feature-title">Enjoy good food at 1/2 price or less</h3>
-                  <p className="why-feature-desc">Rescue fresh, high-quality food from your favorite local spots at a fraction of the cost.</p>
-                </div>
-                <div className="why-feature-card">
-                  <h3 className="why-feature-title">Help the environment by reducing food waste</h3>
-                  <p className="why-feature-desc">Every single surprise bag rescued directly avoids CO2e emissions and conserves natural resources.</p>
-                </div>
+            <div className="why-use-intro">
+              <div className="section-eyebrow">
+                <span className="section-dot"></span>
+                <span>Why use Grabengo</span>
               </div>
-
-              <div className="why-image-wrapper">
-                <img src="/groceries_bag.png" alt="Grabengo Groceries Bag" className="why-bag-image" />
+              <h2 className="section-title section-title--why">Good for your wallet.<br />Great for the planet.</h2>
+            </div>
+            <div className="why-feat-grid">
+              <div className="why-feat-cell">
+                <div className="why-feat-num">½ price<br /><span>or less</span></div>
+                <p className="why-feat-desc">Rescue fresh, high-quality food from your favourite local spots at a fraction of the cost.</p>
               </div>
-
-              <div className="why-features-col why-features-col-right">
-                <div className="why-feature-card">
-                  <h3 className="why-feature-title">Rescue food near you</h3>
-                  <p className="why-feature-desc">Discover outstanding local bakeries, supermarkets, cafes, and restaurants in your area.</p>
-                </div>
-                <div className="why-feature-card">
-                  <h3 className="why-feature-title">Try something new from local spots</h3>
-                  <p className="why-feature-desc">Unpack surprise food bags from local favorites, bakeries, or sushi spots you haven't visited yet.</p>
-                </div>
+              <div className="why-feat-cell">
+                <div className="why-feat-num">1 in 3<br /><span>meals wasted</span></div>
+                <p className="why-feat-desc">Around 1 in 3 meals produced globally are never eaten. Every rescue bag fights this directly.</p>
+              </div>
+              <div className="why-feat-cell">
+                <div className="why-feat-num">Near you<br /><span>always</span></div>
+                <p className="why-feat-desc">Discover outstanding local bakeries, supermarkets, cafes, and restaurants nearby.</p>
+              </div>
+              <div className="why-feat-cell">
+                <div className="why-feat-num">Surprise<br /><span>every time</span></div>
+                <p className="why-feat-desc">Unpack mystery bags from sushi spots, bakeries, or cafes you&apos;ve never tried before.</p>
+              </div>
+            </div>
+            <div className="why-stat-strip">
+              <div className="why-stat-cell">
+                <div className="why-stat-num why-stat-num--orange">180k+</div>
+                <div className="why-stat-label">Businesses onboard</div>
+              </div>
+              <div className="why-stat-cell">
+                <div className="why-stat-num">2M+</div>
+                <div className="why-stat-label">Bags rescued</div>
+              </div>
+              <div className="why-stat-cell">
+                <div className="why-stat-num why-stat-num--green">£4.2M</div>
+                <div className="why-stat-label">Saved by customers</div>
+              </div>
+              <div className="why-stat-cell why-stat-cell--last">
+                <div className="why-stat-num">4.9★</div>
+                <div className="why-stat-label">Average rating</div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Moving Ribbon / Marquee */}
+        {/* ── Marquee ── */}
         <div className="marquee-ribbon">
           <div className="marquee-content">
-            <span className="marquee-item"><span className="marquee-dot"></span>Sandwich</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Poke</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Burrito</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Salads</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Donuts</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Pizza</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Pastries</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Groceries</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Sushi</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Muffins</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Sandwich</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Poke</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Burrito</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Salads</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Donuts</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Pizza</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Pastries</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Groceries</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Sushi</span>
-            <span className="marquee-item"><span className="marquee-dot"></span>Muffins</span>
+            {[...marqueeItems, ...marqueeItems].map(([label, dot], i) => (
+              <span key={`${label}-${i}`} className="marquee-item">
+                <span className={`marquee-dot${dot === 'green' ? ' marquee-dot--green' : ''}`}></span>
+                {label}
+              </span>
+            ))}
           </div>
         </div>
 
-        {/* Solutions Section */}
+        {/* ── Solutions Section ── */}
         <section id="solutions" className="solutions-section">
           <div className="section-container">
-            <span className="section-tag">Our Business Solutions</span>
-            <h2 className="section-title">Empowering Food Sellers</h2>
+            <div className="solutions-header">
+              <div>
+                <div className="section-eyebrow">
+                  <span className="section-dot"></span>
+                  <span>Business Solutions</span>
+                </div>
+                <h2 className="section-title section-title--solutions">Empowering<br />Food Sellers</h2>
+              </div>
+              <p className="solutions-lead">Three products built around one mission — radically reducing food waste at every step of the supply chain.</p>
+            </div>
             <div className="solutions-grid">
-              <div className="solutions-cards">
-                <div className="solution-item">
-                  <span className="solution-tag">For: Food Retail, Service, Catering</span>
+              <div className="solution-item">
+                <div className="solution-item-icon solution-item-icon--orange">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="#D4651A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    <line x1="3" y1="6" x2="21" y2="6" stroke="#D4651A" strokeWidth="1.8" />
+                    <path d="M16 10a4 4 0 01-8 0" stroke="#D4651A" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="solution-tag">Food Retail, Service, Catering</span>
                   <h3 className="solution-title">Surprise Bags</h3>
-                  <p className="solution-desc">
-                    Unlock extra revenue from your surplus ingredients and products. Sell your unsold food in "Surprise Bags" for customers to order and collect.
-                  </p>
-                </div>
-                <div className="solution-item">
-                  <span className="solution-tag">For: Grocery Retail</span>
-                  <h3 className="solution-title">Grabengo Platform</h3>
-                  <p className="solution-desc">
-                    Your end-to-end surplus food management suite. Modular, intelligent software that helps grocery retailers track, manage, and redistribute surplus.
-                  </p>
-                </div>
-                <div className="solution-item">
-                  <span className="solution-tag">For: FMCGs, Wholesalers</span>
-                  <h3 className="solution-title">Date Labeling Initiative</h3>
-                  <p className="solution-desc">
-                    Reduce waste at home by adding our customized "Look, Smell, Taste" label to Best Before products to guide household consumption.
-                  </p>
+                  <p className="solution-desc">Unlock extra revenue from surplus ingredients. Sell unsold food in Surprise Bags for customers to collect.</p>
                 </div>
               </div>
-              <div className="solutions-image-wrapper">
-                <img src="/bakery_pickup.png" alt="Solutions Showcase" className="solutions-image" />
+              <div className="solution-item solution-item--dark">
+                <div className="solution-item-icon solution-item-icon--amber-dark">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="#D4651A" strokeWidth="1.8" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="#D4651A" strokeWidth="1.8" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="#D4651A" strokeWidth="1.8" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="#D4651A" strokeWidth="1.8" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="solution-tag solution-tag--light">Grocery Retail</span>
+                  <h3 className="solution-title solution-title--light">Grabengo Platform</h3>
+                  <p className="solution-desc solution-desc--light">End-to-end surplus food management suite. Track, manage, and redistribute surplus intelligently.</p>
+                </div>
+              </div>
+              <div className="solution-item">
+                <div className="solution-item-icon solution-item-icon--green">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#7A9E6E">
+                    <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 008 20C19 20 22 3 22 3c-1 2-8 2-8 2 0-2 .5-4 6-4l-.52-1.5A6.5 6.5 0 0110 5.5c0-1.06.19-2.08.52-3.03A14 14 0 002 18h2c0-4.5 4-8 8-8 0 0 2-3 5-2z" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="solution-tag solution-tag--green">FMCGs, Wholesalers</span>
+                  <h3 className="solution-title">Date Labeling Initiative</h3>
+                  <p className="solution-desc">Add our &quot;Look, Smell, Taste&quot; label to Best Before products to guide household consumption.</p>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Join CTA Banner */}
+        {/* ── Join CTA ── */}
         <section id="join" className="join-section">
-          <div className="section-container">
+          <div className="join-section-inner">
+            <div className="join-eyebrow">
+              <span className="join-dot"></span>
+              <span>Join the movement</span>
+            </div>
             <h2 className="join-title">Join over 180,000 businesses fighting food waste with us</h2>
-            <p className="join-subtitle">Download the Grabengo app today and start saving food or listing your surplus.</p>
+            <p className="join-subtitle">Download the Grabengo app and start saving food or listing your surplus today.</p>
             <div className="join-btns">
-              <button className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Get the App</button>
+              <button type="button" className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Get the App</button>
               <Link to={ROUTES.register} className="btn-hero-outline" onClick={() => { setRegisterError(''); setRegisterComplete(null); }}>Register as Seller</Link>
             </div>
           </div>
         </section>
 
-        {/* Footer */}
+        {/* ── Footer ── */}
         <footer className="giant-footer">
           <div className="footer-top">
-            <div className="footer-logo">
-              <img src={grabengoWordmark} alt="Grabengo" />
+            <div className="footer-col footer-col--brand">
+              <div className="footer-logo">
+                <GrabengoLogoMark size={24} textClassName="footer-logo-text" />
+              </div>
+              <p className="footer-brand-desc">Reducing food waste, one rescue bag at a time. Aligned with UNEP, FAO, and EU Farm-to-Fork principles.</p>
+              <div className="footer-badges">
+                <div className="bcorp-badge">
+                  <div className="bcorp-circle">B</div>
+                  <span>Certified B Corp</span>
+                </div>
+              </div>
             </div>
-            <div className="footer-links-row">
-            
+            <div className="footer-col">
+              <div className="footer-col-label">Platform</div>
+              <div className="footer-col-links">
+                <a href="#why-use" className="footer-col-link">About</a>
+                <a href="#solutions" className="footer-col-link">Solutions</a>
+                <a href="#join" className="footer-col-link">Impact</a>
+              </div>
             </div>
-            <div className="footer-badges">
-              <div className="bcorp-badge">
-                <div className="bcorp-circle">B</div>
-                <span>Certified B Corporation</span>
+            <div className="footer-col">
+              <div className="footer-col-label">Legal</div>
+              <div className="footer-col-links">
+                <Link to={ROUTES.privacy} className="footer-col-link">Privacy Policy</Link>
+                <Link to={ROUTES.terms} className="footer-col-link">Terms &amp; Conditions</Link>
+                <Link to={ROUTES.cookies} className="footer-col-link">Cookie Policy</Link>
+                <Link to={ROUTES.dsa} className="footer-col-link">DSA Disclosure</Link>
+                <Link to={ROUTES.legal} className="footer-col-link">Legal</Link>
+              </div>
+            </div>
+            <div className="footer-col">
+              <div className="footer-col-label">Help</div>
+              <div className="footer-col-links">
+                <Link to={ROUTES.contact} className="footer-col-link">Contact us</Link>
+                <Link to={ROUTES.foodWaste} className="footer-col-link">Food Waste Sources</Link>
+                <Link to={ROUTES.status} className="footer-col-link">Status</Link>
+                <Link to={ROUTES.doNotSell} className="footer-col-link">Do Not Sell My Data</Link>
               </div>
             </div>
           </div>
@@ -1369,48 +1548,30 @@ function App() {
           </div>
 
           <div className="footer-bottom">
-            <div className="footer-legal-links">
-              {[
-                ['Legal', ROUTES.legal],
-                ['Privacy Policy', ROUTES.privacy],
-                ['Cookie Policy', ROUTES.cookies],
-                ['Terms & Conditions', ROUTES.terms],
-                ['Contact us', ROUTES.contact],
-                ['DSA Disclosure', ROUTES.dsa],
-                ['Do Not Sell or Share My Data', ROUTES.doNotSell],
-                ['Food Waste Sources', ROUTES.foodWaste],
-                ['Status', ROUTES.status],
-              ].map(([label, path]) => (
-                <Link key={path} to={path} className="footer-legal-link">
-                  {label}
-                </Link>
-              ))}
-            </div>
-            <div>
-              <p>Copyright &copy; {new Date().getFullYear()} Grabengo. All Rights Reserved. · <a href="https://grabengo.store" style={{ color: 'inherit' }}>grabengo.store</a></p>
+            <p className="footer-copyright">
+              &copy; {new Date().getFullYear()} Grabengo (Seed Health, Inc. style) ·{' '}
+              <a href="https://grabengo.store" className="footer-copyright-link">grabengo.store</a>
+            </p>
+            <div className="footer-bottom-links">
+              <Link to={ROUTES.doNotSell} className="footer-bottom-link">Do Not Sell My Data</Link>
+              <a href="#" className="footer-bottom-link">Accessibility</a>
             </div>
           </div>
         </footer>
 
+        {/* ── App Download Modal ── */}
         {showAppDownloadModal && (
           <div className="app-modal-overlay" onClick={() => setShowAppDownloadModal(false)}>
             <div className="app-modal-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="app-modal-title" aria-modal="true">
-              <button type="button" className="app-modal-close" onClick={() => setShowAppDownloadModal(false)} aria-label="Close">
-                ×
-              </button>
-
+              <button type="button" className="app-modal-close" onClick={() => setShowAppDownloadModal(false)} aria-label="Close">×</button>
               <div className="app-modal-header">
                 <div className="app-modal-icon-wrap">
-                  <img src={grabengoFavicon} alt="Grabengo" />
+                  <GrabengoLogoMark size={30} showText={false} />
                 </div>
                 <span className="app-modal-badge">Coming Soon</span>
                 <h3 id="app-modal-title" className="app-modal-title">Mobile App In Development</h3>
               </div>
-
-              <p className="app-modal-text">
-                Our mobile application is under development and will soon be available on iOS and Android. Sorry for the inconvenience.
-              </p>
-
+              <p className="app-modal-text">Our mobile application is under development and will soon be available on iOS and Android.</p>
               <div className="app-modal-stores">
                 <div className="app-modal-store-pill">
                   <span className="app-modal-store-label">Coming to</span>
@@ -1421,17 +1582,14 @@ function App() {
                   <span className="app-modal-store-name">Google Play</span>
                 </div>
               </div>
-
-              <button type="button" className="app-modal-btn" onClick={() => setShowAppDownloadModal(false)}>
-                Got it
-              </button>
+              <button type="button" className="app-modal-btn" onClick={() => setShowAppDownloadModal(false)}>Got it</button>
             </div>
           </div>
         )}
+
       </div>
     );
   };
-
   const goHome = () => navigate(token ? ROUTES.dashboard : ROUTES.home);
 
   const renderLoginPage = () => {
