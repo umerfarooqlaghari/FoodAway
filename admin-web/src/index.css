@@ -3178,15 +3178,32 @@ body {
   align-items: center;
   text-decoration: none;
 }
-.explore-nav-brand img {
-  display: block;
-  height: auto;
-  max-height: 46px;
-  width: auto;
-  max-width: 180px;
-  object-fit: contain;
-  object-position: left center;
-  background: transparent;
+.explore-nav-brand-text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1A1208;
+  letter-spacing: -0.02em;
+}
+
+.explore-footer-logo-text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.pos-logo-text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.02em;
+}
+
+.pos-watermark-mark {
+  opacity: 0.18;
 }
 
 .explore-nav-links {
@@ -3320,7 +3337,8 @@ body {
   padding: 24px;
   overflow: visible;
 }
-.explore-hero-basket img {
+.explore-hero-basket img,
+.explore-hero-icon {
   width: 100%;
   height: 100%;
   max-width: 220px;
@@ -3757,17 +3775,9 @@ body {
   border-bottom: 1px solid #333;
 }
 
-.explore-footer-brand img,
-.explore-footer-logo {
-  display: block;
-  height: auto;
-  max-height: 56px;
-  width: auto;
-  max-width: 220px;
-  object-fit: contain;
-  object-position: left top;
+.explore-footer-brand .grabengo-logo-mark {
+  display: inline-flex;
   margin-bottom: 12px;
-  background: transparent;
 }
 .explore-footer-brand p {
   font-size: 14px;
@@ -3852,6 +3862,19 @@ body {
   gap: 0.75rem;
   cursor: pointer;
   min-width: 0;
+}
+
+.legal-page-brand .grabengo-logo-mark {
+  flex-shrink: 0;
+}
+
+.legal-page-brand-text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .legal-page-brand img {

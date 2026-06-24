@@ -50,6 +50,7 @@ import { LineChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Rect, Circle, Path, Text as SvgText } from 'react-native-svg';
+import GrabengoLogoMark from './components/GrabengoLogoMark';
 
 const customTheme = {
   ...DefaultTheme,
@@ -1171,7 +1172,7 @@ function LandingScreen({ navigation }) {
 
   const renderHeader = () => (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 10, alignItems: 'center' }}>
-      <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 }}>Take It All Away</Text>
+      <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 }}>Grabengo</Text>
       <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ padding: 8 }}>
         <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', marginBottom: 5, borderRadius: 2 }} />
         <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', marginBottom: 5, borderRadius: 2 }} />
@@ -1897,7 +1898,9 @@ function ExploreTenantsScreen({ navigation }) {
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <Image source={require('./assets/images/icon.png')} style={{ width: 36, height: 36, borderRadius: 10, marginRight: 10 }} />
+              <View style={{ marginRight: 10 }}>
+                <GrabengoLogoMark size={36} />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 20, fontWeight: '900', color: '#111827' }}>Grabengo</Text>
                 <Text style={{ fontSize: 12, color: '#6B7280' }} numberOfLines={1}>Hi, {user?.name?.split(' ')[0] || 'there'}</Text>
@@ -2088,10 +2091,10 @@ function SplashScreen({ navigation }) {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: '#F5F3EE', justifyContent: 'center', alignItems: 'center' }}>
       <StatusBar style="dark" />
-      <Image source={require('./assets/images/splash-icon.png')} style={{ width: 260, height: 260, resizeMode: 'contain' }} />
-      <ActivityIndicator color="#EA580C" size="large" style={{ marginTop: 32 }} />
+      <GrabengoLogoMark size={120} />
+      <ActivityIndicator color="#D4651A" size="large" style={{ marginTop: 32 }} />
     </View>
   );
 }

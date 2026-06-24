@@ -7,7 +7,7 @@ import {
   ClockIcon, TrashIcon
 } from './Icons';
 import TenantBrandLogo from '../components/TenantBrandLogo';
-import { grabengoLogo, grabengoWordmark } from '../brandAssets';
+import GrabengoLogoMark from '../components/GrabengoLogoMark';
 import { mainSiteUrl } from '../host';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -510,7 +510,7 @@ export default function CustomerPage({
               <span className="pos-tenant-name">{tenantName}</span>
             </>
           ) : (
-            <img src={grabengoWordmark} alt="Grabengo" className="pos-logo-img" />
+            <GrabengoLogoMark size={22} textClassName="pos-logo-text" />
           )}
         </div>
         <div className="pos-search-wrap">
@@ -646,7 +646,7 @@ export default function CustomerPage({
             </div>
           ) : totalItemCount === 0 ? (
             <div className="pos-empty">
-              <img src={grabengoLogo} alt="" style={{ height: 56, opacity: 0.2 }} />
+              <GrabengoLogoMark size={72} showText={false} className="pos-watermark-mark" />
               <h3>No items found</h3>
               <p>
                 {search

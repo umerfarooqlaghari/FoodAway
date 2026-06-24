@@ -23,7 +23,6 @@ import {
   normalizeProductCategory,
 } from '@shared/productCategories.js';
 import GrabengoLogoMark from './components/GrabengoLogoMark';
-import { grabengoFavicon } from './brandAssets';
 import {
   getSubdomain,
   isMainSite,
@@ -1163,7 +1162,7 @@ function App() {
           {/* Left pill: logo + nav links */}
           <div className="landing-nav-pill landing-nav-pill-left">
             <a href={ROUTES.home} className="landing-logo-pill">
-              <GrabengoLogoMark size={20} textClassName="landing-logo-text" />
+              <GrabengoLogoMark size={24} textClassName="landing-logo-text" />
             </a>
             <div className="landing-nav-divider" />
             <nav className="landing-nav-links">
@@ -1599,12 +1598,18 @@ function App() {
     const portalSubtitle = onTenantSite
       ? 'Sign in to manage your stores, orders, and inventory'
       : 'Super admin sign-in for the Grabengo platform';
-    const loginLogo = onTenantSite && tenantBranding?.logo ? tenantBranding.logo : grabengoFavicon;
+    const loginLogo = onTenantSite && tenantBranding?.logo ? tenantBranding.logo : null;
 
     return (
         <div className="auth-page">
           <div className="glass-card animate-fade-in auth-card">
-            <img src={loginLogo} alt="Portal Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain', borderRadius: onTenantSite && tenantBranding?.logo ? '12px' : undefined }} />
+            {loginLogo ? (
+              <img src={loginLogo} alt="Portal Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain', borderRadius: '12px' }} />
+            ) : (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <GrabengoLogoMark size={70} showText={false} />
+              </div>
+            )}
 
             {forgotPasswordStep === 'login' && (
               <>
@@ -1796,7 +1801,7 @@ function App() {
           <button type="button" className="app-modal-close" onClick={() => setRegisterComplete(null)} aria-label="Close">×</button>
           <div className="app-modal-header">
             <div className="app-modal-icon-wrap">
-              <img src={grabengoFavicon} alt="Grabengo" />
+              <GrabengoLogoMark size={36} showText={false} />
             </div>
             <span className="app-modal-badge">Store ready</span>
             <h3 id="register-complete-title" className="app-modal-title">Your store portal is live</h3>
@@ -1823,7 +1828,9 @@ function App() {
   const renderRegisterPage = () => (
         <div className="auth-page">
           <div className="glass-card animate-fade-in auth-card auth-card--wide">
-            <img src={grabengoFavicon} alt="Grabengo Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain' }} />
+            <div style={{ marginBottom: '1.5rem' }}>
+              <GrabengoLogoMark size={70} showText={false} />
+            </div>
             <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Register as Seller</h2>
             <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on Grabengo and start selling surplus food</p>
 
@@ -1894,7 +1901,7 @@ function App() {
             {user?.logo ? (
               <img src={user.logo} alt="Brand Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }} />
             ) : (
-              <img src={grabengoFavicon} alt="Grabengo Logo" style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'contain', flexShrink: 0 }} />
+              <GrabengoLogoMark size={45} showText={false} />
             )}
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <span className="sidebar-logo" style={{ fontSize: '1.35rem', fontWeight: '800', lineHeight: '1.1', margin: 0, padding: 0 }}>Grabengo</span>

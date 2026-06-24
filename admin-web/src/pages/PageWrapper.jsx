@@ -1,13 +1,12 @@
 import React from 'react';
-import { grabengoFavicon } from '../brandAssets';
+import GrabengoLogoMark from '../components/GrabengoLogoMark';
 
 export default function PageWrapper({ onBack, children }) {
   return (
     <div className="legal-page">
       <nav className="legal-page-nav">
         <div className="legal-page-brand" onClick={onBack} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onBack?.()}>
-          <img src={grabengoFavicon} alt="Grabengo" />
-          <span>Grabengo</span>
+          <GrabengoLogoMark size={28} textClassName="legal-page-brand-text" onDarkBg />
         </div>
         <button type="button" className="legal-page-back" onClick={onBack}>
           ← Back to Home

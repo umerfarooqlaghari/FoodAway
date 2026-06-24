@@ -5,7 +5,7 @@ import { SearchIcon, StoreIcon, BrandsIcon, RestaurantIcon, SupermarketIcon, Bak
 import { tenantStoreUrl } from '../host';
 import { ROUTES } from '../routePaths';
 import TenantBrandLogo from '../components/TenantBrandLogo';
-import { grabengoLogo, grabengoMascot, grabengoWordmark } from '../brandAssets';
+import GrabengoLogoMark from '../components/GrabengoLogoMark';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -138,7 +138,7 @@ export default function TenantExplorePage({ onBack }) {
             ← Home
           </button>
           <Link to={ROUTES.home} className="explore-nav-brand">
-            <img src={grabengoWordmark} alt="Grabengo" />
+            <GrabengoLogoMark size={22} textClassName="explore-nav-brand-text" />
           </Link>
           <nav className="explore-nav-links" aria-label="Main">
             <Link to={ROUTES.home}>Home</Link>
@@ -192,7 +192,7 @@ export default function TenantExplorePage({ onBack }) {
           </div>
           <div className="explore-hero-visual" aria-hidden="true">
             <div className="explore-hero-basket">
-              <img src={grabengoMascot} alt="" />
+              <GrabengoLogoMark size={160} showText={false} onDarkBg />
             </div>
           </div>
         </div>
@@ -289,7 +289,7 @@ export default function TenantExplorePage({ onBack }) {
         </svg>
         <div className="explore-footer-inner">
           <div className="explore-footer-brand">
-            <img src={grabengoWordmark} alt="Grabengo" className="explore-footer-logo" />
+            <GrabengoLogoMark size={24} textClassName="explore-footer-logo-text" />
             <p>Rescue surplus food from brands you love.</p>
           </div>
           <div className="explore-footer-col">

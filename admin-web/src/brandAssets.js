@@ -1,7 +1,6 @@
-/** Bump when replacing files in admin-web/public/ logo/favicon assets. */
-export const BRAND_ASSET_V = '13';
+/** Bump when replacing admin-web/public/favicon.png or favicon.svg */
+export const BRAND_ASSET_V = '15';
 
-export const grabengoLogo = `/Grabengo-V1-transparent.png?v=${BRAND_ASSET_V}`;
-export const grabengoWordmark = `/Grabengo-wordmark.png?v=${BRAND_ASSET_V}`;
-export const grabengoMascot = `/Grabengo-mascot.png?v=${BRAND_ASSET_V}`;
-export const grabengoFavicon = `/favicon.svg?v=${BRAND_ASSET_V}`;
+/** Canonical Grabengo mark — same file on web and mobile (sync via scripts/sync-brand-icons.js) */
+export const grabengoIcon = `/favicon.png?v=${BRAND_ASSET_V}`;
+export const grabengoIconSvg = `/favicon.svg?v=${BRAND_ASSET_V}`;
