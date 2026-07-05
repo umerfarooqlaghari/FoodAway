@@ -1,0 +1,8 @@
+admin-web/
+backend/
+node_modules/
+.git/
+.expo/
+dist/
+build/
+*.ipa
