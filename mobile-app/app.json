@@ -2,7 +2,7 @@
   "expo": {
     "name": "Grabengo",
     "slug": "mobile-app",
-    "version": "1.0.9",
+    "version": "1.0.11",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "grabengo",
@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.alphadevs.mobileapp",
-      "buildNumber": "12",
+      "buildNumber": "14",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -25,6 +25,8 @@
       }
     },
     "android": {
+      "package": "com.alphadevs.mobileapp",
+      "versionCode": 14,
       "adaptiveIcon": {
         "backgroundColor": "#D4651A",
         "foregroundImage": "./assets/images/android-icon-foreground.png"

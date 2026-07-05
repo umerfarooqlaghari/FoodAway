@@ -12,6 +12,7 @@
     "expo": "~56.0.12",
     "expo-asset": "~56.0.17",
     "expo-audio": "^56.0.12",
+    "expo-build-properties": "~56.0.19",
     "expo-constants": "~56.0.17",
     "expo-dev-client": "~56.0.20",
     "expo-device": "~56.0.4",
@@ -49,16 +50,18 @@
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~56.0.4",
+    "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "EXPO_PUBLIC_API_URL=http://localhost:3000/api ./node_modules/.bin/expo start --lan --go",
     "start:localhost": "EXPO_PUBLIC_API_URL=http://localhost:3000/api ./node_modules/.bin/expo start --lan --go",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "ios": "EXPO_PUBLIC_API_URL=http://localhost:3000/api ./node_modules/.bin/expo start --ios --lan --go",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "postinstall": "patch-package"
   },
   "private": true
 }
