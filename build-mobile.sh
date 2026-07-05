@@ -12,6 +12,8 @@ case "$PROFILE" in
   production) PROFILE="production" ;;
 esac
 
+export EAS_SKIP_AUTO_FINGERPRINT=1
+
 echo "🚀 EAS iOS Build — profile: $PROFILE"
 cd mobile-app
 

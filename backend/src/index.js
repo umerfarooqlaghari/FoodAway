@@ -189,7 +189,7 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
   try {
     await initDB();
     const cleaned = await deleteOrphanTenants(db);
-    if (cleaned.changes > 0) {
+    if (cleaned?.changes > 0) {
       console.log(`Removed ${cleaned.changes} orphan tenant(s) from incomplete seller registrations`);
     }
   } catch (err) {

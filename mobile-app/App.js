@@ -65,6 +65,26 @@ import Constants from 'expo-constants';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
+// --- Subdomain Helpers ---
+const slugifySubdomain = (input) => {
+  if (!input) return '';
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .slice(0, 48);
+};
+
+const shortSubdomainFromName = (input) => {
+  const slug = slugifySubdomain(input);
+  if (!slug) return 'store';
+  const first = slug.split('-')[0];
+  if (first.length >= 2) return first;
+  return slug;
+};
+
 // --- Receipt HTML Generator ---
 const generateReceiptHTML = (receiptData, currencySymbol) => {
   const { orderIds, storeName, tenantName, items, total, pickupTime, customerName, dateTime, paymentMethod } = receiptData;
@@ -1549,7 +1569,17 @@ function RegisterScreen({ navigation }) {
             <TextInput style={styles.input} placeholder="Full Name" placeholderTextColor="#94a3b8" value={name} onChangeText={setName} editable={!loading} />
           ) : (
             <>
-              <TextInput style={styles.input} placeholder="Brand Name" placeholderTextColor="#94a3b8" value={brandName} onChangeText={setBrandName} editable={!loading} />
+              <TextInput style={styles.input} placeholder="Brand Name (e.g. KFC, Starbucks)" placeholderTextColor="#94a3b8" value={brandName} onChangeText={setBrandName} editable={!loading} />
+              {brandName.trim().length > 0 && (
+                <View style={{ marginBottom: 14, marginTop: -6, paddingHorizontal: 4, alignSelf: 'flex-start' }}>
+                  <Text style={{ fontSize: 13, color: '#64748B' }}>
+                    Your store link will be similar to:{' '}
+                    <Text style={{ color: '#FF5A00', fontWeight: '700' }}>
+                      {`${shortSubdomainFromName(brandName)}.grabengo.store`}
+                    </Text>
+                  </Text>
+                </View>
+              )}
               <TouchableOpacity
                 onPress={pickLogo}
                 disabled={loading}

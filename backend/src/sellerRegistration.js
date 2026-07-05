@@ -17,7 +17,7 @@ class RegistrationError extends Error {
  * (no SellersAdmin user and no stores).
  */
 async function deleteOrphanTenants(db) {
-  await db.prepare(`
+  return await db.prepare(`
     DELETE FROM tenants t
     WHERE NOT EXISTS (
       SELECT 1 FROM users u WHERE u.tenant_id = t.id
@@ -27,6 +27,7 @@ async function deleteOrphanTenants(db) {
     )
   `).run();
 }
+
 
 /**
  * Atomically create tenant + SellersAdmin user. Rolls back on any failure so
