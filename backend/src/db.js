@@ -307,6 +307,7 @@ async function migrateToTenantsTable(db) {
     SELECT u.id, u.name, u.subdomain, u.logo, u.phone, u.created_at
     FROM users u
     WHERE u.role = 'SellersAdmin'
+      AND u.tenant_id IS NULL
       AND NOT EXISTS (SELECT 1 FROM tenants t WHERE t.id = u.id)
   `);
 

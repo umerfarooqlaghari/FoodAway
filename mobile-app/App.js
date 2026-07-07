@@ -1173,22 +1173,38 @@ function SupermarketPreviewIllustration({ width = 280, height = 210 }) {
 function LandingScreen({ navigation }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [carouselTenants, setCarouselTenants] = useState([]);
   const scrollRef = React.useRef(null);
   const screenWidth = Dimensions.get('window').width;
   const illustrationWidth = screenWidth - 48;
   const illustrationHeight = illustrationWidth * (360 / 480);
 
+  // Fetch active tenants for the brand carousel
   useEffect(() => {
+    axios.get(`${API_URL}/public/tenants`)
+      .then(res => {
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          setCarouselTenants(res.data);
+        }
+      })
+      .catch(() => {}); // silently ignore — static fallback stays visible
+  }, []);
+
+  // Auto-scroll the brands carousel
+  useEffect(() => {
+    const CARD_STEP = 156; // 140px card + 16px margin
+    const singleSetWidth = Math.max(carouselTenants.length, 4) * CARD_STEP;
     let scrollPos = 0;
     const interval = setInterval(() => {
       if (scrollRef.current) {
         scrollPos += 2;
         scrollRef.current.scrollTo({ x: scrollPos, animated: false });
-        if (scrollPos > 1000) scrollPos = 0;
+        // Reset when we've scrolled one full copy of the list (seamless loop)
+        if (scrollPos >= singleSetWidth) scrollPos = 0;
       }
     }, 50);
     return () => clearInterval(interval);
-  }, []);
+  }, [carouselTenants]);
 
   const renderHeader = () => (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 10, alignItems: 'center' }}>
@@ -1299,38 +1315,30 @@ function LandingScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Brands Carousel */}
+          {/* Brands Carousel — live from active tenants */}
           <View style={{ marginTop: 40 }}>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 16, paddingLeft: 24 }}>Top Brands</Text>
-            <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 24 }}>
-              <View style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', marginRight: 16 }}>
-                <Image source={require('./assets/images/logo_dunkin.png')} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', justifyContent: 'flex-end', padding: 12 }}>
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>Dunkin Donuts</Text>
-                  <Text style={{ color: '#D1D5DB', fontSize: 12 }}>1.2 km away</Text>
-                </LinearGradient>
-              </View>
-              <View style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', marginRight: 16 }}>
-                <Image source={require('./assets/images/logo_mcdonalds.png')} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', justifyContent: 'flex-end', padding: 12 }}>
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>McDonalds</Text>
-                  <Text style={{ color: '#D1D5DB', fontSize: 12 }}>0.8 km away</Text>
-                </LinearGradient>
-              </View>
-              <View style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', marginRight: 16 }}>
-                <Image source={require('./assets/images/logo_kfc.png')} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', justifyContent: 'flex-end', padding: 12 }}>
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>KFC</Text>
-                  <Text style={{ color: '#D1D5DB', fontSize: 12 }}>2.1 km away</Text>
-                </LinearGradient>
-              </View>
-              <View style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', marginRight: 16 }}>
-                <Image source={require('./assets/images/logo_pita.png')} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', justifyContent: 'flex-end', padding: 12 }}>
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>Pita Pit</Text>
-                  <Text style={{ color: '#D1D5DB', fontSize: 12 }}>1.5 km away</Text>
-                </LinearGradient>
-              </View>
+            <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 24 }} scrollEnabled={false}>
+              {/* Render list twice for seamless looping */}
+              {(carouselTenants.length > 0 ? [...carouselTenants, ...carouselTenants] : []).map((tenant, idx) => (
+                <View key={`${tenant.id}-${idx}`} style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#1A1208', marginRight: 16, justifyContent: 'center', alignItems: 'center' }}>
+                  {tenant.logo ? (
+                    <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                  ) : (
+                    <View style={{ width: '100%', height: '100%', backgroundColor: '#2D1F0E', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: LANDING_ORANGE, fontSize: 38, fontWeight: '900', letterSpacing: -1 }}>
+                        {tenantInitials(tenant.name)}
+                      </Text>
+                    </View>
+                  )}
+                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '55%', justifyContent: 'flex-end', padding: 12 }}>
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 }} numberOfLines={1}>{tenant.name}</Text>
+                    <Text style={{ color: '#D1D5DB', fontSize: 11 }}>
+                      {tenant.store_count > 1 ? `${tenant.store_count} locations` : '1 location'}
+                    </Text>
+                  </LinearGradient>
+                </View>
+              ))}
             </ScrollView>
           </View>
 
@@ -2946,41 +2954,161 @@ function DiscoverScreen({ navigation, route }) {
         onReviewsPress={() => setReviewsVisible(true)} 
       />
 
-      {/* Map Modal */}
+      {/* Map Modal — enhanced with directions + nearest store */}
       <Modal visible={mapVisible} animationType="slide">
-        <View style={{ flex: 1 }}>
-          <MapView
-            style={{ flex: 1 }}
-            initialRegion={userLocation ? {
-              latitude: userLocation.latitude,
-              longitude: userLocation.longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            } : undefined}
-            showsUserLocation={true}
-          >
-            {stores.filter(s => s.lat && s.lng).map(store => (
-              <Marker
-                key={store.id}
-                coordinate={{ latitude: store.lat, longitude: store.lng }}
-                title={store.name}
-                description={store.address}
-              >
-                <Callout tooltip>
-                  <View style={{ backgroundColor: 'white', padding: 10, borderRadius: 8, borderColor: '#ccc', borderWidth: 1 }}>
-                    <Text style={{ fontWeight: 'bold' }}>{store.name}</Text>
-                    <Text style={{ fontSize: 12, color: '#666' }}>{store.address}</Text>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          {(() => {
+            // Find the nearest store to the user
+            const visibleStores = stores.filter(s => s.lat && s.lng);
+            let nearestStore = null;
+            let nearestDist = Infinity;
+            if (userLocation) {
+              visibleStores.forEach(s => {
+                const d = Math.hypot(s.lat - userLocation.latitude, s.lng - userLocation.longitude);
+                if (d < nearestDist) { nearestDist = d; nearestStore = s; }
+              });
+            }
+
+            const openDirections = (store) => {
+              if (!store?.lat || !store?.lng) return;
+              const label = encodeURIComponent(store.name);
+              const url = Platform.OS === 'ios'
+                ? `maps://maps.apple.com/?daddr=${store.lat},${store.lng}&dirflg=d`
+                : `google.navigation:q=${store.lat},${store.lng}`;
+              Linking.canOpenURL(url).then(supported => {
+                if (supported) {
+                  Linking.openURL(url);
+                } else {
+                  // Fallback: Google Maps web
+                  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${store.lat},${store.lng}&destination_place_id=${label}`);
+                }
+              });
+            };
+
+            return (
+              <>
+                <MapView
+                  style={{ flex: 1 }}
+                  initialRegion={userLocation ? {
+                    latitude: userLocation.latitude,
+                    longitude: userLocation.longitude,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  } : { latitude: 51.5074, longitude: -0.1278, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
+                  showsUserLocation={true}
+                  showsMyLocationButton={true}
+                  showsCompass={true}
+                >
+                  {visibleStores.map(store => {
+                    const isNearest = nearestStore?.id === store.id;
+                    return (
+                      <Marker
+                        key={store.id}
+                        coordinate={{ latitude: store.lat, longitude: store.lng }}
+                        pinColor={isNearest ? '#FF5A00' : '#D4651A'}
+                      >
+                        <Callout tooltip onPress={() => openDirections(store)}>
+                          <View style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 14,
+                            padding: 14,
+                            width: 220,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 8,
+                            elevation: 6,
+                            borderWidth: isNearest ? 1.5 : 0,
+                            borderColor: isNearest ? '#FF5A00' : 'transparent',
+                          }}>
+                            {isNearest && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#FF5A00', marginRight: 5 }} />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#FF5A00', textTransform: 'uppercase', letterSpacing: 0.8 }}>Nearest to you</Text>
+                              </View>
+                            )}
+                            <Text style={{ fontWeight: '800', fontSize: 14, color: '#111827', marginBottom: 3 }} numberOfLines={1}>{store.name}</Text>
+                            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }} numberOfLines={2}>{store.address}</Text>
+                            <View style={{
+                              backgroundColor: '#FF5A00',
+                              borderRadius: 8,
+                              paddingVertical: 8,
+                              paddingHorizontal: 12,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6,
+                            }}>
+                              <Ionicons name="navigate" size={13} color="#FFFFFF" />
+                              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Get Directions</Text>
+                            </View>
+                          </View>
+                        </Callout>
+                      </Marker>
+                    );
+                  })}
+                </MapView>
+
+                {/* Header bar */}
+                <View style={{
+                  position: 'absolute', top: 0, left: 0, right: 0,
+                  paddingTop: Math.max(insets.top, 16),
+                  paddingHorizontal: 16, paddingBottom: 12,
+                  backgroundColor: 'rgba(255,255,255,0.96)',
+                  flexDirection: 'row', alignItems: 'center',
+                  borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
+                }}>
+                  <TouchableOpacity
+                    onPress={() => setMapVisible(false)}
+                    style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}
+                  >
+                    <Ionicons name="close" size={20} color="#111827" />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827' }}>
+                      Stores near you
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 1 }}>
+                      {visibleStores.length} location{visibleStores.length !== 1 ? 's' : ''} · tap a pin for directions
+                    </Text>
                   </View>
-                </Callout>
-              </Marker>
-            ))}
-          </MapView>
-          <TouchableOpacity
-            style={{ position: 'absolute', top: Math.max(insets.top, 20), right: 20, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 24, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}
-            onPress={() => setMapVisible(false)}
-          >
-            <Text style={{ color: '#111827', fontWeight: 'bold' }}>Close Map</Text>
-          </TouchableOpacity>
+                </View>
+
+                {/* Navigate to nearest CTA */}
+                {nearestStore && (
+                  <TouchableOpacity
+                    onPress={() => openDirections(nearestStore)}
+                    style={{
+                      position: 'absolute',
+                      bottom: Math.max(insets.bottom, 24) + 8,
+                      left: 20, right: 20,
+                      backgroundColor: '#FF5A00',
+                      borderRadius: 16,
+                      paddingVertical: 16,
+                      paddingHorizontal: 20,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      shadowColor: '#FF5A00',
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 12,
+                      elevation: 8,
+                    }}
+                  >
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="navigate" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 }}>Nearest store</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }} numberOfLines={1}>{nearestStore.name}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
+                  </TouchableOpacity>
+                )}
+              </>
+            );
+          })()}
         </View>
       </Modal>
 
@@ -4182,35 +4310,45 @@ function StoreDetailsScreen({ navigation, route }) {
             >
               <Marker coordinate={{ latitude: store.lat || 51.5074, longitude: store.lng || -0.1278 }} title={store.name} />
             </MapView>
-            <TouchableOpacity 
+            {/* Get Directions row */}
+            <TouchableOpacity
               onPress={() => {
-                const scheme = Platform.OS === 'ios' ? 'maps:' : 'geo:';
-                const url = `${scheme}${store.lat},${store.lng}?q=${encodeURIComponent(store.name)}`;
-                Linking.openURL(url);
+                const navUrl = Platform.OS === 'ios'
+                  ? `maps://maps.apple.com/?daddr=${store.lat},${store.lng}&dirflg=d`
+                  : `google.navigation:q=${store.lat},${store.lng}`;
+                Linking.canOpenURL(navUrl).then(ok => {
+                  if (ok) {
+                    Linking.openURL(navUrl);
+                  } else {
+                    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${store.lat},${store.lng}`);
+                  }
+                });
               }}
-              style={{ 
-                padding: 16, 
-                backgroundColor: '#FFFFFF', 
-                flexDirection: 'row', 
-                justifyContent: 'space-between', 
+              style={{
+                padding: 16,
+                backgroundColor: '#FFFFFF',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
                 alignItems: 'center',
                 borderTopWidth: 1,
-                borderTopColor: '#F1F5F9'
+                borderTopColor: '#F1F5F9',
               }}
             >
               <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Open in System Maps</Text>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Get Directions</Text>
                 <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4 }} numberOfLines={1}>{store.address}</Text>
               </View>
-              <View style={{ 
-                width: 36, 
-                height: 36, 
-                borderRadius: 18, 
-                backgroundColor: '#F1F5F9', 
-                justifyContent: 'center', 
-                alignItems: 'center' 
+              <View style={{
+                backgroundColor: '#FF5A00',
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
               }}>
-                <Ionicons name="navigate" size={16} color="#EA580C" />
+                <Ionicons name="navigate" size={14} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>Navigate</Text>
               </View>
             </TouchableOpacity>
           </View>

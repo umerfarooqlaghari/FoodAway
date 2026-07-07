@@ -34,6 +34,14 @@ if lsof -ti :8081 >/dev/null 2>&1; then
   sleep 1
 fi
 
+# Ensure iOS Simulator is running and booted
+if ! xcrun simctl list devices booted 2>/dev/null | grep -q "Booted"; then
+  echo "🖥️  No booted iOS simulator found. Launching Simulator app..."
+  open -a Simulator
+  # Give it a few seconds to initialize and start booting
+  sleep 6
+fi
+
 # Pre-launch Expo Go on a booted iOS simulator
 if xcrun simctl list devices booted 2>/dev/null | grep -q "Booted"; then
   echo "📲 Warming up Expo Go on booted simulator..."
@@ -42,4 +50,4 @@ if xcrun simctl list devices booted 2>/dev/null | grep -q "Booted"; then
 fi
 
 # Use LAN so iOS Simulator reliably reaches Metro (localhost-only binding is flaky on this machine)
-EXPO_PUBLIC_API_URL=http://localhost:3000/api EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK=1 ./node_modules/.bin/expo start --lan --go --ios
+CI=true EXPO_PUBLIC_API_URL=http://localhost:3000/api EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK=1 ./node_modules/.bin/expo start --lan --go --ios
