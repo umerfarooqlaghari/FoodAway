@@ -1,3 +1,4 @@
+# Sibling apps/folders we do not need for mobile builds
 admin-web/
 backend/
 node_modules/
@@ -6,3 +7,13 @@ node_modules/
 dist/
 build/
 *.ipa
+
+# Mobile app subfolders we do not need for native builds
+mobile-app/node_modules/
+mobile-app/.expo/
+mobile-app/dist/
+mobile-app/android/
+mobile-app/ios/
+mobile-app/web-build/
+mobile-app/inspect-archive/
+inspect-archive-new/
