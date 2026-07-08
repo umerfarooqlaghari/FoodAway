@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, TextInput, Alert, ScrollView, Image, Modal, Platform, Linking, Animated, TouchableWithoutFeedback } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, TextInput, Alert, ScrollView, Image, Modal, Platform, Linking, Animated, TouchableWithoutFeedback, Switch } from 'react-native';
 import { SafeAreaView, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { createAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Configure notification behavior for foreground notifications
 Notifications.setNotificationHandler({
@@ -45,7 +46,7 @@ if (!MapView) {
 }
 import { getDistance } from 'geolib';
 import { LinearGradient } from 'expo-linear-gradient';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -533,6 +534,20 @@ function ChatProvider({ children }) {
           if (wsOrder.pickup_time) {
             schedulePickupReminder(wsOrder.store_name, wsOrder.pickup_time);
           }
+        } else if (payload.type === 'order_status_update') {
+          const statusOrder = payload.order;
+          const isRejectedOrCancelled = statusOrder.status === 'rejected' || statusOrder.status === 'cancelled';
+          playSoundAndHaptic(isRejectedOrCancelled ? 'medium' : 'success');
+          setToastNotification({
+            type: 'order_status_update',
+            storeName: statusOrder.store_name,
+            message: statusOrder.message,
+          });
+          triggerLocalPushNotification(
+            statusOrder.title,
+            statusOrder.message,
+            { type: 'order_status', orderId: statusOrder.id }
+          );
         } else if (payload.type === 'inactivity_reminder') {
           playSoundAndHaptic('success');
           setToastNotification({
@@ -745,6 +760,11 @@ function GlobalToast() {
     iconName = 'flame';
     badgeColor = '#FCD34D';
     typeLabel = 'Flash Deal (70%+ OFF)';
+  } else if (toastNotification.type === 'order_status_update') {
+    gradientColors = ['#1D4ED8', '#1E3A8A'];
+    iconName = 'information-circle';
+    badgeColor = '#93C5FD';
+    typeLabel = 'Order Update';
   }
 
   return (
@@ -976,7 +996,8 @@ function GlobalReceiptModal() {
 
   if (!receiptModalData) return null;
 
-  const { orderIds, storeName, items, total, pickupTime, customerName, dateTime } = receiptModalData;
+  const { orderIds, storeName, items, total, pickupTime, customerName, dateTime, fulfillmentType, deliveryAddress, deliveryPhone } = receiptModalData;
+  const isDeliveryReceipt = fulfillmentType === 'delivery';
   const orderRef = Array.isArray(orderIds)
     ? orderIds.map(id => `GTG-${String(id).padStart(5, '0')}`).join(', ')
     : `GTG-${String(orderIds).padStart(5, '0')}`;
@@ -1036,7 +1057,7 @@ function GlobalReceiptModal() {
                   <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '500' }}>Payment</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4, borderWidth: 1, borderColor: '#BBF7D0' }}>
                     <Ionicons name="cash-outline" size={12} color="#15803D" />
-                    <Text style={{ fontSize: 12, color: '#15803D', fontWeight: '700' }}>Cash at Pickup</Text>
+                    <Text style={{ fontSize: 12, color: '#15803D', fontWeight: '700' }}>{isDeliveryReceipt ? 'Cash on Delivery' : 'Cash at Pickup'}</Text>
                   </View>
                 </View>
               </View>
@@ -1069,7 +1090,7 @@ function GlobalReceiptModal() {
               </View>
 
               {/* Pickup */}
-              {pickupTime && pickupTime !== 'N/A' ? (
+              {!isDeliveryReceipt && pickupTime && pickupTime !== 'N/A' ? (
                 <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 14, marginTop: 18, borderWidth: 1, borderColor: '#BBF7D0', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center' }}>
                     <Ionicons name="time-outline" size={16} color="#15803D" />
@@ -1081,13 +1102,34 @@ function GlobalReceiptModal() {
                 </View>
               ) : null}
 
+              {/* Delivery */}
+              {isDeliveryReceipt ? (
+                <View style={{ backgroundColor: '#EFF6FF', borderRadius: 12, padding: 14, marginTop: 18, borderWidth: 1, borderColor: '#BFDBFE' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: deliveryAddress ? 8 : 0 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="bicycle-outline" size={16} color="#1D4ED8" />
+                    </View>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Delivery Order</Text>
+                  </View>
+                  {deliveryAddress ? <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827' }}>{deliveryAddress}</Text> : null}
+                  {deliveryPhone ? <Text style={{ fontSize: 12, color: '#374151', marginTop: 2 }}>{deliveryPhone}</Text> : null}
+                  <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 8, lineHeight: 15 }}>
+                    Delivered by the store directly, not Grabengo. The store may call to confirm your order. Delivery charges, if any, are excluded from the total above.
+                  </Text>
+                </View>
+              ) : null}
+
               {/* Show at branch banner */}
               <LinearGradient colors={['#1E293B', '#0F172A']} style={{ borderRadius: 18, padding: 22, marginTop: 22, alignItems: 'center' }}>
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(234,88,12,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 10, borderWidth: 1.5, borderColor: '#EA580C' }}>
-                  <Ionicons name="phone-portrait-outline" size={22} color="#F97316" />
+                  <Ionicons name={isDeliveryReceipt ? "call-outline" : "phone-portrait-outline"} size={22} color="#F97316" />
                 </View>
-                <Text style={{ color: 'white', fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 5 }}>Show this receipt at the branch</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, textAlign: 'center' }}>Present to collect your rescued food order</Text>
+                <Text style={{ color: 'white', fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 5 }}>
+                  {isDeliveryReceipt ? "The store will call to confirm" : "Show this receipt at the branch"}
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, textAlign: 'center' }}>
+                  {isDeliveryReceipt ? "Keep your phone nearby" : "Present to collect your rescued food order"}
+                </Text>
               </LinearGradient>
             </View>
 
@@ -1380,6 +1422,15 @@ function LandingScreen({ navigation }) {
 }
 
 // --- Auth Screens ---
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const formatSaleEnd = (value) => {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${hh}:${mm}`;
+};
+
 const parsePickupTimeDetails = (pickupTimeStr) => {
   if (!pickupTimeStr) return { days: [], from: '18:00', to: '20:00' };
   const timeRegex = /(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/;
@@ -2581,6 +2632,12 @@ function DiscoverScreen({ navigation, route }) {
         </View>
         <Text numberOfLines={1} style={styles.gridTitle}>{item.name}</Text>
         <Text numberOfLines={1} style={[styles.gridRating, { color: '#6B7280' }]}>{item.store_name}</Text>
+        {item.sale_ends_at && new Date(item.sale_ends_at) > new Date() && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#FFF7ED', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 4 }}>
+            <Ionicons name="flash-outline" size={10} color="#EA580C" />
+            <Text style={{ fontSize: 10, fontWeight: '700', color: '#EA580C', marginLeft: 3 }}>Sale ends {formatSaleEnd(item.sale_ends_at)}</Text>
+          </View>
+        )}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <View>
             <View style={[styles.gridPriceTag, { backgroundColor: '#9CA3AF' }]}>
@@ -3648,13 +3705,24 @@ function StoreDetailsScreen({ navigation, route }) {
             <View style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#EA580C', letterSpacing: 0.5 }}>MERCHANT PARTNER</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Ionicons name="leaf" size={14} color="#10B981" />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>Eco Hero</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {store.delivery_enabled ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                  <Ionicons name="bicycle-outline" size={13} color="#1D4ED8" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8' }}>Delivery Available</Text>
+                </View>
+              ) : null}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="leaf" size={14} color="#10B981" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>Eco Hero</Text>
+              </View>
             </View>
           </View>
 
           <Text style={{ fontSize: 26, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>{store.name}</Text>
+          {store.delivery_enabled && store.delivery_fee_note ? (
+            <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>🛵 {store.delivery_fee_note}</Text>
+          ) : null}
           
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
             <Ionicons name="location" size={16} color="#64748B" />
@@ -4068,6 +4136,14 @@ function StoreDetailsScreen({ navigation, route }) {
                                 {item.quantity} remaining
                               </Text>
                             </View>
+                            {item.sale_ends_at && new Date(item.sale_ends_at) > new Date() && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7ED', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                                <Ionicons name="flash-outline" size={11} color="#EA580C" />
+                                <Text style={{ fontSize: 11, color: '#EA580C', fontWeight: '800', marginLeft: 3 }}>
+                                  Sale ends {formatSaleEnd(item.sale_ends_at)}
+                                </Text>
+                              </View>
+                            )}
                           </View>
 
                           <TouchableOpacity 
@@ -4480,16 +4556,143 @@ function StoreDetailsScreen({ navigation, route }) {
   );
 }
 
+// --- Delivery Address Screen ---
+function DeliveryAddressScreen({ navigation, route }) {
+  const { user, token } = useContext(AuthContext);
+  const { deliveryInfo, setDeliveryInfo } = useContext(CartContext);
+  const insets = useSafeAreaInsets();
+  const feeNotes = route.params?.feeNotes || [];
+  const storeNames = route.params?.storeNames || [];
+
+  const [address, setAddress] = useState(deliveryInfo.address || user?.delivery_address || '');
+  const [phone, setPhone] = useState(deliveryInfo.phone || user?.phone || '');
+  const [saveForFuture, setSaveForFuture] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const handleContinue = async () => {
+    if (!address.trim() || !phone.trim()) {
+      Alert.alert("Required", "Please enter your delivery address and phone number.");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (saveForFuture) {
+        await axios.put(`${API_URL}/users/${user.id}`, { phone: phone.trim(), delivery_address: address.trim() }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      setDeliveryInfo({ fulfillmentType: 'delivery', address: address.trim(), phone: phone.trim() });
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert("Error", e.response?.data?.error || "Could not save delivery details. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 10 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, backgroundColor: '#FFFFFF', borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}>
+          <Ionicons name="arrow-back" size={20} color="#111827" />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827', marginLeft: 16 }}>Delivery Details</Text>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <View style={{ backgroundColor: '#EFF6FF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <Ionicons name="information-circle" size={18} color="#1D4ED8" />
+            <Text style={{ fontWeight: '800', fontSize: 13, color: '#1D4ED8' }}>Delivered by the store, not Grabengo</Text>
+          </View>
+          <Text style={{ fontSize: 12.5, color: '#374151', lineHeight: 18 }}>
+            {(storeNames.length ? storeNames.join(', ') : 'The store')} will deliver this order themselves. Extra delivery charges may apply depending on the store — these are set and collected by the store directly, not included in your app total. The store may call you to confirm your order and any delivery cost.
+          </Text>
+          {feeNotes.length > 0 && (
+            <View style={{ marginTop: 10, gap: 4 }}>
+              {feeNotes.map((note, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                  <Ionicons name="pricetag-outline" size={13} color="#1D4ED8" style={{ marginTop: 2 }} />
+                  <Text style={{ fontSize: 12, color: '#1D4ED8', fontWeight: '600', flex: 1 }}>{note}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <Text style={{ color: '#374151', fontWeight: '700', marginBottom: 6, fontSize: 13 }}>Delivery Address *</Text>
+        <TextInput
+          style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 15, color: '#111827', height: 90, textAlignVertical: 'top' }}
+          placeholder="House/flat number, street, area, city"
+          placeholderTextColor="#9CA3AF"
+          value={address}
+          onChangeText={setAddress}
+          multiline
+        />
+
+        <Text style={{ color: '#374151', fontWeight: '700', marginBottom: 6, fontSize: 13 }}>Phone Number *</Text>
+        <TextInput
+          style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 15, color: '#111827' }}
+          placeholder="e.g. 03001234567"
+          placeholderTextColor="#9CA3AF"
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+        />
+
+        <TouchableOpacity
+          onPress={() => setSaveForFuture(!saveForFuture)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24, paddingVertical: 4 }}
+        >
+          <Ionicons name={saveForFuture ? "checkbox" : "square-outline"} size={22} color={saveForFuture ? "#EA580C" : "#9CA3AF"} />
+          <Text style={{ fontSize: 13, color: '#374151', flex: 1 }}>Save these details for future orders</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleContinue}
+          disabled={saving}
+          style={{ backgroundColor: saving ? '#9CA3AF' : '#EA580C', borderRadius: 16, paddingVertical: 17, alignItems: 'center' }}
+        >
+          {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontSize: 16, fontWeight: '800' }}>Confirm Delivery Details</Text>}
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 // --- Cart Screen ---
 function CartScreen({ navigation, route }) {
-  const { cartItems, updateQuantity, removeFromCart, cartTotalPrice, cartTotalCount, clearCart } = useContext(CartContext);
+  const { cartItems, updateQuantity, removeFromCart, cartTotalPrice, cartTotalCount, clearCart, deliveryInfo, setDeliveryInfo } = useContext(CartContext);
   const { token, currencySymbol, user } = useContext(AuthContext);
   const { openReceipt } = useContext(ChatContext);
   const [checkingOut, setCheckingOut] = useState(false);
   const insets = useSafeAreaInsets();
 
+  const isDelivery = deliveryInfo.fulfillmentType === 'delivery';
+  const deliveryEligible = cartItems.length > 0 && cartItems.every(item => item.delivery_enabled);
+  const feeNotes = [...new Set(cartItems.map(i => i.delivery_fee_note).filter(Boolean))];
+  const storeNames = [...new Set(cartItems.map(i => i.store_name).filter(Boolean))];
+
+  // If cart contents change such that delivery is no longer possible, fall back to pickup
+  useEffect(() => {
+    if (isDelivery && !deliveryEligible) {
+      setDeliveryInfo(prev => ({ ...prev, fulfillmentType: 'pickup' }));
+    }
+  }, [isDelivery, deliveryEligible]);
+
+  const goToDeliveryAddress = () => {
+    navigation.navigate('DeliveryAddress', { feeNotes, storeNames });
+  };
+
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
+    if (isDelivery && (!deliveryInfo.address?.trim() || !deliveryInfo.phone?.trim())) {
+      Alert.alert("Delivery details needed", "Please add your delivery address and phone number.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Add Details", onPress: goToDeliveryAddress },
+      ]);
+      return;
+    }
     setCheckingOut(true);
     const cartSnapshot = cartItems.map(item => ({
       name: item.type === 'bag' ? (item.store_name + ' Surprise Bag') : item.name,
@@ -4499,6 +4702,7 @@ function CartScreen({ navigation, route }) {
     }));
     const storeName = cartItems[0]?.store_name || 'Store';
     const totalPrice = cartTotalPrice;
+    const paymentMethodLabel = isDelivery ? 'Cash on Delivery' : 'Cash at Pickup';
     try {
       const payload = {
         items: cartItems.map(item => ({
@@ -4507,7 +4711,9 @@ function CartScreen({ navigation, route }) {
           quantity: item.cart_quantity,
           price: item.price
         })),
-        paymentMethod: 'Cash at Pickup'
+        paymentMethod: paymentMethodLabel,
+        fulfillmentType: isDelivery ? 'delivery' : 'pickup',
+        ...(isDelivery ? { deliveryAddress: deliveryInfo.address.trim(), deliveryPhone: deliveryInfo.phone.trim() } : {}),
       };
       const response = await axios.post(`${API_URL}/orders`, payload, { headers: { Authorization: `Bearer ${token}` } });
       const receiptGroups = response.data?.receipt_groups || [];
@@ -4515,43 +4721,62 @@ function CartScreen({ navigation, route }) {
         id: cartItems[0].tenant_id,
         name: cartItems[0].tenant_name || storeName,
       } : null);
-      clearCart();
-      navigation.navigate('Discover', tenantParam ? { tenant: tenantParam } : undefined);
 
-      if (receiptGroups.length > 0) {
-        receiptGroups.forEach((group) => {
-          const groupItems = group.orders.map((o) => ({
-            name: o.item_name || (o.type === 'bag' ? `${o.store_name} Surprise Bag` : o.item_name),
-            quantity: o.quantity,
-            price: o.price,
-            type: o.type,
-          }));
-          const groupTotal = group.orders.reduce((s, o) => s + Number(o.price) * (o.quantity || 1), 0);
+      const finishUp = () => {
+        clearCart();
+        navigation.navigate('Discover', tenantParam ? { tenant: tenantParam } : undefined);
+
+        if (receiptGroups.length > 0) {
+          receiptGroups.forEach((group) => {
+            const groupItems = group.orders.map((o) => ({
+              name: o.item_name || (o.type === 'bag' ? `${o.store_name} Surprise Bag` : o.item_name),
+              quantity: o.quantity,
+              price: o.price,
+              type: o.type,
+            }));
+            const groupTotal = group.orders.reduce((s, o) => s + Number(o.price) * (o.quantity || 1), 0);
+            openReceipt({
+              orderIds: group.orders.map((o) => o.id),
+              storeName: group.orders[0]?.store_name || storeName,
+              tenantName: group.tenant_name || storeName,
+              items: groupItems,
+              total: groupTotal,
+              pickupTime: group.orders[0]?.pickup_time || null,
+              fulfillmentType: group.orders[0]?.fulfillment_type || (isDelivery ? 'delivery' : 'pickup'),
+              deliveryAddress: group.orders[0]?.delivery_address || null,
+              deliveryPhone: group.orders[0]?.delivery_phone || null,
+              customerName: user?.name || null,
+              dateTime: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              paymentMethod: paymentMethodLabel,
+            });
+          });
+        } else {
+          const orderIds = response.data?.order_ids || [];
           openReceipt({
-            orderIds: group.orders.map((o) => o.id),
-            storeName: group.orders[0]?.store_name || storeName,
-            tenantName: group.tenant_name || storeName,
-            items: groupItems,
-            total: groupTotal,
-            pickupTime: group.orders[0]?.pickup_time || null,
+            orderIds,
+            storeName,
+            tenantName: storeName,
+            items: cartSnapshot,
+            total: totalPrice,
+            pickupTime: null,
+            fulfillmentType: isDelivery ? 'delivery' : 'pickup',
+            deliveryAddress: isDelivery ? deliveryInfo.address : null,
+            deliveryPhone: isDelivery ? deliveryInfo.phone : null,
             customerName: user?.name || null,
             dateTime: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-            paymentMethod: 'Cash at Pickup',
+            paymentMethod: paymentMethodLabel,
           });
-        });
+        }
+      };
+
+      if (isDelivery) {
+        Alert.alert(
+          "Order Placed! 🛵",
+          `${storeName} will call you shortly to confirm your order and any delivery charges. Delivery cost is not included in the app total — pay it directly to the store.`,
+          [{ text: "Got it", onPress: finishUp }]
+        );
       } else {
-        const orderIds = response.data?.order_ids || [];
-        openReceipt({
-          orderIds,
-          storeName,
-          tenantName: storeName,
-          items: cartSnapshot,
-          total: totalPrice,
-          pickupTime: null,
-          customerName: user?.name || null,
-          dateTime: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          paymentMethod: 'Cash at Pickup',
-        });
+        finishUp();
       }
     } catch (e) {
       Alert.alert("Checkout Failed", e.response?.data?.error || e.message);
@@ -4646,14 +4871,58 @@ function CartScreen({ navigation, route }) {
               <Text style={{ fontSize: 24, fontWeight: '800', color: '#10B981' }}>{currencySymbol}{cartTotalPrice.toFixed(2)}</Text>
             </View>
             <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 10 }}>How would you like to get this order?</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setDeliveryInfo(prev => ({ ...prev, fulfillmentType: 'pickup' }))}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: !isDelivery ? '#EA580C' : '#E5E7EB', backgroundColor: !isDelivery ? '#FFF7ED' : '#F9FAFB' }}
+                >
+                  <Ionicons name="storefront-outline" size={16} color={!isDelivery ? '#EA580C' : '#6B7280'} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: !isDelivery ? '#EA580C' : '#6B7280' }}>Pickup</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => deliveryEligible && goToDeliveryAddress()}
+                  disabled={!deliveryEligible}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isDelivery ? '#EA580C' : '#E5E7EB', backgroundColor: isDelivery ? '#FFF7ED' : (deliveryEligible ? '#F9FAFB' : '#F3F4F6'), opacity: deliveryEligible ? 1 : 0.5 }}
+                >
+                  <Ionicons name="bicycle-outline" size={16} color={isDelivery ? '#EA580C' : '#6B7280'} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: isDelivery ? '#EA580C' : '#6B7280' }}>Delivery</Text>
+                </TouchableOpacity>
+              </View>
+              {!deliveryEligible && (
+                <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>
+                  Delivery isn't offered by every store in your cart, so pickup is the only option right now.
+                </Text>
+              )}
+            </View>
+
+            {isDelivery && (
+              <View style={{ backgroundColor: '#FFF7ED', borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: '#FED7AA' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#EA580C', textTransform: 'uppercase', letterSpacing: 0.5 }}>Deliver To</Text>
+                    <Text style={{ fontSize: 13, color: '#111827', fontWeight: '600', marginTop: 4 }} numberOfLines={2}>{deliveryInfo.address || 'No address added'}</Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{deliveryInfo.phone}</Text>
+                  </View>
+                  <TouchableOpacity onPress={goToDeliveryAddress}>
+                    <Text style={{ color: '#EA580C', fontWeight: '700', fontSize: 12 }}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8, lineHeight: 15 }}>
+                  Delivered by the store, not Grabengo. Delivery charges (if any) are excluded from the total below — pay the store directly. They may call to confirm.
+                </Text>
+              </View>
+            )}
+
+            <View style={{ marginBottom: 20 }}>
               <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 10 }}>Payment Method</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#BBF7D0', gap: 12 }}>
                 <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center' }}>
                   <Ionicons name="cash" size={22} color="#15803D" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>Cash at Pickup</Text>
-                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Pay when you collect your order</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>{isDelivery ? 'Cash on Delivery' : 'Cash at Pickup'}</Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{isDelivery ? 'Delivery cost excluded — pay the store directly' : 'Pay when you collect your order'}</Text>
                 </View>
                 <View style={{ backgroundColor: '#15803D', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
                   <Text style={{ color: 'white', fontSize: 10, fontWeight: '800' }}>ONLY</Text>
@@ -4683,9 +4952,11 @@ function BookingsScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchOrders();
+    }, [])
+  );
 
   const fetchOrders = async () => {
     try {
@@ -4701,12 +4972,31 @@ function BookingsScreen({ navigation }) {
   const renderOrderItem = ({ item }) => {
     const imageUrl = item.store_image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&auto=format&fit=crop';
     const date = new Date(item.created_at).toLocaleDateString();
+    const isDelivery = item.fulfillment_type === 'delivery';
+    const CUSTOMER_STATUS_BADGES = {
+      pending: isDelivery ? { label: 'AWAITING CONFIRMATION', bg: '#FEF3C7', color: '#92400E' } : null,
+      confirmed: { label: 'CONFIRMED', bg: '#DBEAFE', color: '#1D4ED8' },
+      rejected: { label: 'DELIVERY DECLINED', bg: '#FEE2E2', color: '#DC2626' },
+      cancelled: { label: 'CANCELLED', bg: '#F3F4F6', color: '#6B7280' },
+    };
+    const statusBadge = CUSTOMER_STATUS_BADGES[item.status];
     return (
       <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
           <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600' }}>{date}</Text>
-          <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-            <Text style={{ fontSize: 10, color: '#0369A1', fontWeight: '700' }}>{item.payment_method?.toUpperCase()}</Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDelivery ? '#DBEAFE' : '#F3F4F6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+              <Ionicons name={isDelivery ? "bicycle-outline" : "storefront-outline"} size={11} color={isDelivery ? '#1D4ED8' : '#374151'} />
+              <Text style={{ fontSize: 10, color: isDelivery ? '#1D4ED8' : '#374151', fontWeight: '700' }}>{isDelivery ? 'DELIVERY' : 'PICKUP'}</Text>
+            </View>
+            {statusBadge && (
+              <View style={{ backgroundColor: statusBadge.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                <Text style={{ fontSize: 10, color: statusBadge.color, fontWeight: '700' }}>{statusBadge.label}</Text>
+              </View>
+            )}
+            <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+              <Text style={{ fontSize: 10, color: '#0369A1', fontWeight: '700' }}>{item.payment_method?.toUpperCase()}</Text>
+            </View>
           </View>
         </View>
         <View style={{ flexDirection: 'row' }}>
@@ -4720,6 +5010,12 @@ function BookingsScreen({ navigation }) {
             </View>
           </View>
         </View>
+        {isDelivery && (
+          <View style={{ backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, marginTop: 10 }}>
+            <Text style={{ fontSize: 12, color: '#1D4ED8', fontWeight: '700' }}>{item.delivery_address}</Text>
+            <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>Delivered by the store · delivery cost excluded from total above</Text>
+          </View>
+        )}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 10, gap: 8 }}>
           <TouchableOpacity
             onPress={() => {
@@ -4729,6 +5025,9 @@ function BookingsScreen({ navigation }) {
                 items: [{ name: item.item_name, quantity: item.quantity, price: item.price, type: item.type }],
                 total: item.price * item.quantity,
                 pickupTime: null,
+                fulfillmentType: item.fulfillment_type,
+                deliveryAddress: item.delivery_address,
+                deliveryPhone: item.delivery_phone,
                 customerName: user?.name || null,
                 dateTime: new Date(item.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
                 paymentMethod: item.payment_method || 'Cash at Pickup',
@@ -4829,6 +5128,8 @@ function SellerDashboardScreen() {
   const [storeAddress, setStoreAddress] = useState('');
   const [storeLat, setStoreLat] = useState(51.5074);
   const [storeLng, setStoreLng] = useState(-0.1278);
+  const [storeDeliveryEnabled, setStoreDeliveryEnabled] = useState(false);
+  const [storeDeliveryFeeNote, setStoreDeliveryFeeNote] = useState('');
 
   const [bagStoreId, setBagStoreId] = useState(null);
   const [bagPrice, setBagPrice] = useState('');
@@ -4852,10 +5153,37 @@ function SellerDashboardScreen() {
   const [foodQuantity, setFoodQuantity] = useState('');
   const [foodCategory, setFoodCategory] = useState('Other');
   const [foodImages, setFoodImages] = useState([]);
+  const [foodSaleEndsAt, setFoodSaleEndsAt] = useState(null); // Date | null
+  const [foodSalePicker, setFoodSalePicker] = useState(null); // 'date' | 'time' (Android steps) | 'datetime' (iOS) | null
   const [sellerFoodItems, setSellerFoodItems] = useState([]);
   const [editingFoodId, setEditingFoodId] = useState(null);
 
-  const [stats, setStats] = useState({ totalRevenue: 0, bagsSold: 0, dailySales: [] });
+  const defaultSaleEnd = () => {
+    const d = new Date();
+    d.setHours(d.getHours() + 1, 0, 0, 0);
+    return d;
+  };
+  const onSaleEndPicked = (_event, date) => {
+    if (!date) return;
+    if (Platform.OS === 'android' && foodSalePicker === 'date') {
+      // Date chosen; keep previous (or default) time and ask for the time next
+      const next = new Date(date);
+      const base = foodSaleEndsAt || defaultSaleEnd();
+      next.setHours(base.getHours(), base.getMinutes(), 0, 0);
+      setFoodSaleEndsAt(next);
+      setFoodSalePicker('time');
+      return;
+    }
+    if (Platform.OS === 'android') setFoodSalePicker(null);
+    setFoodSaleEndsAt(prev => {
+      const next = new Date(prev || date);
+      if (foodSalePicker === 'time') next.setHours(date.getHours(), date.getMinutes(), 0, 0);
+      else return new Date(date);
+      return next;
+    });
+  };
+
+  const [stats, setStats] = useState({ totalRevenue: 0, bagsSold: 0, productsSold: 0, dailySales: [] });
   const [sellerOrders, setSellerOrders] = useState([]);
   const [sellerReviews, setSellerReviews] = useState([]);
   const [sellerChats, setSellerChats] = useState([]);
@@ -4890,7 +5218,27 @@ function SellerDashboardScreen() {
   const [pickupDays, setPickupDays] = useState([]);
   const [pickupFrom, setPickupFrom] = useState('18:00');
   const [pickupTo, setPickupTo] = useState('20:00');
+  const [activeTimePicker, setActiveTimePicker] = useState(null); // 'from' | 'to' | null
   const buildPickupTime = (days, from, to) => days.length === 0 ? `${from} - ${to}` : `${days.join(', ')} ${from} - ${to}`;
+  const timeToDate = (hhmm) => {
+    const [h, m] = (hhmm || '').split(':').map(Number);
+    const d = new Date();
+    d.setHours(Number.isFinite(h) ? h : 18, Number.isFinite(m) ? m : 0, 0, 0);
+    return d;
+  };
+  const formatTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const onTimePicked = (which) => (_event, date) => {
+    if (Platform.OS === 'android') setActiveTimePicker(null);
+    if (!date) return;
+    const value = formatTime(date);
+    if (which === 'from') {
+      setPickupFrom(value);
+      setPickupTime(buildPickupTime(pickupDays, value, pickupTo));
+    } else {
+      setPickupTo(value);
+      setPickupTime(buildPickupTime(pickupDays, pickupFrom, value));
+    }
+  };
   const togglePickupDay = (day) => {
     setPickupDays(prev => {
       const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
@@ -4938,6 +5286,7 @@ function SellerDashboardScreen() {
       setStats({
         totalRevenue: Number(data.totalRevenue) || 0,
         bagsSold: Number(data.bagsSold) || 0,
+        productsSold: Number(data.productsSold) || 0,
         dailySales: data.dailySales || [],
       });
     } catch (e) {
@@ -4951,6 +5300,34 @@ function SellerDashboardScreen() {
       setSellerOrders(response.data || []);
     } catch (e) {
       console.log("Error fetching seller orders:", e.message);
+    }
+  };
+
+  const runOrderAction = async (orderId, action) => {
+    try {
+      await axios.patch(`${API_URL}/seller/orders/${orderId}/status`, { action }, { headers: { Authorization: `Bearer ${token}` } });
+      fetchSellerOrders();
+      fetchStats();
+    } catch (e) {
+      Alert.alert("Error", e.response?.data?.error || "Could not update this order.");
+    }
+  };
+
+  const ORDER_ACTION_CONFIRMATIONS = {
+    reject: { title: "Reject Delivery?", message: "The customer will be notified that this delivery was declined. Stock will be restored." },
+    convert_to_pickup: { title: "Convert to Pickup?", message: "The customer will be notified they now need to pick up this order themselves." },
+    cancel: { title: "Cancel Order?", message: "The customer will be notified. Stock will be restored to your inventory." },
+  };
+
+  const handleOrderAction = (orderId, action) => {
+    const confirmCopy = ORDER_ACTION_CONFIRMATIONS[action];
+    if (confirmCopy) {
+      Alert.alert(confirmCopy.title, confirmCopy.message, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Yes, Continue", style: "destructive", onPress: () => runOrderAction(orderId, action) },
+      ]);
+    } else {
+      runOrderAction(orderId, action);
     }
   };
 
@@ -5130,14 +5507,14 @@ function SellerDashboardScreen() {
     if (!storeName || !storeAddress) return Alert.alert("Error", "Please fill all store fields.");
     try {
       if (editingStoreId) {
-        await axios.put(`${API_URL}/stores/${editingStoreId}`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(`${API_URL}/stores/${editingStoreId}`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_fee_note: storeDeliveryFeeNote.trim() || null }, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Store updated successfully!");
         setEditingStoreId(null);
       } else {
-        await axios.post(`${API_URL}/stores`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post(`${API_URL}/stores`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_fee_note: storeDeliveryFeeNote.trim() || null }, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Store created successfully!");
       }
-      setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278);
+      setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryFeeNote('');
       setShowStoreModal(false);
       fetchStores();
       fetchStats();
@@ -5158,6 +5535,16 @@ function SellerDashboardScreen() {
         }
       }
     ]);
+  };
+
+  const handleToggleStoreDelivery = async (store, nextValue) => {
+    setStores(prev => prev.map(s => s.id === store.id ? { ...s, delivery_enabled: nextValue } : s));
+    try {
+      await axios.put(`${API_URL}/stores/${store.id}`, { delivery_enabled: nextValue }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (e) {
+      setStores(prev => prev.map(s => s.id === store.id ? { ...s, delivery_enabled: !nextValue } : s));
+      Alert.alert("Error", e.response?.data?.error || "Could not update delivery setting");
+    }
   };
 
   const handleCreateBag = async () => {
@@ -5217,6 +5604,7 @@ function SellerDashboardScreen() {
         images: foodImages,
         quantity: parseInt(foodQuantity),
         category: foodCategory,
+        sale_ends_at: foodSaleEndsAt ? foodSaleEndsAt.toISOString() : null,
       };
       if (editingFoodId) {
         await axios.put(`${API_URL}/food-items/${editingFoodId}`, payload, { headers: { Authorization: `Bearer ${token}` } });
@@ -5226,7 +5614,7 @@ function SellerDashboardScreen() {
         await axios.post(`${API_URL}/food-items`, payload, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Food item created!");
       }
-      setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]);
+      setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]); setFoodSaleEndsAt(null); setFoodSalePicker(null);
       fetchSellerFoodItems();
     } catch (e) {
       Alert.alert("Error", e.response?.data?.error || e.message);
@@ -5322,7 +5710,7 @@ function SellerDashboardScreen() {
       </Modal>
 
       {/* Quick nav chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 52, marginTop: 12 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 52, marginTop: 12, flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}>
         {navItems.map(item => (
           <TouchableOpacity
             key={item.key}
@@ -5340,10 +5728,15 @@ function SellerDashboardScreen() {
       </ScrollView>
 
       {/* KPI Strip */}
-      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 12, marginBottom: 8 }}>
-        <SellerStatCard label="Revenue" value={formatMoney(stats.totalRevenue, currencySymbol)} />
-        <SellerStatCard label="Bags Sold" value={String(stats.bagsSold)} />
-        <SellerStatCard label="Stores" value={String(stores.length)} />
+      <View style={{ gap: 10, paddingHorizontal: 16, marginTop: 12, marginBottom: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <SellerStatCard label="Revenue" value={formatMoney(stats.totalRevenue, currencySymbol)} />
+          <SellerStatCard label="Stores" value={String(stores.length)} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <SellerStatCard label="Bags Sold" value={String(stats.bagsSold)} />
+          <SellerStatCard label="Products Sold" value={String(stats.productsSold)} />
+        </View>
       </View>
 
       {/* Currency Picker Row */}
@@ -5366,6 +5759,7 @@ function SellerDashboardScreen() {
           data={stores}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          removeClippedSubviews={false}
           ListEmptyComponent={<SellerEmptyState icon="storefront-outline" title="No stores yet" subtitle="Tap + to add your first store location" />}
           renderItem={({ item: store }) => (
             <View style={[styles.card, { marginBottom: 12 }]}>
@@ -5382,9 +5776,23 @@ function SellerDashboardScreen() {
                   <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{store.address}</Text>
                 </View>
               </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="bicycle-outline" size={18} color={store.delivery_enabled ? SELLER_BRAND : '#9CA3AF'} />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: store.delivery_enabled ? '#111827' : '#6B7280' }}>
+                    Delivery {store.delivery_enabled ? 'On' : 'Off'}
+                  </Text>
+                </View>
+                <Switch
+                  value={!!store.delivery_enabled}
+                  onValueChange={(next) => handleToggleStoreDelivery(store, next)}
+                  trackColor={{ false: '#E5E7EB', true: '#FED7AA' }}
+                  thumbColor={store.delivery_enabled ? SELLER_BRAND : '#F3F4F6'}
+                />
+              </View>
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                 <TouchableOpacity
-                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setEditingStoreId(store.id); setShowStoreModal(true); }}
+                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setStoreDeliveryEnabled(!!store.delivery_enabled); setStoreDeliveryFeeNote(store.delivery_fee_note || ''); setEditingStoreId(store.id); setShowStoreModal(true); }}
                   style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FFF7ED', borderRadius: 10, alignItems: 'center' }}>
                   <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 13 }}>Edit</Text>
                 </TouchableOpacity>
@@ -5405,6 +5813,7 @@ function SellerDashboardScreen() {
           data={sellerBags}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          removeClippedSubviews={false}
           ListEmptyComponent={<SellerEmptyState icon="bag-handle-outline" title="No surprise bags yet" subtitle="Create your first surprise bag listing" />}
           renderItem={({ item: bag }) => (
             <View style={[styles.card, { marginBottom: 12 }]}>
@@ -5443,6 +5852,7 @@ function SellerDashboardScreen() {
                       setPickupFrom(details.from);
                       setPickupTo(details.to);
                       setEditingBagId(bag.id);
+                      setActiveTimePicker(null);
                       setShowBagModal(true);
                     }}
                     style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#EEF2FF', borderRadius: 8 }}>
@@ -5466,6 +5876,7 @@ function SellerDashboardScreen() {
           data={sellerFoodItems}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          removeClippedSubviews={false}
           ListEmptyComponent={<SellerEmptyState icon="cart-outline" title="No products yet" subtitle="Add grocery, household, and other store items" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { marginBottom: 12 }]}>
@@ -5505,6 +5916,8 @@ function SellerDashboardScreen() {
                       setFoodQuantity(item.quantity.toString());
                       setFoodCategory(item.category || 'Other');
                       setFoodImages(parsedImgs);
+                      setFoodSaleEndsAt(item.sale_ends_at ? new Date(item.sale_ends_at) : null);
+                      setFoodSalePicker(null);
                       setEditingFoodId(item.id);
                       setShowFoodModal(true);
                     }}
@@ -5528,23 +5941,92 @@ function SellerDashboardScreen() {
           data={sellerOrders}
           keyExtractor={item => String(item.id)}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          removeClippedSubviews={false}
           ListEmptyComponent={<SellerEmptyState icon="receipt-outline" title="No orders yet" subtitle="Customer orders will appear here" />}
-          renderItem={({ item: order }) => (
+          renderItem={({ item: order }) => {
+            const isDelivery = order.fulfillment_type === 'delivery';
+            const status = order.status || 'pending';
+            const isSettled = ['paid', 'rejected', 'cancelled'].includes(status);
+            const showTriad = isDelivery && status === 'pending';
+            const showPaymentActions = !isSettled && !showTriad;
+            const STATUS_BADGES = {
+              confirmed: { label: 'CONFIRMED', bg: '#DBEAFE', color: '#1D4ED8' },
+              paid: { label: 'PAID', bg: '#DCFCE7', color: '#15803D' },
+              rejected: { label: 'REJECTED', bg: '#FEE2E2', color: '#DC2626' },
+              cancelled: { label: 'CANCELLED', bg: '#F3F4F6', color: '#6B7280' },
+            };
+            const statusBadge = STATUS_BADGES[status];
+            return (
             <View style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDelivery ? '#DBEAFE' : '#F3F4F6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
+                      <Ionicons name={isDelivery ? "bicycle-outline" : "storefront-outline"} size={11} color={isDelivery ? '#1D4ED8' : '#374151'} />
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: isDelivery ? '#1D4ED8' : '#374151' }}>{isDelivery ? 'DELIVERY' : 'PICKUP'}</Text>
+                    </View>
+                    {statusBadge && (
+                      <View style={{ backgroundColor: statusBadge.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: statusBadge.color }}>{statusBadge.label}</Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={{ fontWeight: '800', fontSize: 15, color: '#111827' }}>{order.item_name || 'Order Item'}</Text>
                   <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{order.store_name} · Ref #{order.id}</Text>
                   <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>{order.customer_name || order.customer_email || 'Customer'}</Text>
                 </View>
                 <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 17 }}>{formatMoney(Number(order.price) * (order.quantity || 1), currencySymbol)}</Text>
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+
+              {isDelivery && (
+                <View style={{ backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, marginTop: 10 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Deliver To</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827', marginTop: 2 }}>{order.delivery_address || 'No address provided'}</Text>
+                </View>
+              )}
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
                 <Text style={{ color: '#6B7280', fontSize: 12 }}>Qty: {order.quantity || 1} · {order.payment_method || 'Cash at Pickup'}</Text>
-                <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{order.pickup_time || 'Pickup window TBC'}</Text>
+                <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{isDelivery ? '' : (order.pickup_time || 'Pickup window TBC')}</Text>
               </View>
+
+              {order.customer_phone ? (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`tel:${order.customer_phone}`)}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 8, backgroundColor: '#F0FDF4', borderRadius: 10 }}
+                >
+                  <Ionicons name="call-outline" size={14} color="#15803D" />
+                  <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13 }}>{order.customer_phone}</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {showTriad && (
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'confirm')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DCFCE7', borderRadius: 10, alignItems: 'center' }}>
+                    <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 11.5 }}>Confirm</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'convert_to_pickup')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DBEAFE', borderRadius: 10, alignItems: 'center' }}>
+                    <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 11.5 }}>To Pickup</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'reject')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center' }}>
+                    <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 11.5 }}>Reject</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {showPaymentActions && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'mark_paid')} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: SELLER_BRAND, borderRadius: 10 }}>
+                    <Ionicons name="cash-outline" size={13} color="#fff" />
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12.5 }}>Amount Received</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'cancel')} style={{ paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12.5 }}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-          )}
+          );}}
         />
       )}
 
@@ -5553,6 +6035,7 @@ function SellerDashboardScreen() {
           data={sellerReviews}
           keyExtractor={item => String(item.id)}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          removeClippedSubviews={false}
           ListEmptyComponent={<SellerEmptyState icon="star-outline" title="No reviews yet" subtitle="Customer reviews will show here" />}
           renderItem={({ item: review }) => (
             <View style={[styles.card, { marginBottom: 12 }]}>
@@ -5575,6 +6058,7 @@ function SellerDashboardScreen() {
           data={sellerChats}
           keyExtractor={item => `${item.store_id}_${item.customer_id}`}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          removeClippedSubviews={false}
           ListEmptyComponent={<SellerEmptyState icon="chatbubbles-outline" title="No conversations yet" subtitle="Customer chat messages will appear here" />}
           renderItem={({ item: chat }) => (
             <TouchableOpacity onPress={() => openSellerChat(chat)} style={[styles.card, { marginBottom: 12 }]}>
@@ -5600,6 +6084,7 @@ function SellerDashboardScreen() {
           data={staffList}
           keyExtractor={item => String(item.id)}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          removeClippedSubviews={false}
           ListEmptyComponent={<SellerEmptyState icon="people-outline" title="No staff yet" subtitle="Add team members to help manage your stores" />}
           ListHeaderComponent={
             <TouchableOpacity onPress={() => setShowStaffModal(true)} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND, marginBottom: 16 }]}>
@@ -5626,9 +6111,9 @@ function SellerDashboardScreen() {
       {inventoryTab && (
       <TouchableOpacity
         onPress={() => {
-          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setShowStoreModal(true); }
-          else if (sellerTab === 'bags') { setEditingBagId(null); setBagStoreId(null); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setShowBagModal(true); }
-          else { setEditingFoodId(null); setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]); setShowFoodModal(true); }
+          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryFeeNote(''); setShowStoreModal(true); }
+          else if (sellerTab === 'bags') { setEditingBagId(null); setBagStoreId(null); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setActiveTimePicker(null); setShowBagModal(true); }
+          else { setEditingFoodId(null); setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]); setFoodSaleEndsAt(null); setFoodSalePicker(null); setShowFoodModal(true); }
         }}
         style={{
           position: 'absolute', bottom: 30, right: 20,
@@ -5704,6 +6189,38 @@ function SellerDashboardScreen() {
                   <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>Upload Store Image (Optional)</Text>
                 </TouchableOpacity>
               )}
+
+              <View style={{ backgroundColor: '#F9FAFB', borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <Ionicons name="bicycle-outline" size={20} color={SELLER_BRAND} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: '700', fontSize: 14, color: '#111827' }}>Offer Delivery</Text>
+                      <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>Customers can request delivery at checkout</Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={storeDeliveryEnabled}
+                    onValueChange={setStoreDeliveryEnabled}
+                    trackColor={{ false: '#E5E7EB', true: '#FED7AA' }}
+                    thumbColor={storeDeliveryEnabled ? SELLER_BRAND : '#F3F4F6'}
+                  />
+                </View>
+                {storeDeliveryEnabled && (
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Delivery Fee / Notes (optional)</Text>
+                    <TextInput
+                      style={[styles.input, { marginBottom: 0 }]}
+                      placeholder="e.g. Rs 150 flat fee, or 'call to confirm charge'"
+                      placeholderTextColor="#9CA3AF"
+                      value={storeDeliveryFeeNote}
+                      onChangeText={setStoreDeliveryFeeNote}
+                    />
+                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>Shown to customers before they choose delivery. You collect this charge directly — it's not processed by Grabengo.</Text>
+                  </View>
+                )}
+              </View>
+
               <TouchableOpacity onPress={handleCreateStore} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND }]}>
                 <Text style={styles.primaryButtonText}>{editingStoreId ? 'Update Store' : 'Create Store'}</Text>
               </TouchableOpacity>
@@ -5756,15 +6273,42 @@ function SellerDashboardScreen() {
               <View style={{ flexDirection: 'row', gap: 10, marginBottom: 6 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>From</Text>
-                  <TextInput style={styles.input} placeholder="18:00" placeholderTextColor="#9CA3AF" value={pickupFrom}
-                    onChangeText={v => { setPickupFrom(v); setPickupTime(buildPickupTime(pickupDays, v, pickupTo)); }} />
+                  <TouchableOpacity
+                    style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                    onPress={() => setActiveTimePicker(activeTimePicker === 'from' ? null : 'from')}>
+                    <Text style={{ fontSize: 15, color: '#111827' }}>{pickupFrom}</Text>
+                    <Ionicons name="time-outline" size={18} color={activeTimePicker === 'from' ? SELLER_BRAND : '#64748B'} />
+                  </TouchableOpacity>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>To</Text>
-                  <TextInput style={styles.input} placeholder="20:00" placeholderTextColor="#9CA3AF" value={pickupTo}
-                    onChangeText={v => { setPickupTo(v); setPickupTime(buildPickupTime(pickupDays, pickupFrom, v)); }} />
+                  <TouchableOpacity
+                    style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                    onPress={() => setActiveTimePicker(activeTimePicker === 'to' ? null : 'to')}>
+                    <Text style={{ fontSize: 15, color: '#111827' }}>{pickupTo}</Text>
+                    <Ionicons name="time-outline" size={18} color={activeTimePicker === 'to' ? SELLER_BRAND : '#64748B'} />
+                  </TouchableOpacity>
                 </View>
               </View>
+              {activeTimePicker && (
+                <View style={{ marginBottom: 6 }}>
+                  <DateTimePicker
+                    value={timeToDate(activeTimePicker === 'from' ? pickupFrom : pickupTo)}
+                    mode="time"
+                    is24Hour
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onValueChange={onTimePicked(activeTimePicker)}
+                    onDismiss={() => setActiveTimePicker(null)}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <TouchableOpacity
+                      style={{ alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: SELLER_BRAND, borderRadius: 8 }}
+                      onPress={() => setActiveTimePicker(null)}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               {pickupTime ? (
                 <View style={{ backgroundColor: '#FFF7ED', borderRadius: 8, padding: 8, marginBottom: 14 }}>
                   <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 12 }}>{pickupTime}</Text>
@@ -5835,6 +6379,42 @@ function SellerDashboardScreen() {
               </View>
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Quantity *</Text>
               <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="10" placeholderTextColor="#9CA3AF" value={foodQuantity} onChangeText={setFoodQuantity} keyboardType="numeric" />
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>On sale until (optional)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <TouchableOpacity
+                  style={[styles.input, { flex: 1, marginBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                  onPress={() => setFoodSalePicker(Platform.OS === 'ios' ? 'datetime' : 'date')}>
+                  <Text style={{ fontSize: 15, color: foodSaleEndsAt ? '#111827' : '#9CA3AF' }}>
+                    {foodSaleEndsAt ? formatSaleEnd(foodSaleEndsAt) : 'Set end date & time'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={18} color={foodSalePicker ? SELLER_BRAND : '#64748B'} />
+                </TouchableOpacity>
+                {foodSaleEndsAt && (
+                  <TouchableOpacity onPress={() => { setFoodSaleEndsAt(null); setFoodSalePicker(null); }}>
+                    <Ionicons name="close-circle" size={22} color="#9CA3AF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              {foodSalePicker && (
+                <View style={{ marginBottom: 14 }}>
+                  <DateTimePicker
+                    value={foodSaleEndsAt || defaultSaleEnd()}
+                    mode={Platform.OS === 'ios' ? 'datetime' : foodSalePicker}
+                    is24Hour
+                    minimumDate={new Date()}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onValueChange={onSaleEndPicked}
+                    onDismiss={() => setFoodSalePicker(null)}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <TouchableOpacity
+                      style={{ alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: SELLER_BRAND, borderRadius: 8 }}
+                      onPress={() => { if (!foodSaleEndsAt) setFoodSaleEndsAt(defaultSaleEnd()); setFoodSalePicker(null); }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Description</Text>
               <TextInput style={[styles.input, { height: 70, marginBottom: 14 }]} placeholder="Optional description..." placeholderTextColor="#9CA3AF" value={foodDescription} onChangeText={setFoodDescription} multiline />
               <TouchableOpacity onPress={pickFoodImages} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#FED7AA' }}>
@@ -5947,6 +6527,8 @@ export default function App() {
   });
 
   const [cartItems, setCartItems] = useState([]);
+  const DEFAULT_DELIVERY_INFO = { fulfillmentType: 'pickup', address: '', phone: '' };
+  const [deliveryInfo, setDeliveryInfo] = useState(DEFAULT_DELIVERY_INFO);
 
   // Global Currency State
   const [currencyCode, setCurrencyCode] = useState('GBP');
@@ -5975,6 +6557,7 @@ export default function App() {
           { text: "Cancel", style: "cancel" },
           { text: "Clear Cart & Add", onPress: () => {
             setCartItems([{ ...item, type, cart_quantity: 1 }]);
+            setDeliveryInfo(DEFAULT_DELIVERY_INFO);
             Alert.alert("Success", "Item added to cart");
           }}
         ]
@@ -6018,13 +6601,14 @@ export default function App() {
     setCartItems(prev => prev.filter(i => !(i.id === id && i.type === type)));
   };
 
-  const clearCart = () => setCartItems([]);
+  const clearCart = () => { setCartItems([]); setDeliveryInfo(DEFAULT_DELIVERY_INFO); };
 
   const cartContext = React.useMemo(() => ({
     cartItems, addToCart, updateQuantity, removeFromCart, clearCart,
     cartTotalCount: cartItems.reduce((acc, item) => acc + item.cart_quantity, 0),
-    cartTotalPrice: cartItems.reduce((acc, item) => acc + (item.price * item.cart_quantity), 0)
-  }), [cartItems]);
+    cartTotalPrice: cartItems.reduce((acc, item) => acc + (item.price * item.cart_quantity), 0),
+    deliveryInfo, setDeliveryInfo,
+  }), [cartItems, deliveryInfo]);
 
   useEffect(() => {
     const bootstrapAsync = async () => {
@@ -6122,6 +6706,7 @@ export default function App() {
                   <Stack.Screen name="Discover" component={DiscoverScreen} />
                   <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} />
                   <Stack.Screen name="Cart" component={CartScreen} />
+                  <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
                   <Stack.Screen name="Bookings" component={BookingsScreen} />
                   <Stack.Screen name="Splash" component={SplashScreen} />
                 </>

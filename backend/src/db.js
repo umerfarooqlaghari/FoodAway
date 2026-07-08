@@ -269,6 +269,26 @@ const initDB = async () => {
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS lng REAL DEFAULT 0"); } catch (e) {}
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"); } catch (e) {}
   try { await db.exec("ALTER TABLE surprise_bags ADD COLUMN IF NOT EXISTS original_price REAL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE food_items ADD COLUMN IF NOT EXISTS sale_ends_at TIMESTAMPTZ"); } catch (e) {}
+  // Old seed data wrote type 'food_item'; the app convention is 'food' (joins depend on it)
+  try { await db.exec("UPDATE orders SET type = 'food' WHERE type = 'food_item'"); } catch (e) {}
+  try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_enabled BOOLEAN DEFAULT FALSE"); } catch (e) {}
+  try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_fee_note TEXT"); } catch (e) {}
+  try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS delivery_address TEXT"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_type TEXT DEFAULT 'pickup'"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_phone TEXT"); } catch (e) {}
+  try {
+    const statusColExists = await db.prepare(
+      "SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'status'"
+    ).get();
+    if (!statusColExists) {
+      await db.exec("ALTER TABLE orders ADD COLUMN status TEXT DEFAULT 'pending'");
+      // Orders placed before this column existed already happened — treat them as settled
+      // so historical revenue/units-sold stats don't vanish. Only new orders start 'pending'.
+      await db.exec("UPDATE orders SET status = 'paid'");
+    }
+  } catch (e) {}
   try { await db.exec("ALTER TABLE surprise_bags ADD COLUMN IF NOT EXISTS description TEXT"); } catch (e) {}
   try { await db.exec("ALTER TABLE surprise_bags ADD COLUMN IF NOT EXISTS images TEXT"); } catch (e) {}
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS food_item_id INTEGER REFERENCES food_items(id)"); } catch (e) {}

@@ -211,7 +211,7 @@ async function main() {
       ).run(
         useFood ? null : bagId,
         useFood ? foodId : null,
-        useFood ? 'food_item' : 'bag',
+        useFood ? 'food' : 'bag',
         storeIds[0],
         customerId,
         useFood ? FOOD_ITEMS[i % FOOD_ITEMS.length].price : SURPRISE_BAGS[i % SURPRISE_BAGS.length].price,
