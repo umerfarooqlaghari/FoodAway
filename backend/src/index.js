@@ -340,9 +340,9 @@ app.post('/api/auth/register', async (req, res) => {
 
       sendEmail({
         to: email,
-        subject: `Your ${brandName} store portal is ready`,
-        html: emailSellerWelcomeLayout({ brandName: finalName, storeUrl, loginUrl }),
-        text: `Welcome to ${brandName}! Your store portal: ${storeUrl}`,
+        subject: `Your ${brandName} store is onboarded`,
+        html: emailSellerWelcomeLayout({ brandName: finalName }),
+        text: `Your store has been onboarded onto ${brandName}. You can now log in with the ${brandName} mobile app to manage your stores, orders, and inventory.`,
       }).catch(err => console.error('Failed to send seller welcome email:', err.message));
 
       return res.status(201).json({
@@ -351,7 +351,7 @@ app.post('/api/auth/register', async (req, res) => {
         subdomain,
         storeUrl,
         loginUrl,
-        message: 'Seller account registered successfully. Your store link has been emailed to you.',
+        message: 'Seller account registered successfully. You can now log in with the mobile app.',
       });
     }
 

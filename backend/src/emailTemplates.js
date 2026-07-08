@@ -35,18 +35,12 @@ function emailSimpleLayout({ title, bodyHtml }) {
     </div>`;
 }
 
-function emailSellerWelcomeLayout({ brandName: storeName, loginUrl }) {
+function emailSellerWelcomeLayout({ brandName: storeName }) {
   return emailSimpleLayout({
     title: 'Your store is ready!',
     bodyHtml: `
       <p>Hi <strong>${storeName}</strong>,</p>
-      <p>Welcome to ${brandName}! Your seller portal is live. Use the link below to sign in and manage your stores, orders, and inventory.</p>
-      <p style="text-align:center;margin:28px 0;">
-        <a href="${loginUrl}" style="background:#FF5A00;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">
-          Open my store portal
-        </a>
-      </p>
-      <p style="font-size:14px;color:#666;">Bookmark this link — all seller sign-ins happen on your dedicated store portal, not the main ${brandName} website.</p>
+      <p>Your store has been onboarded onto ${brandName}. You can now log in with the ${brandName} mobile app to manage your stores, orders, and inventory.</p>
       <p style="font-size:14px;color:#666;">Need help? Contact us at <a href="mailto:${supportEmail}" style="color:#FF5A00;">${supportEmail}</a>.</p>`,
   });
 }
