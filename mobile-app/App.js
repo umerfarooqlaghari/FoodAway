@@ -51,7 +51,6 @@ import { LineChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Rect, Circle, Path, Text as SvgText } from 'react-native-svg';
-import GrabengoLogoMark from './components/GrabengoLogoMark';
 
 const customTheme = {
   ...DefaultTheme,
@@ -127,7 +126,7 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
   body{font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;background:#F1F5F9;padding:32px 16px;}
   .page{max-width:400px;margin:0 auto;}
   .receipt{background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.14);}
-  .hdr{background:linear-gradient(135deg,#EA580C,#F97316);padding:36px 28px 32px;text-align:center;}
+  .hdr{background:linear-gradient(135deg,#E27A53,#C4623E);padding:36px 28px 32px;text-align:center;}
   .check{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.25);display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px;font-size:26px;color:white;}
   .brand{font-size:30px;font-weight:900;color:#fff;letter-spacing:-1px;}
   .confirmed{font-size:10px;color:rgba(255,255,255,0.75);text-transform:uppercase;letter-spacing:1.8px;margin-top:5px;}
@@ -688,6 +687,13 @@ function ChatProvider({ children }) {
   );
 }
 
+function GlobalProfileModal() {
+  const { user, logout, updateUser, token, profileModalVisible, closeProfile } = useContext(AuthContext);
+  return (
+    <CustomerProfileSheet visible={!!profileModalVisible} onClose={closeProfile} user={user} logout={logout} updateUser={updateUser} token={token} />
+  );
+}
+
 function GlobalToast() {
   const { toastNotification, setToastNotification, openChatWithStore, openReceipt } = useContext(ChatContext);
   const slideAnim = useRef(new Animated.Value(-150)).current;
@@ -737,7 +743,7 @@ function GlobalToast() {
 
   let gradientColors = ['#1E293B', '#0F172A'];
   let iconName = 'chatbubble-ellipses';
-  let badgeColor = '#EA580C';
+  let badgeColor = '#E27A53';
   let typeLabel = 'Support Message';
 
   if (toastNotification.type === 'new_bag') {
@@ -853,7 +859,7 @@ function GlobalChatModal() {
 
   return (
     <Modal visible={chatVisible} animationType="slide" onRequestClose={() => setChatVisible(false)}>
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: insets.top }}>
+      <View style={{ flex: 1, backgroundColor: '#FDF3E4', paddingTop: insets.top }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', height: 60 }}>
           <TouchableOpacity onPress={() => setChatVisible(false)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}>
@@ -879,18 +885,18 @@ function GlobalChatModal() {
         </View>
 
         {/* Message History list */}
-        <FlatList
+        <ScrollView
           ref={flatListRef}
-          data={chatMessages}
-          keyExtractor={item => item.id.toString()}
+          style={{ flex: 1 }}
           contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12 }}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          renderItem={({ item }) => {
+        >
+          {chatMessages.map((item) => {
             const isMe = item.sender_role === 'Customer';
             return (
-              <View style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
-                <View style={{ 
-                  backgroundColor: isMe ? '#EA580C' : '#F3F4F6',
+              <View key={item.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                <View style={{
+                  backgroundColor: isMe ? '#E27A53' : '#F3F4F6',
                   paddingHorizontal: 16,
                   paddingVertical: 10,
                   borderRadius: 18,
@@ -906,8 +912,8 @@ function GlobalChatModal() {
                 </Text>
               </View>
             );
-          }}
-        />
+          })}
+        </ScrollView>
 
         {/* Typing indicator message */}
         {isStoreTyping && (
@@ -927,7 +933,7 @@ function GlobalChatModal() {
           paddingBottom: Math.max(insets.bottom, 12),
           borderTopWidth: 1, 
           borderTopColor: '#F3F4F6',
-          backgroundColor: '#FFFFFF'
+          backgroundColor: '#FFF6E9'
         }}>
           <TextInput
             style={{
@@ -956,7 +962,7 @@ function GlobalChatModal() {
               width: 44,
               height: 44,
               borderRadius: 22,
-              backgroundColor: chatInput.trim() ? '#EA580C' : '#E5E7EB',
+              backgroundColor: chatInput.trim() ? '#E27A53' : '#E5E7EB',
               justifyContent: 'center',
               alignItems: 'center',
               marginLeft: 12
@@ -1018,10 +1024,10 @@ function GlobalReceiptModal() {
 
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           {/* Receipt Card */}
-          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.15, shadowRadius: 28, elevation: 12 }}>
+          <View style={{ backgroundColor: '#FFF6E9', borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.15, shadowRadius: 28, elevation: 12 }}>
 
             {/* Gradient Header */}
-            <LinearGradient colors={['#EA580C', '#F97316']} style={{ paddingVertical: 36, paddingHorizontal: 28, alignItems: 'center' }}>
+            <LinearGradient colors={['#E27A53', '#C4623E']} style={{ paddingVertical: 36, paddingHorizontal: 28, alignItems: 'center' }}>
               <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}>
                 <Ionicons name="checkmark" size={30} color="white" />
               </View>
@@ -1035,7 +1041,7 @@ function GlobalReceiptModal() {
             {/* Torn edge */}
             <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', paddingHorizontal: 4 }}>
               {Array.from({ length: 18 }).map((_, i) => (
-                <View key={i} style={{ flex: 1, height: 22, backgroundColor: '#FFFFFF', borderRadius: 11, marginHorizontal: 1, marginTop: -11 }} />
+                <View key={i} style={{ flex: 1, height: 22, backgroundColor: '#FFF6E9', borderRadius: 11, marginHorizontal: 1, marginTop: -11 }} />
               ))}
             </View>
 
@@ -1121,8 +1127,8 @@ function GlobalReceiptModal() {
 
               {/* Show at branch banner */}
               <LinearGradient colors={['#1E293B', '#0F172A']} style={{ borderRadius: 18, padding: 22, marginTop: 22, alignItems: 'center' }}>
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(234,88,12,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 10, borderWidth: 1.5, borderColor: '#EA580C' }}>
-                  <Ionicons name={isDeliveryReceipt ? "call-outline" : "phone-portrait-outline"} size={22} color="#F97316" />
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(234,88,12,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 10, borderWidth: 1.5, borderColor: '#E27A53' }}>
+                  <Ionicons name={isDeliveryReceipt ? "call-outline" : "phone-portrait-outline"} size={22} color="#E27A53" />
                 </View>
                 <Text style={{ color: 'white', fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 5 }}>
                   {isDeliveryReceipt ? "The store will call to confirm" : "Show this receipt at the branch"}
@@ -1136,7 +1142,7 @@ function GlobalReceiptModal() {
             {/* Bottom torn edge */}
             <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', paddingHorizontal: 4 }}>
               {Array.from({ length: 18 }).map((_, i) => (
-                <View key={i} style={{ flex: 1, height: 22, backgroundColor: '#FFFFFF', borderRadius: 11, marginHorizontal: 1, marginBottom: -11 }} />
+                <View key={i} style={{ flex: 1, height: 22, backgroundColor: '#FFF6E9', borderRadius: 11, marginHorizontal: 1, marginBottom: -11 }} />
               ))}
             </View>
 
@@ -1154,7 +1160,7 @@ function GlobalReceiptModal() {
           <TouchableOpacity
             onPress={handleDownloadPDF}
             disabled={generating}
-            style={{ backgroundColor: generating ? '#9CA3AF' : '#EA580C', borderRadius: 16, paddingVertical: 17, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#EA580C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}
+            style={{ backgroundColor: generating ? '#9CA3AF' : '#E27A53', borderRadius: 16, paddingVertical: 17, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#E27A53', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}
           >
             {generating ? (
               <ActivityIndicator color="white" />
@@ -1180,7 +1186,7 @@ function GlobalReceiptModal() {
 const Stack = createNativeStackNavigator();
 
 // --- Landing Screen ---
-const LANDING_ORANGE = '#FF5A00';
+const LANDING_ORANGE = '#E27A53';
 
 function SupermarketPreviewIllustration({ width = 280, height = 210 }) {
   return (
@@ -1252,9 +1258,9 @@ function LandingScreen({ navigation }) {
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 10, alignItems: 'center' }}>
       <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 }}>Grabengo</Text>
       <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ padding: 8 }}>
-        <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', marginBottom: 5, borderRadius: 2 }} />
-        <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', marginBottom: 5, borderRadius: 2 }} />
-        <View style={{ width: 24, height: 3, backgroundColor: '#FFFFFF', borderRadius: 2 }} />
+        <View style={{ width: 24, height: 3, backgroundColor: '#FFF6E9', marginBottom: 5, borderRadius: 2 }} />
+        <View style={{ width: 24, height: 3, backgroundColor: '#FFF6E9', marginBottom: 5, borderRadius: 2 }} />
+        <View style={{ width: 24, height: 3, backgroundColor: '#FFF6E9', borderRadius: 2 }} />
       </TouchableOpacity>
     </View>
   );
@@ -1264,7 +1270,7 @@ function LandingScreen({ navigation }) {
       <TouchableOpacity style={{ position: 'absolute', top: 60, right: 30 }} onPress={() => setMenuVisible(false)}>
         <Text style={{ fontSize: 40, color: '#111827', fontWeight: '300' }}>×</Text>
       </TouchableOpacity>
-      <Text style={{ fontSize: 32, fontWeight: '800', color: '#EA580C', marginBottom: 60 }}>Grabengo Menu</Text>
+      <Text style={{ fontSize: 32, fontWeight: '800', color: '#E27A53', marginBottom: 60 }}>Grabengo Menu</Text>
       <TouchableOpacity
         style={{ backgroundColor: '#111827', paddingVertical: 18, paddingHorizontal: 60, borderRadius: 30, marginBottom: 20, width: 250, alignItems: 'center' }}
         onPress={() => { setMenuVisible(false); navigation.navigate('Login'); }}>
@@ -1289,11 +1295,11 @@ function LandingScreen({ navigation }) {
               <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 32 }}>
                 <TouchableOpacity
                   onPress={() => setShowComingSoon(false)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14, marginBottom: 20 }}>
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#FFF6E9', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14, marginBottom: 20 }}>
                   <Ionicons name="chevron-back" size={16} color={LANDING_ORANGE} />
                   <Text style={{ color: LANDING_ORANGE, fontWeight: '700', fontSize: 13 }}>Back</Text>
                 </TouchableOpacity>
-                <View style={{ alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14, marginBottom: 14 }}>
+                <View style={{ alignSelf: 'flex-start', backgroundColor: '#FFF6E9', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14, marginBottom: 14 }}>
                   <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 11, letterSpacing: 1.2 }}>COMING SOON</Text>
                 </View>
                 <Text style={{ fontSize: 32, fontWeight: '900', color: '#111827', lineHeight: 38, letterSpacing: -0.5 }}>
@@ -1304,16 +1310,16 @@ function LandingScreen({ navigation }) {
                 </Text>
                 
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
-                  <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 14, padding: 14 }}>
+                  <View style={{ flex: 1, backgroundColor: '#FFF6E9', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 14, padding: 14 }}>
                     <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 16 }}>Up to 50%</Text>
                     <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 12, marginTop: 4 }}>off surplus stock</Text>
                   </View>
-                  <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 14, padding: 14 }}>
+                  <View style={{ flex: 1, backgroundColor: '#FFF6E9', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 14, padding: 14 }}>
                     <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 16 }}>One app</Text>
                     <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 12, marginTop: 4 }}>food + FMCG rescue</Text>
                   </View>
                 </View>
-                <View style={{ alignItems: 'center', marginTop: 24, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 20, padding: 12 }}>
+                <View style={{ alignItems: 'center', marginTop: 24, backgroundColor: '#FFF6E9', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 20, padding: 12 }}>
                   <SupermarketPreviewIllustration width={illustrationWidth - 48} height={(illustrationWidth - 48) * (360 / 480)} />
                 </View>
               </View>
@@ -1350,7 +1356,7 @@ function LandingScreen({ navigation }) {
                 Rescue surplus pastries, donuts, and meals from top local spots before they go to waste.
               </Text>
               <View style={{ flexDirection: 'row', marginTop: 30, gap: 12 }}>
-                <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}>
+                <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ backgroundColor: '#FFF6E9', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }}>
                   <Text style={{ color: '#D97706', fontWeight: '800', fontSize: 16 }}>Explore</Text>
                 </TouchableOpacity>
               </View>
@@ -1468,6 +1474,9 @@ function LoginScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF6E9', justifyContent: 'center', alignItems: 'center', marginTop: 8, marginLeft: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 }}>
+        <Ionicons name="arrow-back" size={20} color="#111827" />
+      </TouchableOpacity>
       <View style={styles.authContainer}>
         <Text style={styles.headerTitle}>Welcome Back</Text>
         <Text style={styles.headerSubtitle}>Login as a customer or seller.</Text>
@@ -1497,7 +1506,7 @@ function LoginScreen({ navigation }) {
         </View>
 
         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginBottom: 20 }} disabled={loading}>
-          <Text style={{ color: '#FF5A00', fontWeight: '700', fontSize: 14 }}>Forgot Password?</Text>
+          <Text style={{ color: '#E27A53', fontWeight: '700', fontSize: 14 }}>Forgot Password?</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.primaryButton, loading && { opacity: 0.7 }]} onPress={handleLogin} disabled={loading}>
@@ -1585,6 +1594,9 @@ function RegisterScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF6E9', justifyContent: 'center', alignItems: 'center', marginTop: 8, marginLeft: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 }}>
+        <Ionicons name="arrow-back" size={20} color="#111827" />
+      </TouchableOpacity>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
         <View style={styles.authContainer}>
           <Text style={styles.headerTitle}>Create Account</Text>
@@ -1600,12 +1612,12 @@ function RegisterScreen({ navigation }) {
                 paddingVertical: 12,
                 borderRadius: 12,
                 borderWidth: 2,
-                borderColor: accountType === 'customer' ? '#FF5A00' : '#E5E7EB',
+                borderColor: accountType === 'customer' ? '#E27A53' : '#E5E7EB',
                 backgroundColor: accountType === 'customer' ? '#FFF7ED' : '#F9FAFB',
                 alignItems: 'center',
               }}
             >
-              <Text style={{ fontWeight: '700', color: accountType === 'customer' ? '#FF5A00' : '#64748B' }}>Customer</Text>
+              <Text style={{ fontWeight: '700', color: accountType === 'customer' ? '#E27A53' : '#64748B' }}>Customer</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setAccountType('seller')}
@@ -1615,12 +1627,12 @@ function RegisterScreen({ navigation }) {
                 paddingVertical: 12,
                 borderRadius: 12,
                 borderWidth: 2,
-                borderColor: accountType === 'seller' ? '#FF5A00' : '#E5E7EB',
+                borderColor: accountType === 'seller' ? '#E27A53' : '#E5E7EB',
                 backgroundColor: accountType === 'seller' ? '#FFF7ED' : '#F9FAFB',
                 alignItems: 'center',
               }}
             >
-              <Text style={{ fontWeight: '700', color: accountType === 'seller' ? '#FF5A00' : '#64748B' }}>Seller</Text>
+              <Text style={{ fontWeight: '700', color: accountType === 'seller' ? '#E27A53' : '#64748B' }}>Seller</Text>
             </TouchableOpacity>
           </View>
 
@@ -1633,7 +1645,7 @@ function RegisterScreen({ navigation }) {
                 <View style={{ marginBottom: 14, marginTop: -6, paddingHorizontal: 4, alignSelf: 'flex-start' }}>
                   <Text style={{ fontSize: 13, color: '#64748B' }}>
                     Your store link will be similar to:{' '}
-                    <Text style={{ color: '#FF5A00', fontWeight: '700' }}>
+                    <Text style={{ color: '#E27A53', fontWeight: '700' }}>
                       {`${shortSubdomainFromName(brandName)}.grabengo.store`}
                     </Text>
                   </Text>
@@ -1722,6 +1734,9 @@ function ForgotPasswordScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF6E9', justifyContent: 'center', alignItems: 'center', marginTop: 8, marginLeft: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 }}>
+        <Ionicons name="arrow-back" size={20} color="#111827" />
+      </TouchableOpacity>
       <View style={styles.authContainer}>
         {step === 1 ? (
           <>
@@ -1810,7 +1825,7 @@ function TenantBrandLogo({ tenant, size = 56 }) {
     );
   }
   return (
-    <View style={{ width: size, height: size, borderRadius: 14, backgroundColor: '#EA580C', justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: 14, backgroundColor: '#E27A53', justifyContent: 'center', alignItems: 'center' }}>
       <Text style={{ color: '#fff', fontWeight: '900', fontSize: size * 0.32 }}>{tenantInitials(tenant.name)}</Text>
     </View>
   );
@@ -1819,21 +1834,33 @@ function TenantBrandLogo({ tenant, size = 56 }) {
 function CustomerProfileSheet({ visible, onClose, user, logout, updateUser, token }) {
   const insets = useSafeAreaInsets();
   const [editName, setEditName] = useState(user?.name || '');
+  const [editEmail, setEditEmail] = useState(user?.email || '');
+  const [editPhone, setEditPhone] = useState(user?.phone || '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (visible) setEditName(user?.name || '');
-  }, [visible, user?.name]);
+    if (visible) {
+      setEditName(user?.name || '');
+      setEditEmail(user?.email || '');
+      setEditPhone(user?.phone || '');
+    }
+  }, [visible, user?.name, user?.email, user?.phone]);
 
   const handleSave = async () => {
     if (!user?.id) return;
     if (!editName.trim()) return Alert.alert('Required', 'Please enter your name.');
+    if (!editEmail.trim()) return Alert.alert('Required', 'Please enter your email.');
+    if (!editPhone.trim()) return Alert.alert('Required', 'Please enter your phone number.');
     setSaving(true);
     try {
-      await axios.put(`${API_URL}/users/${user.id}`, { name: editName.trim() }, {
+      await axios.put(`${API_URL}/users/${user.id}`, {
+        name: editName.trim(),
+        email: editEmail.trim(),
+        phone: editPhone.trim(),
+      }, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      await updateUser({ name: editName.trim() });
+      await updateUser({ name: editName.trim(), email: editEmail.trim(), phone: editPhone.trim() });
       Alert.alert('Saved', 'Profile updated.');
       onClose();
     } catch (e) {
@@ -1847,15 +1874,13 @@ function CustomerProfileSheet({ visible, onClose, user, logout, updateUser, toke
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} activeOpacity={1} onPress={onClose}>
         <TouchableWithoutFeedback>
-          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 24, paddingBottom: Math.max(insets.bottom, 24) }}>
+          <View style={{ backgroundColor: '#FFF6E9', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 24, paddingBottom: Math.max(insets.bottom, 24) }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>My Profile</Text>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Ionicons name="close" size={24} color="#111827" />
               </TouchableOpacity>
             </View>
-            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 6 }}>Email</Text>
-            <Text style={{ fontSize: 16, color: '#111827', fontWeight: '600', marginBottom: 16 }}>{user?.email}</Text>
             <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 6 }}>Name</Text>
             <TextInput
               style={styles.input}
@@ -1864,7 +1889,26 @@ function CustomerProfileSheet({ visible, onClose, user, logout, updateUser, toke
               placeholder="Your name"
               placeholderTextColor="#94a3b8"
             />
-            <TouchableOpacity style={[styles.primaryButton, { marginTop: 8 }]} onPress={handleSave} disabled={saving}>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 6, marginTop: 16 }}>Email</Text>
+            <TextInput
+              style={styles.input}
+              value={editEmail}
+              onChangeText={setEditEmail}
+              placeholder="Your email"
+              placeholderTextColor="#94a3b8"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 6, marginTop: 16 }}>Phone Number</Text>
+            <TextInput
+              style={styles.input}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="Your phone number"
+              placeholderTextColor="#94a3b8"
+              keyboardType="phone-pad"
+            />
+            <TouchableOpacity style={[styles.primaryButton, { marginTop: 20 }]} onPress={handleSave} disabled={saving}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Changes</Text>}
             </TouchableOpacity>
             <TouchableOpacity
@@ -1882,33 +1926,30 @@ function CustomerProfileSheet({ visible, onClose, user, logout, updateUser, toke
 
 function ExploreTenantsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { user, logout, updateUser, token } = useContext(AuthContext);
+  const { user, logout, updateUser, token, openProfile } = useContext(AuthContext);
   const { cartTotalCount } = useContext(CartContext);
-  const [tenants, setTenants] = useState([]);
+  const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [coords, setCoords] = useState(null);
   const [locationLabel, setLocationLabel] = useState('Using your location');
-  const [sortMode, setSortMode] = useState('nearest');
   const [maxDistance, setMaxDistance] = useState(null);
+  const [customDistanceMode, setCustomDistanceMode] = useState(false);
+  const [customDistanceValue, setCustomDistanceValue] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const fetchTenants = async () => {
+  const fetchStores = async () => {
     setLoading(true);
     setLoadError(null);
-    let lat;
-    let lng;
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         const loc = await Location.getCurrentPositionAsync({});
-        lat = loc.coords.latitude;
-        lng = loc.coords.longitude;
-        setCoords({ lat, lng });
+        setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         try {
-          const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+          const [place] = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
           if (place) {
             setLocationLabel([place.city, place.region].filter(Boolean).join(', ') || 'Near you');
           }
@@ -1917,7 +1958,7 @@ function ExploreTenantsScreen({ navigation }) {
         }
       } else {
         setCoords(null);
-        setLocationLabel('Location off — enable for nearby brands');
+        setLocationLabel('Location off — enable for distance filters');
       }
     } catch (_) {
       setCoords(null);
@@ -1925,78 +1966,78 @@ function ExploreTenantsScreen({ navigation }) {
     }
 
     try {
-      const params = new URLSearchParams();
-      if (lat != null && lng != null) {
-        params.set('lat', String(lat));
-        params.set('lng', String(lng));
-        params.set('sort', 'nearest');
-      }
-      const qs = params.toString();
-      const url = `${API_URL}/public/tenants${qs ? `?${qs}` : ''}`;
-      const res = await axios.get(url);
+      const res = await axios.get(`${API_URL}/stores`, { headers: { Authorization: `Bearer ${token}` } });
       if (!Array.isArray(res.data)) throw new Error(`Unexpected response from ${API_URL}`);
-      setTenants(res.data);
+      setStores(res.data);
     } catch (e) {
-      const message = e.response?.data?.error || e.message || 'Could not load brands. Check that the backend is running.';
+      const message = e.response?.data?.error || e.message || 'Could not load stores. Check that the backend is running.';
       setLoadError(message);
-      setTenants([]);
+      setStores([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTenants();
+    fetchStores();
   }, []);
 
-  const filtered = tenants
-    .filter((t) => {
+  const storesWithDistance = stores.map((s) => {
+    if (coords && s.lat && s.lng) {
+      const meters = getDistance({ latitude: coords.lat, longitude: coords.lng }, { latitude: s.lat, longitude: s.lng });
+      return { ...s, distance_km: meters / 1000 };
+    }
+    return { ...s, distance_km: null };
+  });
+
+  const filtered = storesWithDistance
+    .filter((s) => {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
-      return (t.name || '').toLowerCase().includes(q) || (t.subdomain || '').toLowerCase().includes(q);
+      return (s.name || '').toLowerCase().includes(q) || (s.address || '').toLowerCase().includes(q);
     })
-    .filter((t) => {
-      if (maxDistance == null || t.distance_km == null) return true;
-      return t.distance_km <= maxDistance;
+    .filter((s) => {
+      if (maxDistance == null || s.distance_km == null) return true;
+      return s.distance_km <= maxDistance;
+    })
+    .filter((s) => {
+      if (selectedCategory === 'All') return true;
+      return s.category === selectedCategory;
     })
     .sort((a, b) => {
-      if (sortMode === 'name') return (a.name || '').localeCompare(b.name || '');
-      if (sortMode === 'stores') return (b.store_count || 0) - (a.store_count || 0);
       if (a.distance_km != null && b.distance_km != null) return a.distance_km - b.distance_km;
       return (a.name || '').localeCompare(b.name || '');
     });
 
   const avatarUri = user?.logo || `https://i.pravatar.cc/100?img=${user?.id || 12}`;
-  const SORT_OPTIONS = [
-    { key: 'nearest', label: 'Nearest', icon: 'navigate-outline' },
-    { key: 'name', label: 'A–Z', icon: 'text-outline' },
-    { key: 'stores', label: 'Most stores', icon: 'storefront-outline' },
+  const HOME_CATEGORY_TABS = [
+    { key: 'All', label: 'All', icon: 'apps-outline' },
+    ...STORE_CATEGORIES,
   ];
-  const DISTANCE_OPTIONS = [
-    { key: null, label: 'Any distance' },
-    { key: 5, label: 'Within 5 km' },
-    { key: 15, label: 'Within 15 km' },
-    { key: 50, label: 'Within 50 km' },
-  ];
+  const applyCustomDistance = () => {
+    const n = parseFloat(customDistanceValue);
+    if (!isNaN(n) && n > 0) {
+      setMaxDistance(n);
+    }
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <View style={{ flex: 1, backgroundColor: '#FDF3E4' }}>
       <StatusBar style="dark" />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <View style={{ marginRight: 10 }}>
-                <GrabengoLogoMark size={36} />
+              <View style={{ backgroundColor: '#FDF3E4', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginRight: 10 }}>
+                <Image source={require('./assets/images/grabengo-logo-cream.png')} style={{ width: 96, height: 28 }} resizeMode="contain" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 20, fontWeight: '900', color: '#111827' }}>Grabengo</Text>
                 <Text style={{ fontSize: 12, color: '#6B7280' }} numberOfLines={1}>Hi, {user?.name?.split(' ')[0] || 'there'}</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={() => setProfileOpen(true)} style={{ marginRight: 10 }}>
-              <Image source={{ uri: avatarUri }} style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: '#EA580C' }} />
+            <TouchableOpacity onPress={openProfile} style={{ marginRight: 10 }}>
+              <Image source={{ uri: avatarUri }} style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: '#E27A53' }} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setMenuOpen(true)}
@@ -2007,20 +2048,20 @@ function ExploreTenantsScreen({ navigation }) {
           </View>
 
           {/* Location row */}
-          <TouchableOpacity onPress={fetchTenants} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, backgroundColor: '#FFF7ED', borderRadius: 14, padding: 12 }}>
-            <Ionicons name="location" size={20} color="#EA580C" />
+          <TouchableOpacity onPress={fetchStores} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, backgroundColor: '#FFF6E9', borderRadius: 14, padding: 12 }}>
+            <Ionicons name="location" size={20} color="#E27A53" />
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#EA580C', textTransform: 'uppercase' }}>Your location</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#E27A53', textTransform: 'uppercase' }}>Your location</Text>
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }} numberOfLines={1}>{locationLabel}</Text>
             </View>
-            <Ionicons name="refresh" size={18} color="#EA580C" />
+            <Ionicons name="refresh" size={18} color="#E27A53" />
           </TouchableOpacity>
 
           {/* Search */}
           <View style={{ backgroundColor: '#F3F4F6', borderRadius: 30, paddingHorizontal: 18, paddingVertical: 12, marginTop: 12, flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="search" size={18} color="#9CA3AF" style={{ marginRight: 10 }} />
             <TextInput
-              placeholder="Search brands..."
+              placeholder="Search stores..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -2028,129 +2069,210 @@ function ExploreTenantsScreen({ navigation }) {
             />
           </View>
 
-          {/* Sort filters */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-            {SORT_OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                onPress={() => setSortMode(opt.key)}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-                  backgroundColor: sortMode === opt.key ? '#EA580C' : '#F3F4F6',
-                }}
-              >
-                <Ionicons name={opt.icon} size={14} color={sortMode === opt.key ? '#fff' : '#6B7280'} />
-                <Text style={{ fontWeight: '700', fontSize: 13, color: sortMode === opt.key ? '#fff' : '#6B7280' }}>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
           {/* Distance filters */}
           {coords && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-              {DISTANCE_OPTIONS.map((opt) => (
+            <View style={{ marginTop: 12 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 44, flexGrow: 0 }} contentContainerStyle={{ gap: 8, paddingRight: 8, alignItems: 'center' }} renderToHardwareTextureAndroid collapsable={false}>
                 <TouchableOpacity
-                  key={String(opt.key)}
-                  onPress={() => setMaxDistance(opt.key)}
+                  onPress={() => { setMaxDistance(null); setCustomDistanceMode(false); }}
                   style={{
                     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-                    backgroundColor: maxDistance === opt.key ? '#111827' : '#F9FAFB',
-                    borderWidth: 1, borderColor: maxDistance === opt.key ? '#111827' : '#E5E7EB',
+                    backgroundColor: maxDistance == null ? '#111827' : '#FFF6E9',
+                    borderWidth: 1, borderColor: maxDistance == null ? '#111827' : '#E5E7EB',
                   }}
                 >
-                  <Text style={{ fontWeight: '600', fontSize: 12, color: maxDistance === opt.key ? '#fff' : '#6B7280' }}>{opt.label}</Text>
+                  <Text style={{ fontWeight: '600', fontSize: 12, color: maxDistance == null ? '#fff' : '#6B7280' }}>Any distance</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+                <TouchableOpacity
+                  onPress={() => { setMaxDistance(5); setCustomDistanceMode(false); }}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    backgroundColor: maxDistance === 5 ? '#111827' : '#FFF6E9',
+                    borderWidth: 1, borderColor: maxDistance === 5 ? '#111827' : '#E5E7EB',
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', fontSize: 12, color: maxDistance === 5 ? '#fff' : '#6B7280' }}>Within 5 km</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { setMaxDistance(10); setCustomDistanceMode(false); }}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    backgroundColor: maxDistance === 10 ? '#111827' : '#FFF6E9',
+                    borderWidth: 1, borderColor: maxDistance === 10 ? '#111827' : '#E5E7EB',
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', fontSize: 12, color: maxDistance === 10 ? '#fff' : '#6B7280' }}>Within 10 km</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setCustomDistanceMode(!customDistanceMode)}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    backgroundColor: customDistanceMode ? '#111827' : '#FFF6E9',
+                    borderWidth: 1, borderColor: customDistanceMode ? '#111827' : '#E5E7EB',
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', fontSize: 12, color: customDistanceMode ? '#fff' : '#6B7280' }}>Custom</Text>
+                </TouchableOpacity>
+              </ScrollView>
+              {customDistanceMode && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <TextInput
+                    placeholder="Distance in km"
+                    placeholderTextColor="#9CA3AF"
+                    value={customDistanceValue}
+                    onChangeText={setCustomDistanceValue}
+                    keyboardType="numeric"
+                    style={{ flex: 1, backgroundColor: '#FFF6E9', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: '#111827', borderWidth: 1, borderColor: '#E5E7EB' }}
+                  />
+                  <TouchableOpacity onPress={applyCustomDistance} style={{ backgroundColor: '#E27A53', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14 }}>
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Apply</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           )}
         </View>
 
-        {/* Quick access: orders without picking a brand */}
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Bookings')}
-          style={{ marginHorizontal: 20, marginTop: 16, backgroundColor: '#111827', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center' }}
-        >
-          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
-            <Ionicons name="receipt" size={22} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>View my orders</Text>
-            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 2 }}>Check past bookings — no brand needed</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
+        {/* Category tabs */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 52, marginTop: 16, flexGrow: 0 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, alignItems: 'center' }} renderToHardwareTextureAndroid collapsable={false}>
+          <TouchableOpacity
+            onPress={() => setSelectedCategory('All')}
+            style={{
+              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
+              backgroundColor: selectedCategory === 'All' ? '#E27A53' : '#FFF6E9',
+              borderWidth: 1, borderColor: selectedCategory === 'All' ? '#E27A53' : '#E5E7EB',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'All' ? '#fff' : '#111827' }}>All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setSelectedCategory('Restaurants')}
+            style={{
+              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
+              backgroundColor: selectedCategory === 'Restaurants' ? '#E27A53' : '#FFF6E9',
+              borderWidth: 1, borderColor: selectedCategory === 'Restaurants' ? '#E27A53' : '#E5E7EB',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Restaurants' ? '#fff' : '#111827' }}>Restaurants</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setSelectedCategory('Bakeries')}
+            style={{
+              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
+              backgroundColor: selectedCategory === 'Bakeries' ? '#E27A53' : '#FFF6E9',
+              borderWidth: 1, borderColor: selectedCategory === 'Bakeries' ? '#E27A53' : '#E5E7EB',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Bakeries' ? '#fff' : '#111827' }}>Bakeries</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setSelectedCategory('Cafes')}
+            style={{
+              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
+              backgroundColor: selectedCategory === 'Cafes' ? '#E27A53' : '#FFF6E9',
+              borderWidth: 1, borderColor: selectedCategory === 'Cafes' ? '#E27A53' : '#E5E7EB',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Cafes' ? '#fff' : '#111827' }}>Cafes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setSelectedCategory('Grocery Store')}
+            style={{
+              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
+              backgroundColor: selectedCategory === 'Grocery Store' ? '#E27A53' : '#FFF6E9',
+              borderWidth: 1, borderColor: selectedCategory === 'Grocery Store' ? '#E27A53' : '#E5E7EB',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Grocery Store' ? '#fff' : '#111827' }}>Grocery Store</Text>
+          </TouchableOpacity>
+        </ScrollView>
 
-        <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827', marginHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
-          Browse brands
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>
+            {selectedCategory === 'All' ? 'All Stores' : selectedCategory}
+          </Text>
+          <Text style={{ fontSize: 13, color: '#E27A53', fontWeight: '600' }}>{filtered.length} found</Text>
+        </View>
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#EA580C" />
+            <ActivityIndicator size="large" color="#E27A53" />
           </View>
         ) : (
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
-            ListEmptyComponent={
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
+            {filtered.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 }}>
                 <Text style={{ fontSize: 40 }}>{loadError ? '⚠️' : '🏪'}</Text>
                 <Text style={{ color: '#111827', marginTop: 8, fontWeight: '700', textAlign: 'center' }}>
-                  {loadError ? 'Could not load brands' : 'No brands found'}
+                  {loadError ? 'Could not load stores' : 'No stores found'}
                 </Text>
                 <Text style={{ color: '#6B7280', marginTop: 6, textAlign: 'center', fontSize: 13 }}>
-                  {loadError ? `${loadError}\n\nAPI: ${API_URL}` : searchQuery.trim() ? 'Try a different search.' : 'No active stores listed yet.'}
+                  {loadError ? `${loadError}\n\nAPI: ${API_URL}` : searchQuery.trim() ? 'Try a different search.' : selectedCategory !== 'All' ? `No ${selectedCategory.toLowerCase()} nearby yet.` : 'No active stores listed yet.'}
                 </Text>
                 {loadError ? (
-                  <TouchableOpacity onPress={fetchTenants} style={{ marginTop: 16, backgroundColor: '#EA580C', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 }}>
+                  <TouchableOpacity onPress={fetchStores} style={{ marginTop: 16, backgroundColor: '#E27A53', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 }}>
                     <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
-            }
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Discover', { tenant: item })}
-                style={{
-                  backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12,
-                  flexDirection: 'row', alignItems: 'center',
-                  borderWidth: 1, borderColor: '#F3F4F6',
-                  shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-                }}
-              >
-                <TenantBrandLogo tenant={item} size={56} />
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827' }}>{item.name}</Text>
-                  <Text style={{ fontSize: 12, color: '#EA580C', fontWeight: '600', marginTop: 2 }}>{item.subdomain}.grabengo.store</Text>
-                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                    {item.store_count} store{item.store_count !== 1 ? 's' : ''}
-                    {item.distance_km != null ? ` · ${item.distance_km < 1 ? `${Math.round(item.distance_km * 1000)} m` : `${item.distance_km.toFixed(1)} km`}` : ''}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
-              </TouchableOpacity>
+            ) : (
+              filtered.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  onPress={() => navigation.navigate('StoreDetails', {
+                    store: item,
+                    userLocation: coords ? { latitude: coords.lat, longitude: coords.lng } : null,
+                  })}
+                  style={{
+                    backgroundColor: '#FFF6E9', borderRadius: 20, padding: 16, marginBottom: 12,
+                    flexDirection: 'row', alignItems: 'center',
+                    borderWidth: 1, borderColor: '#F3F4F6',
+                    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+                  }}
+                >
+                  {item.image ? (
+                    <Image source={{ uri: item.image }} style={{ width: 56, height: 56, borderRadius: 14 }} />
+                  ) : (
+                    <View style={{ width: 56, height: 56, borderRadius: 14, backgroundColor: '#E27A53', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900' }}>{(item.name || '?')[0].toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1, marginLeft: 14 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827' }} numberOfLines={1}>{item.name}</Text>
+                    {item.category ? (
+                      <Text style={{ fontSize: 11, color: '#E27A53', fontWeight: '700', marginTop: 2 }}>{item.category}</Text>
+                    ) : null}
+                    <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }} numberOfLines={1}>
+                      {item.address}
+                      {item.distance_km != null ? ` · ${item.distance_km < 1 ? `${Math.round(item.distance_km * 1000)} m` : `${item.distance_km.toFixed(1)} km`}` : ''}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+                </TouchableOpacity>
+              ))
             )}
-          />
+          </ScrollView>
         )}
       </SafeAreaView>
 
       <SharedBottomNav navigation={navigation} activeTab="Explore" cartTotalCount={cartTotalCount} />
 
-      <CustomerProfileSheet visible={profileOpen} onClose={() => setProfileOpen(false)} user={user} logout={logout} updateUser={updateUser} token={token} />
-
       {/* Side menu */}
       <Modal visible={menuOpen} animationType="fade" transparent onRequestClose={() => setMenuOpen(false)}>
         <View style={{ flex: 1, flexDirection: 'row' }}>
           <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} activeOpacity={1} onPress={() => setMenuOpen(false)} />
-          <View style={{ width: '78%', backgroundColor: '#fff', paddingTop: Math.max(insets.top, 20), paddingHorizontal: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 16, elevation: 10 }}>
+          <View style={{ width: '78%', backgroundColor: '#FFF6E9', paddingTop: Math.max(insets.top, 20), paddingHorizontal: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 16, elevation: 10 }}>
             <Text style={{ fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 24 }}>Menu</Text>
             {[
-              { icon: 'home-outline', label: 'Browse brands', action: () => { setMenuOpen(false); navigation.navigate('ExploreTenants'); } },
+              { icon: 'home-outline', label: 'Home', action: () => { setMenuOpen(false); navigation.navigate('ExploreTenants'); } },
               { icon: 'receipt-outline', label: 'My orders', action: () => { setMenuOpen(false); navigation.navigate('Bookings'); } },
               { icon: 'cart-outline', label: 'Cart', action: () => { setMenuOpen(false); navigation.navigate('Cart'); } },
-              { icon: 'person-outline', label: 'Profile', action: () => { setMenuOpen(false); setProfileOpen(true); } },
+              { icon: 'person-outline', label: 'Profile', action: () => { setMenuOpen(false); openProfile(); } },
             ].map((item) => (
               <TouchableOpacity key={item.label} onPress={item.action} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', gap: 14 }}>
                 <Ionicons name={item.icon} size={22} color="#374151" />
@@ -2180,45 +2302,43 @@ function SplashScreen({ navigation }) {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F5F3EE', justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: '#FDF3E4', justifyContent: 'center', alignItems: 'center' }}>
       <StatusBar style="dark" />
-      <GrabengoLogoMark size={120} />
-      <ActivityIndicator color="#D4651A" size="large" style={{ marginTop: 32 }} />
+      <View style={{ backgroundColor: '#FDF3E4', borderRadius: 24, paddingHorizontal: 28, paddingVertical: 22 }}>
+        <Image source={require('./assets/images/grabengo-logo-cream.png')} style={{ width: 220, height: 64 }} resizeMode="contain" />
+      </View>
+      <ActivityIndicator color="#E64A33" size="large" style={{ marginTop: 32 }} />
     </View>
   );
 }
 
 // --- Shared Bottom Nav ---
-const SharedBottomNav = ({ navigation, activeTab, cartTotalCount, onMapPress, onReviewsPress, navParams }) => {
-  const discoverParams = navParams || {};
-  const goHome = () => {
-    if (activeTab === 'Explore' || activeTab === 'Home') return;
-    if (discoverParams?.tenant) {
-      navigation.navigate('Discover', discoverParams);
-    } else {
-      navigation.navigate('ExploreTenants');
-    }
-  };
+const SharedBottomNav = ({ navigation, activeTab, cartTotalCount }) => {
+  const { openProfile } = useContext(AuthContext);
+  const isHome = activeTab === 'Home' || activeTab === 'Explore';
   return (
-    <View style={styles.bottomNavContainer}>
+    <View style={styles.bottomNavContainer} renderToHardwareTextureAndroid collapsable={false}>
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={goHome}>
-          <View style={{ backgroundColor: (activeTab === 'Home' || activeTab === 'Explore') ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name={(activeTab === 'Home' || activeTab === 'Explore') ? "home" : "home-outline"} size={(activeTab === 'Home' || activeTab === 'Explore') ? 20 : 24} color={(activeTab === 'Home' || activeTab === 'Explore') ? "white" : "#9CA3AF"} />
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => !isHome && navigation.navigate('ExploreTenants')}>
+          <View style={{ backgroundColor: isHome ? '#E27A53' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+            <Ionicons name={isHome ? "home" : "home-outline"} size={isHome ? 20 : 24} color={isHome ? "white" : "#9CA3AF"} />
           </View>
-          <Text style={{ color: (activeTab === 'Home' || activeTab === 'Explore') ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: (activeTab === 'Home' || activeTab === 'Explore') ? '700' : '600' }}>Home</Text>
+          <Text style={{ color: isHome ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: isHome ? '700' : '600' }}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={onMapPress || (() => {
-          if (discoverParams?.tenant) navigation.navigate('Discover', { ...discoverParams, openMap: true });
-          else Alert.alert('Pick a brand', 'Select a brand first to view stores on the map.');
-        })}>
-          <View style={{ backgroundColor: activeTab === 'Map' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name={activeTab === 'Map' ? "map" : "map-outline"} size={activeTab === 'Map' ? 20 : 24} color={activeTab === 'Map' ? "white" : "#9CA3AF"} />
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Bookings' && navigation.navigate('Bookings')}>
+          <View style={{ backgroundColor: activeTab === 'Bookings' ? '#E27A53' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+            <Ionicons name={activeTab === 'Bookings' ? "receipt" : "receipt-outline"} size={activeTab === 'Bookings' ? 20 : 24} color={activeTab === 'Bookings' ? "white" : "#9CA3AF"} />
           </View>
-          <Text style={{ color: activeTab === 'Map' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Map' ? '700' : '600' }}>Map</Text>
+          <Text style={{ color: activeTab === 'Bookings' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Bookings' ? '700' : '600' }}>Bookings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Cart' && navigation.navigate('Cart', discoverParams)}>
-          <View style={{ backgroundColor: activeTab === 'Cart' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={openProfile}>
+          <View style={{ backgroundColor: 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+            <Ionicons name="person-outline" size={24} color="#9CA3AF" />
+          </View>
+          <Text style={{ color: '#9CA3AF', fontSize: 12, fontWeight: '600' }}>Profile</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Cart' && navigation.navigate('Cart')}>
+          <View style={{ backgroundColor: activeTab === 'Cart' ? '#E27A53' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
             <Ionicons name={activeTab === 'Cart' ? "cart" : "cart-outline"} size={activeTab === 'Cart' ? 20 : 24} color={activeTab === 'Cart' ? "white" : "#9CA3AF"} />
             {cartTotalCount > 0 && (
               <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
@@ -2227,21 +2347,6 @@ const SharedBottomNav = ({ navigation, activeTab, cartTotalCount, onMapPress, on
             )}
           </View>
           <Text style={{ color: activeTab === 'Cart' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Cart' ? '700' : '600' }}>Cart</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Bookings' && navigation.navigate('Bookings')}>
-          <View style={{ backgroundColor: activeTab === 'Bookings' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name={activeTab === 'Bookings' ? "receipt" : "receipt-outline"} size={activeTab === 'Bookings' ? 20 : 24} color={activeTab === 'Bookings' ? "white" : "#9CA3AF"} />
-          </View>
-          <Text style={{ color: activeTab === 'Bookings' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Bookings' ? '700' : '600' }}>Bookings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={onReviewsPress || (() => {
-          if (discoverParams?.tenant) navigation.navigate('Discover', { openReviews: true, ...discoverParams });
-          else Alert.alert('Pick a brand', 'Select a brand first to browse store reviews.');
-        })}>
-          <View style={{ backgroundColor: activeTab === 'Reviews' ? '#EA580C' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name={activeTab === 'Reviews' ? "star" : "star-outline"} size={activeTab === 'Reviews' ? 20 : 24} color={activeTab === 'Reviews' ? "white" : "#9CA3AF"} />
-          </View>
-          <Text style={{ color: activeTab === 'Reviews' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Reviews' ? '700' : '600' }}>Reviews</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -2520,7 +2625,7 @@ function DiscoverScreen({ navigation, route }) {
           <Image source={{ uri: imageUrl }} style={styles.gridImage} />
           {/* Distance badge */}
           <View style={styles.gridTimeBadge}>
-            <Ionicons name="location-outline" size={10} color="#EA580C" />
+            <Ionicons name="location-outline" size={10} color="#E27A53" />
             <Text style={{ fontSize: 10, fontWeight: '700', color: '#111827', marginLeft: 3 }}>{distanceText}</Text>
           </View>
           {/* Favorite heart button */}
@@ -2543,13 +2648,13 @@ function DiscoverScreen({ navigation, route }) {
           </TouchableOpacity>
           {/* Cart button */}
           <TouchableOpacity style={styles.gridFavoriteBtn} onPress={() => addToCart(item, 'bag')}>
-            <Ionicons name="cart-outline" size={15} color="#EA580C" />
+            <Ionicons name="cart-outline" size={15} color="#E27A53" />
           </TouchableOpacity>
         </View>
         {/* Bag type badge */}
         <View style={{ alignSelf: 'flex-start', backgroundColor: '#FFF7ED', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="bag-outline" size={10} color="#EA580C" />
-          <Text style={{ fontSize: 10, fontWeight: '700', color: '#EA580C' }}>SURPRISE BAG</Text>
+          <Ionicons name="bag-outline" size={10} color="#E27A53" />
+          <Text style={{ fontSize: 10, fontWeight: '700', color: '#E27A53' }}>SURPRISE BAG</Text>
         </View>
         <Text numberOfLines={1} style={styles.gridTitle}>{item.store_name}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -2601,7 +2706,7 @@ function DiscoverScreen({ navigation, route }) {
         <View style={styles.gridImageContainer}>
           <Image source={{ uri: imageUrl }} style={styles.gridImage} />
           <View style={styles.gridTimeBadge}>
-            <Ionicons name="location-outline" size={10} color="#EA580C" />
+            <Ionicons name="location-outline" size={10} color="#E27A53" />
             <Text style={{ fontSize: 10, fontWeight: '700', color: '#111827', marginLeft: 3 }}>{distanceText}</Text>
           </View>
           {/* Favorite heart button */}
@@ -2623,7 +2728,7 @@ function DiscoverScreen({ navigation, route }) {
             <Ionicons name={item.is_favorited === 1 ? "heart" : "heart-outline"} size={14} color={item.is_favorited === 1 ? "#EF4444" : "#6B7280"} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.gridFavoriteBtn} onPress={() => addToCart(item, 'food')}>
-            <Ionicons name="cart-outline" size={15} color="#EA580C" />
+            <Ionicons name="cart-outline" size={15} color="#E27A53" />
           </TouchableOpacity>
         </View>
         {/* Category badge */}
@@ -2634,13 +2739,13 @@ function DiscoverScreen({ navigation, route }) {
         <Text numberOfLines={1} style={[styles.gridRating, { color: '#6B7280' }]}>{item.store_name}</Text>
         {item.sale_ends_at && new Date(item.sale_ends_at) > new Date() && (
           <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#FFF7ED', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 4 }}>
-            <Ionicons name="flash-outline" size={10} color="#EA580C" />
-            <Text style={{ fontSize: 10, fontWeight: '700', color: '#EA580C', marginLeft: 3 }}>Sale ends {formatSaleEnd(item.sale_ends_at)}</Text>
+            <Ionicons name="flash-outline" size={10} color="#E27A53" />
+            <Text style={{ fontSize: 10, fontWeight: '700', color: '#E27A53', marginLeft: 3 }}>Sale ends {formatSaleEnd(item.sale_ends_at)}</Text>
           </View>
         )}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <View>
-            <View style={[styles.gridPriceTag, { backgroundColor: '#9CA3AF' }]}>
+            <View style={styles.gridPriceTag}>
               <Text style={styles.gridPriceText}>{currencySymbol}{item.price.toFixed(2)}</Text>
             </View>
             {item.original_price && (
@@ -2703,12 +2808,12 @@ function DiscoverScreen({ navigation, route }) {
         <TouchableOpacity
           onPress={() => { setSelectedStoreId(null); setFavoritesOnly(false); }}
           style={{ 
-            backgroundColor: (selectedStoreId === null && !favoritesOnly) ? '#EA580C' : '#F3F4F6', 
+            backgroundColor: (selectedStoreId === null && !favoritesOnly) ? '#E27A53' : '#F3F4F6', 
             paddingHorizontal: 20, 
             paddingVertical: 10, 
             borderRadius: 24, 
             borderWidth: 1, 
-            borderColor: (selectedStoreId === null && !favoritesOnly) ? '#EA580C' : '#E5E7EB'
+            borderColor: (selectedStoreId === null && !favoritesOnly) ? '#E27A53' : '#E5E7EB'
           }}
         >
           <Text style={{ color: (selectedStoreId === null && !favoritesOnly) ? 'white' : '#4B5563', fontWeight: 'bold' }}>All</Text>
@@ -2745,7 +2850,7 @@ function DiscoverScreen({ navigation, route }) {
       </View>
 
       {/* Ongoing Offers Banner */}
-      <View style={{ marginTop: 24, backgroundColor: '#EA580C', borderRadius: 24, padding: 24, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }}>
+      <View style={{ marginTop: 24, backgroundColor: '#E27A53', borderRadius: 24, padding: 24, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }}>
         <View style={{ flex: 1, zIndex: 1 }}>
           <Text style={{ color: 'white', fontSize: 24, fontWeight: '800', lineHeight: 30 }}>Explore Stores{'\n'}Nearby You</Text>
           <TouchableOpacity onPress={() => setMapVisible(true)} style={{ backgroundColor: 'white', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignSelf: 'flex-start', marginTop: 16 }}>
@@ -2759,7 +2864,7 @@ function DiscoverScreen({ navigation, route }) {
       <View style={{ marginTop: 32 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>All Stores</Text>
-          <Text style={{ fontSize: 13, color: '#EA580C', fontWeight: '600' }}>{filteredStores.length} available</Text>
+          <Text style={{ fontSize: 13, color: '#E27A53', fontWeight: '600' }}>{filteredStores.length} available</Text>
         </View>
         {filteredStores.length === 0 ? (
           <View style={{ backgroundColor: '#F9FAFB', borderRadius: 16, padding: 24, alignItems: 'center' }}>
@@ -2782,14 +2887,14 @@ function DiscoverScreen({ navigation, route }) {
                     marginRight: 14,
                     borderRadius: 20,
                     overflow: 'hidden',
-                    backgroundColor: '#FFFFFF',
+                    backgroundColor: '#FFF6E9',
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.08,
                     shadowRadius: 10,
                     elevation: 4,
                     borderWidth: 2,
-                    borderColor: isSelected ? '#EA580C' : 'transparent',
+                    borderColor: isSelected ? '#E27A53' : 'transparent',
                   }}
                 >
                   <View style={{ position: 'relative' }}>
@@ -2822,7 +2927,7 @@ function DiscoverScreen({ navigation, route }) {
                     <Text numberOfLines={1} style={{ fontWeight: '700', fontSize: 13, color: '#111827' }}>{store.name}</Text>
                     <Text numberOfLines={1} style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{store.address}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                      <View style={{ backgroundColor: '#EA580C', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                      <View style={{ backgroundColor: '#E27A53', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>
                           {storeBags.length} bag{storeBags.length !== 1 ? 's' : ''}
                         </Text>
@@ -2860,7 +2965,7 @@ function DiscoverScreen({ navigation, route }) {
             ? `${stores.find(s => s.id === selectedStoreId)?.name || 'Store'} ${activeTab === 'bags' ? 'Bags' : 'Products'}`
             : activeTab === 'bags' ? 'All Surprise Bags' : 'All Products'}
         </Text>
-        <Text style={{ fontSize: 13, color: '#EA580C', fontWeight: '700', flexShrink: 0 }}>{activeCount} available</Text>
+        <Text style={{ fontSize: 13, color: '#E27A53', fontWeight: '700', flexShrink: 0 }}>{activeCount} available</Text>
       </View>
 
       {activeCount === 0 && !loading && (
@@ -2878,36 +2983,28 @@ function DiscoverScreen({ navigation, route }) {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
+    <View style={{ flex: 1, backgroundColor: '#FDF3E4' }}>
       <StatusBar style="dark" />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
 
         {/* ── Stable top bar: location + search ── */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, backgroundColor: '#FAFAFA' }}>
-          {selectedTenant && (
+        <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, backgroundColor: '#FDF3E4' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
             <TouchableOpacity
-              onPress={() => navigation.replace('ExploreTenants')}
-              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, backgroundColor: '#FFF7ED', borderRadius: 16, padding: 12 }}
+              onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('ExploreTenants')}
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF6E9', justifyContent: 'center', alignItems: 'center', marginRight: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 }}
             >
-              {selectedTenant.logo ? (
-                <Image source={{ uri: selectedTenant.logo }} style={{ width: 40, height: 40, borderRadius: 10, marginRight: 12 }} />
-              ) : (
-                <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFEDD5', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                  <Text style={{ fontSize: 20 }}>🏪</Text>
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: '#EA580C', fontWeight: '700', textTransform: 'uppercase' }}>Shopping from</Text>
-                <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827' }}>{selectedTenant.name}</Text>
-              </View>
-              <Text style={{ fontSize: 12, color: '#EA580C', fontWeight: '700' }}>Change</Text>
+              <Ionicons name="arrow-back" size={20} color="#111827" />
             </TouchableOpacity>
-          )}
+            {selectedTenant?.name ? (
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827', flex: 1 }} numberOfLines={1}>{selectedTenant.name}</Text>
+            ) : null}
+          </View>
           {/* Location row */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                <Ionicons name="location" size={22} color="#EA580C" />
+                <Ionicons name="location" size={22} color="#E27A53" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: '#6B7280', fontSize: 12, fontWeight: '600' }}>Current Location</Text>
@@ -2919,7 +3016,7 @@ function DiscoverScreen({ navigation, route }) {
               setEditAvatar(user?.logo || null);
               setEditProfileVisible(true);
             }}>
-              <Image source={{ uri: avatarUri }} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#EA580C' }} />
+              <Image source={{ uri: avatarUri }} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#E27A53' }} />
             </TouchableOpacity>
           </View>
 
@@ -2945,7 +3042,7 @@ function DiscoverScreen({ navigation, route }) {
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#EA580C" />
+            <ActivityIndicator size="large" color="#E27A53" />
           </View>
         ) : (
           <>
@@ -2953,13 +3050,13 @@ function DiscoverScreen({ navigation, route }) {
             <View style={{ flexDirection: 'row', marginHorizontal: 20, marginBottom: 4, backgroundColor: '#F3F4F6', borderRadius: 28, padding: 4 }}>
               <TouchableOpacity
                 onPress={() => { setActiveTab('bags'); setProductCategoryFilter('All'); }}
-                style={{ flex: 1, paddingVertical: 10, borderRadius: 24, alignItems: 'center', backgroundColor: activeTab === 'bags' ? '#EA580C' : 'transparent' }}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 24, alignItems: 'center', backgroundColor: activeTab === 'bags' ? '#E27A53' : 'transparent' }}
               >
                 <Text style={{ fontWeight: '700', fontSize: 14, color: activeTab === 'bags' ? 'white' : '#6B7280' }}>🎁 Surprise Bags</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setActiveTab('food')}
-                style={{ flex: 1, paddingVertical: 10, borderRadius: 24, alignItems: 'center', backgroundColor: activeTab === 'food' ? '#EA580C' : 'transparent' }}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 24, alignItems: 'center', backgroundColor: activeTab === 'food' ? '#E27A53' : 'transparent' }}
               >
                 <Text style={{ fontWeight: '700', fontSize: 14, color: activeTab === 'food' ? 'white' : '#6B7280' }}>🛒 Products</Text>
               </TouchableOpacity>
@@ -2973,7 +3070,7 @@ function DiscoverScreen({ navigation, route }) {
                     onPress={() => setProductCategoryFilter(cat)}
                     style={{
                       paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-                      backgroundColor: productCategoryFilter === cat ? '#111827' : '#FFFFFF',
+                      backgroundColor: productCategoryFilter === cat ? '#111827' : '#FFF6E9',
                       borderWidth: 1, borderColor: productCategoryFilter === cat ? '#111827' : '#E5E7EB',
                     }}
                   >
@@ -2984,6 +3081,7 @@ function DiscoverScreen({ navigation, route }) {
             )}
 
             <FlatList
+              removeClippedSubviews={false}
               data={activeItems}
               keyExtractor={(item) => item.id.toString()}
               renderItem={activeTab === 'bags' ? renderItem : renderFoodItem}
@@ -3062,11 +3160,11 @@ function DiscoverScreen({ navigation, route }) {
                       <Marker
                         key={store.id}
                         coordinate={{ latitude: store.lat, longitude: store.lng }}
-                        pinColor={isNearest ? '#FF5A00' : '#D4651A'}
+                        pinColor={isNearest ? '#E27A53' : '#D4651A'}
                       >
                         <Callout tooltip onPress={() => openDirections(store)}>
                           <View style={{
-                            backgroundColor: '#FFFFFF',
+                            backgroundColor: '#FFF6E9',
                             borderRadius: 14,
                             padding: 14,
                             width: 220,
@@ -3076,18 +3174,18 @@ function DiscoverScreen({ navigation, route }) {
                             shadowRadius: 8,
                             elevation: 6,
                             borderWidth: isNearest ? 1.5 : 0,
-                            borderColor: isNearest ? '#FF5A00' : 'transparent',
+                            borderColor: isNearest ? '#E27A53' : 'transparent',
                           }}>
                             {isNearest && (
                               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#FF5A00', marginRight: 5 }} />
-                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#FF5A00', textTransform: 'uppercase', letterSpacing: 0.8 }}>Nearest to you</Text>
+                                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#E27A53', marginRight: 5 }} />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#E27A53', textTransform: 'uppercase', letterSpacing: 0.8 }}>Nearest to you</Text>
                               </View>
                             )}
                             <Text style={{ fontWeight: '800', fontSize: 14, color: '#111827', marginBottom: 3 }} numberOfLines={1}>{store.name}</Text>
                             <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }} numberOfLines={2}>{store.address}</Text>
                             <View style={{
-                              backgroundColor: '#FF5A00',
+                              backgroundColor: '#E27A53',
                               borderRadius: 8,
                               paddingVertical: 8,
                               paddingHorizontal: 12,
@@ -3139,14 +3237,14 @@ function DiscoverScreen({ navigation, route }) {
                       position: 'absolute',
                       bottom: Math.max(insets.bottom, 24) + 8,
                       left: 20, right: 20,
-                      backgroundColor: '#FF5A00',
+                      backgroundColor: '#E27A53',
                       borderRadius: 16,
                       paddingVertical: 16,
                       paddingHorizontal: 20,
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: 10,
-                      shadowColor: '#FF5A00',
+                      shadowColor: '#E27A53',
                       shadowOffset: { width: 0, height: 6 },
                       shadowOpacity: 0.35,
                       shadowRadius: 12,
@@ -3186,7 +3284,7 @@ function DiscoverScreen({ navigation, route }) {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                   <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Store Reviews</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <TouchableOpacity onPress={() => setAddReviewVisible(true)} style={{ backgroundColor: '#EA580C', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
+                    <TouchableOpacity onPress={() => setAddReviewVisible(true)} style={{ backgroundColor: '#E27A53', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
                       <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>+ Add</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => setReviewsVisible(false)}>
@@ -3258,7 +3356,7 @@ function DiscoverScreen({ navigation, route }) {
                       <TouchableOpacity 
                         key={store.id} 
                         onPress={() => setReviewStoreId(store.id)}
-                        style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: reviewStoreId === store.id ? '#EA580C' : '#F3F4F6' }}
+                        style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: reviewStoreId === store.id ? '#E27A53' : '#F3F4F6' }}
                       >
                         <Text style={{ color: reviewStoreId === store.id ? 'white' : '#4B5563', fontSize: 12, fontWeight: '600' }}>{store.name}</Text>
                       </TouchableOpacity>
@@ -3292,7 +3390,7 @@ function DiscoverScreen({ navigation, route }) {
                             paddingHorizontal: 12,
                             paddingVertical: 8,
                             borderRadius: 16,
-                            backgroundColor: isSelected ? '#EA580C' : '#F3F4F6',
+                            backgroundColor: isSelected ? '#E27A53' : '#F3F4F6',
                           }}
                         >
                           <Text style={{ color: isSelected ? 'white' : '#4B5563', fontSize: 12, fontWeight: '600' }}>
@@ -3362,8 +3460,8 @@ function DiscoverScreen({ navigation, route }) {
                 {/* Avatar section */}
                 <View style={{ alignItems: 'center', marginBottom: 24 }}>
                   <TouchableOpacity onPress={pickAvatar} style={{ position: 'relative' }}>
-                    <Image source={{ uri: editAvatar || avatarUri }} style={{ width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#EA580C' }} />
-                    <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#EA580C', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' }}>
+                    <Image source={{ uri: editAvatar || avatarUri }} style={{ width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#E27A53' }} />
+                    <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#E27A53', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' }}>
                       <Ionicons name="camera" size={16} color="white" />
                     </View>
                   </TouchableOpacity>
@@ -3461,7 +3559,7 @@ function StoreDetailsScreen({ navigation, route }) {
   const [foodItems, setFoodItems] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('bags'); // 'bags' | 'menu' | 'reviews'
+  const [activeTab, setActiveTab] = useState('menu'); // 'menu' | 'reviews'
   const [isFavorited, setIsFavorited] = useState(store.is_favorited === 1);
 
   // Local Review Submission States
@@ -3559,7 +3657,7 @@ function StoreDetailsScreen({ navigation, route }) {
   const coverUrl = store.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=600&auto=format&fit=crop';
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+    <View style={{ flex: 1, backgroundColor: '#FDF3E4' }}>
       <StatusBar style="light" />
 
       {/* Floating Header Actions */}
@@ -3594,8 +3692,38 @@ function StoreDetailsScreen({ navigation, route }) {
           <Ionicons name="arrow-back" size={20} color="white" />
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('Cart')} 
+          <TouchableOpacity
+            onPress={() => {
+              if (!store.lat || !store.lng) {
+                Alert.alert('Location unavailable', 'This store has no map location set.');
+                return;
+              }
+              const label = encodeURIComponent(store.name || 'Store');
+              const url = Platform.OS === 'ios'
+                ? `maps:0,0?q=${label}@${store.lat},${store.lng}`
+                : `geo:${store.lat},${store.lng}?q=${store.lat},${store.lng}(${label})`;
+              Linking.openURL(url).catch(() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${store.lat},${store.lng}`));
+            }}
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 21,
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              borderWidth: 1.5,
+              borderColor: 'rgba(255,255,255,0.25)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              elevation: 4
+            }}
+          >
+            <Ionicons name="map-outline" size={20} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Cart')}
             style={{ 
               width: 42, 
               height: 42, 
@@ -3676,7 +3804,7 @@ function StoreDetailsScreen({ navigation, route }) {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
         {/* Visual Cover Photo with Gradient Overlay */}
         <View style={{ height: 260, position: 'relative' }}>
           <Image source={{ uri: coverUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
@@ -3691,7 +3819,7 @@ function StoreDetailsScreen({ navigation, route }) {
           marginTop: -32, 
           borderTopLeftRadius: 32, 
           borderTopRightRadius: 32, 
-          backgroundColor: '#FFFFFF', 
+          backgroundColor: '#FFF6E9', 
           paddingTop: 28,
           paddingHorizontal: 24,
           paddingBottom: 24,
@@ -3703,7 +3831,7 @@ function StoreDetailsScreen({ navigation, route }) {
         }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <View style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#EA580C', letterSpacing: 0.5 }}>MERCHANT PARTNER</Text>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#E27A53', letterSpacing: 0.5 }}>MERCHANT PARTNER</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {store.delivery_enabled ? (
@@ -3739,7 +3867,7 @@ function StoreDetailsScreen({ navigation, route }) {
             {/* Rating Box */}
             <View style={{ 
               flex: 1, 
-              backgroundColor: '#FFFFFF', 
+              backgroundColor: '#FFF6E9', 
               borderRadius: 20, 
               paddingVertical: 14,
               paddingHorizontal: 6,
@@ -3757,11 +3885,11 @@ function StoreDetailsScreen({ navigation, route }) {
                 width: 32, 
                 height: 32, 
                 borderRadius: 16, 
-                backgroundColor: '#EA580C', 
+                backgroundColor: '#E27A53', 
                 justifyContent: 'center', 
                 alignItems: 'center',
                 marginBottom: 6,
-                shadowColor: '#EA580C',
+                shadowColor: '#E27A53',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.15,
                 shadowRadius: 4,
@@ -3778,7 +3906,7 @@ function StoreDetailsScreen({ navigation, route }) {
             {/* Distance Box */}
             <View style={{ 
               flex: 1, 
-              backgroundColor: '#FFFFFF', 
+              backgroundColor: '#FFF6E9', 
               borderRadius: 20, 
               paddingVertical: 14,
               paddingHorizontal: 6,
@@ -3796,11 +3924,11 @@ function StoreDetailsScreen({ navigation, route }) {
                 width: 32, 
                 height: 32, 
                 borderRadius: 16, 
-                backgroundColor: '#EA580C', 
+                backgroundColor: '#E27A53', 
                 justifyContent: 'center', 
                 alignItems: 'center',
                 marginBottom: 6,
-                shadowColor: '#EA580C',
+                shadowColor: '#E27A53',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.15,
                 shadowRadius: 4,
@@ -3817,7 +3945,7 @@ function StoreDetailsScreen({ navigation, route }) {
             {/* Time Box */}
             <View style={{ 
               flex: 1, 
-              backgroundColor: '#FFFFFF', 
+              backgroundColor: '#FFF6E9', 
               borderRadius: 20, 
               paddingVertical: 14,
               paddingHorizontal: 6,
@@ -3835,11 +3963,11 @@ function StoreDetailsScreen({ navigation, route }) {
                 width: 32, 
                 height: 32, 
                 borderRadius: 16, 
-                backgroundColor: '#EA580C', 
+                backgroundColor: '#E27A53', 
                 justifyContent: 'center', 
                 alignItems: 'center',
                 marginBottom: 6,
-                shadowColor: '#EA580C',
+                shadowColor: '#E27A53',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.15,
                 shadowRadius: 4,
@@ -3856,25 +3984,22 @@ function StoreDetailsScreen({ navigation, route }) {
         </View>
 
         {/* Custom Segmented Capsule Tabs Control */}
-        <View style={{ 
-          flexDirection: 'row', 
-          marginHorizontal: 20, 
-          marginVertical: 16, 
-          backgroundColor: '#F1F5F9', 
-          padding: 4, 
-          borderRadius: 16 
-        }}>
-          {['bags', 'menu', 'reviews'].map(tab => {
+        <View style={{
+          flexDirection: 'row',
+          marginHorizontal: 20,
+          marginVertical: 16,
+          backgroundColor: '#F1F5F9',
+          padding: 4,
+          borderRadius: 16
+        }} renderToHardwareTextureAndroid collapsable={false}>
+          {['menu', 'reviews'].map(tab => {
             const isActive = activeTab === tab;
             let iconName = '';
             let labelText = '';
-            
-            if (tab === 'bags') {
-              iconName = isActive ? 'gift' : 'gift-outline';
-              labelText = 'Bags';
-            } else if (tab === 'menu') {
-              iconName = isActive ? 'cart' : 'cart-outline';
-              labelText = 'Products';
+
+            if (tab === 'menu') {
+              iconName = isActive ? 'restaurant' : 'restaurant-outline';
+              labelText = 'Menu';
             } else {
               iconName = isActive ? 'star' : 'star-outline';
               labelText = 'Reviews';
@@ -3888,7 +4013,7 @@ function StoreDetailsScreen({ navigation, route }) {
                   flex: 1, 
                   paddingVertical: 10, 
                   alignItems: 'center', 
-                  backgroundColor: isActive ? '#FFFFFF' : 'transparent',
+                  backgroundColor: isActive ? '#FFF6E9' : 'transparent',
                   borderRadius: 12,
                   shadowColor: isActive ? '#000' : 'transparent',
                   shadowOffset: { width: 0, height: 2 },
@@ -3900,11 +4025,11 @@ function StoreDetailsScreen({ navigation, route }) {
                   gap: 6
                 }}
               >
-                <Ionicons name={iconName} size={15} color={isActive ? '#EA580C' : '#64748B'} />
+                <Ionicons name={iconName} size={15} color={isActive ? '#E27A53' : '#64748B'} />
                 <Text style={{ 
                   fontSize: 13, 
                   fontWeight: isActive ? '800' : '600', 
-                  color: isActive ? '#EA580C' : '#64748B' 
+                  color: isActive ? '#E27A53' : '#64748B' 
                 }}>
                   {labelText}
                 </Text>
@@ -3916,24 +4041,29 @@ function StoreDetailsScreen({ navigation, route }) {
         {/* Loading Spinner */}
         {loading ? (
           <View style={{ padding: 60, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color="#EA580C" />
+            <ActivityIndicator size="small" color="#E27A53" />
           </View>
         ) : (
           <View style={{ paddingBottom: 10 }}>
-            {/* SURPRISE BAGS LIST */}
-            {activeTab === 'bags' && (
+            {/* MENU: Surprise Bags + Products, merged with section headers */}
+            {activeTab === 'menu' && (
               <View>
-                {bags.length === 0 ? (
-                  <View style={{ marginHorizontal: 20, marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontSize: 40, marginBottom: 8 }}>🎁</Text>
-                    <Text style={{ color: '#64748B', fontWeight: '600', textAlign: 'center' }}>No surprise bags available right now.</Text>
+                {bags.length === 0 && foodItems.length === 0 && (
+                  <View style={{ marginHorizontal: 20, marginTop: 10, backgroundColor: '#FFF6E9', borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <Text style={{ fontSize: 40, marginBottom: 8 }}>🍽️</Text>
+                    <Text style={{ color: '#64748B', fontWeight: '600', textAlign: 'center' }}>Nothing listed by this store right now.</Text>
                   </View>
-                ) : (
+                )}
+
+                {bags.length > 0 && (
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginHorizontal: 20, marginTop: 4, marginBottom: 4 }}>🎁 Surprise Bags</Text>
+                )}
+                {bags.length > 0 && (
                   bags.map(bag => (
                     <View key={bag.id} style={{ 
                       marginHorizontal: 20, 
                       marginTop: 16, 
-                      backgroundColor: '#FFFFFF', 
+                      backgroundColor: '#FFF6E9', 
                       borderRadius: 24, 
                       padding: 16, 
                       borderWidth: 1, 
@@ -3953,14 +4083,14 @@ function StoreDetailsScreen({ navigation, route }) {
                           marginRight: 14,
                           position: 'relative',
                           overflow: 'hidden',
-                          shadowColor: '#EA580C',
+                          shadowColor: '#E27A53',
                           shadowOffset: { width: 0, height: 4 },
                           shadowOpacity: 0.15,
                           shadowRadius: 8,
                           elevation: 3
                         }}>
                           <LinearGradient
-                            colors={['#FF7E40', '#EA580C']}
+                            colors={['#FF7E40', '#E27A53']}
                             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
                           />
                           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -3980,7 +4110,7 @@ function StoreDetailsScreen({ navigation, route }) {
                             
                             {/* Price Column */}
                             <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                              <Text style={{ fontSize: 18, fontWeight: '900', color: '#EA580C' }}>{currencySymbol}{bag.price.toFixed(2)}</Text>
+                              <Text style={{ fontSize: 18, fontWeight: '900', color: '#E27A53' }}>{currencySymbol}{bag.price.toFixed(2)}</Text>
                               {bag.original_price && (
                                 <Text style={{ fontSize: 11, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 2, fontWeight: '600' }}>
                                   {currencySymbol}{bag.original_price.toFixed(2)}
@@ -3997,8 +4127,8 @@ function StoreDetailsScreen({ navigation, route }) {
                       {/* Bottom row: badges and CTA Add button (No overlaps!) */}
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <View style={{ backgroundColor: bag.quantity > 2 ? '#E0F2FE' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                            <Text style={{ fontSize: 11, color: bag.quantity > 2 ? '#0369A1' : '#B91C1C', fontWeight: '800' }}>
+                          <View style={{ backgroundColor: '#FBE2DC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                            <Text style={{ fontSize: 11, color: '#E64A33', fontWeight: '800' }}>
                               {bag.quantity} remaining
                             </Text>
                           </View>
@@ -4011,11 +4141,11 @@ function StoreDetailsScreen({ navigation, route }) {
                         <TouchableOpacity 
                           onPress={() => addToCart(bag, 'bag')}
                           style={{ 
-                            backgroundColor: '#EA580C', 
+                            backgroundColor: '#E27A53', 
                             paddingHorizontal: 16, 
                             paddingVertical: 8, 
                             borderRadius: 20,
-                            shadowColor: '#EA580C',
+                            shadowColor: '#E27A53',
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: 0.2,
                             shadowRadius: 8,
@@ -4028,18 +4158,11 @@ function StoreDetailsScreen({ navigation, route }) {
                     </View>
                   ))
                 )}
-              </View>
-            )}
 
-            {/* FOOD ITEMS MENU LIST */}
-            {activeTab === 'menu' && (
-              <View>
-                {foodItems.length === 0 ? (
-                  <View style={{ marginHorizontal: 20, marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontSize: 40, marginBottom: 8 }}>🛒</Text>
-                    <Text style={{ color: '#64748B', fontWeight: '600', textAlign: 'center' }}>No products listed right now.</Text>
-                  </View>
-                ) : (
+                {foodItems.length > 0 && (
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginHorizontal: 20, marginTop: 20, marginBottom: 4 }}>🛒 Products</Text>
+                )}
+                {foodItems.length > 0 && (
                   foodItems.map(item => {
                     let gradColors = ['#F59E0B', '#D97706'];
                     let catIcon = 'cart';
@@ -4064,7 +4187,7 @@ function StoreDetailsScreen({ navigation, route }) {
                       <View key={item.id} style={{ 
                         marginHorizontal: 20, 
                         marginTop: 16, 
-                        backgroundColor: '#FFFFFF', 
+                        backgroundColor: '#FFF6E9', 
                         borderRadius: 24, 
                         padding: 16, 
                         borderWidth: 1, 
@@ -4114,7 +4237,7 @@ function StoreDetailsScreen({ navigation, route }) {
                               
                               {/* Price Column */}
                               <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#EA580C' }}>{currencySymbol}{item.price.toFixed(2)}</Text>
+                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#E27A53' }}>{currencySymbol}{item.price.toFixed(2)}</Text>
                                 {item.original_price && (
                                   <Text style={{ fontSize: 11, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 2, fontWeight: '600' }}>
                                     {currencySymbol}{item.original_price.toFixed(2)}
@@ -4131,15 +4254,15 @@ function StoreDetailsScreen({ navigation, route }) {
                         {/* Bottom row: badges and CTA Add button (No overlaps!) */}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <View style={{ backgroundColor: item.quantity > 2 ? '#E0F2FE' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                              <Text style={{ fontSize: 11, color: item.quantity > 2 ? '#0369A1' : '#B91C1C', fontWeight: '800' }}>
+                            <View style={{ backgroundColor: '#FBE2DC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                              <Text style={{ fontSize: 11, color: '#E64A33', fontWeight: '800' }}>
                                 {item.quantity} remaining
                               </Text>
                             </View>
                             {item.sale_ends_at && new Date(item.sale_ends_at) > new Date() && (
                               <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7ED', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                                <Ionicons name="flash-outline" size={11} color="#EA580C" />
-                                <Text style={{ fontSize: 11, color: '#EA580C', fontWeight: '800', marginLeft: 3 }}>
+                                <Ionicons name="flash-outline" size={11} color="#E27A53" />
+                                <Text style={{ fontSize: 11, color: '#E27A53', fontWeight: '800', marginLeft: 3 }}>
                                   Sale ends {formatSaleEnd(item.sale_ends_at)}
                                 </Text>
                               </View>
@@ -4149,11 +4272,11 @@ function StoreDetailsScreen({ navigation, route }) {
                           <TouchableOpacity 
                             onPress={() => addToCart(item, 'food')}
                             style={{ 
-                              backgroundColor: '#EA580C', 
+                              backgroundColor: '#E27A53', 
                               paddingHorizontal: 16, 
                               paddingVertical: 8, 
                               borderRadius: 20,
-                              shadowColor: '#EA580C',
+                              shadowColor: '#E27A53',
                               shadowOffset: { width: 0, height: 4 },
                               shadowOpacity: 0.2,
                               shadowRadius: 8,
@@ -4175,7 +4298,7 @@ function StoreDetailsScreen({ navigation, route }) {
               <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
                 {/* Rating Distribution Panel */}
                 <View style={{ 
-                  backgroundColor: '#FFFFFF', 
+                  backgroundColor: '#FFF6E9', 
                   borderRadius: 24, 
                   padding: 20, 
                   marginTop: 10,
@@ -4259,7 +4382,7 @@ function StoreDetailsScreen({ navigation, route }) {
                 <TouchableOpacity 
                   onPress={() => setLocalAddReviewVisible(true)}
                   style={{
-                    backgroundColor: '#EA580C',
+                    backgroundColor: '#E27A53',
                     borderRadius: 16,
                     paddingVertical: 14,
                     alignItems: 'center',
@@ -4267,7 +4390,7 @@ function StoreDetailsScreen({ navigation, route }) {
                     flexDirection: 'row',
                     justifyContent: 'center',
                     gap: 8,
-                    shadowColor: '#EA580C',
+                    shadowColor: '#E27A53',
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.15,
                     shadowRadius: 8,
@@ -4286,7 +4409,7 @@ function StoreDetailsScreen({ navigation, route }) {
                   ) : (
                     reviews.map(review => (
                       <View key={review.id} style={{ 
-                        backgroundColor: '#FFFFFF', 
+                        backgroundColor: '#FFF6E9', 
                         borderRadius: 20, 
                         padding: 16, 
                         marginBottom: 12, 
@@ -4339,7 +4462,7 @@ function StoreDetailsScreen({ navigation, route }) {
                               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
                                 {parsedTags.map(tag => (
                                   <View key={tag} style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#FFEDD5' }}>
-                                    <Text style={{ color: '#EA580C', fontSize: 10, fontWeight: '700' }}>{tag}</Text>
+                                    <Text style={{ color: '#E27A53', fontSize: 10, fontWeight: '700' }}>{tag}</Text>
                                   </View>
                                 ))}
                               </View>
@@ -4364,7 +4487,7 @@ function StoreDetailsScreen({ navigation, route }) {
             overflow: 'hidden', 
             borderWidth: 1, 
             borderColor: '#E2E8F0', 
-            backgroundColor: '#FFFFFF', 
+            backgroundColor: '#FFF6E9', 
             shadowColor: '#0F172A', 
             shadowOffset: { width: 0, height: 6 }, 
             shadowOpacity: 0.04, 
@@ -4402,7 +4525,7 @@ function StoreDetailsScreen({ navigation, route }) {
               }}
               style={{
                 padding: 16,
-                backgroundColor: '#FFFFFF',
+                backgroundColor: '#FFF6E9',
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -4415,7 +4538,7 @@ function StoreDetailsScreen({ navigation, route }) {
                 <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4 }} numberOfLines={1}>{store.address}</Text>
               </View>
               <View style={{
-                backgroundColor: '#FF5A00',
+                backgroundColor: '#E27A53',
                 borderRadius: 10,
                 paddingHorizontal: 12,
                 paddingVertical: 8,
@@ -4435,7 +4558,7 @@ function StoreDetailsScreen({ navigation, route }) {
       <Modal visible={localAddReviewVisible} animationType="slide" transparent>
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'flex-end' }}>
           <View style={{ 
-            backgroundColor: '#FFFFFF', 
+            backgroundColor: '#FFF6E9', 
             borderTopLeftRadius: 32, 
             borderTopRightRadius: 32, 
             padding: 24, 
@@ -4482,12 +4605,12 @@ function StoreDetailsScreen({ navigation, route }) {
                       key={tag}
                       onPress={() => handleToggleTag(tag)}
                       style={{ 
-                        backgroundColor: isSelected ? '#EA580C' : '#F1F5F9', 
+                        backgroundColor: isSelected ? '#E27A53' : '#F1F5F9', 
                         paddingHorizontal: 14, 
                         paddingVertical: 8, 
                         borderRadius: 20, 
                         borderWidth: 1, 
-                        borderColor: isSelected ? '#EA580C' : '#E2E8F0' 
+                        borderColor: isSelected ? '#E27A53' : '#E2E8F0' 
                       }}
                     >
                       <Text style={{ 
@@ -4530,11 +4653,11 @@ function StoreDetailsScreen({ navigation, route }) {
                 onPress={submitLocalReview}
                 disabled={submittingLocalReview}
                 style={{ 
-                  backgroundColor: '#EA580C', 
+                  backgroundColor: '#E27A53', 
                   borderRadius: 24, 
                   paddingVertical: 14, 
                   alignItems: 'center', 
-                  shadowColor: '#EA580C',
+                  shadowColor: '#E27A53',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.2,
                   shadowRadius: 8,
@@ -4552,6 +4675,7 @@ function StoreDetailsScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+      <SharedBottomNav navigation={navigation} activeTab="StoreDetails" cartTotalCount={cartTotalCount} />
     </View>
   );
 }
@@ -4591,9 +4715,9 @@ function DeliveryAddressScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FDF3E4' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 10 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, backgroundColor: '#FFFFFF', borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, backgroundColor: '#FFF6E9', borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}>
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
         <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827', marginLeft: 16 }}>Delivery Details</Text>
@@ -4622,7 +4746,7 @@ function DeliveryAddressScreen({ navigation, route }) {
 
         <Text style={{ color: '#374151', fontWeight: '700', marginBottom: 6, fontSize: 13 }}>Delivery Address *</Text>
         <TextInput
-          style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 15, color: '#111827', height: 90, textAlignVertical: 'top' }}
+          style={{ backgroundColor: '#FFF6E9', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 15, color: '#111827', height: 90, textAlignVertical: 'top' }}
           placeholder="House/flat number, street, area, city"
           placeholderTextColor="#9CA3AF"
           value={address}
@@ -4632,7 +4756,7 @@ function DeliveryAddressScreen({ navigation, route }) {
 
         <Text style={{ color: '#374151', fontWeight: '700', marginBottom: 6, fontSize: 13 }}>Phone Number *</Text>
         <TextInput
-          style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 15, color: '#111827' }}
+          style={{ backgroundColor: '#FFF6E9', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 15, color: '#111827' }}
           placeholder="e.g. 03001234567"
           placeholderTextColor="#9CA3AF"
           value={phone}
@@ -4644,14 +4768,14 @@ function DeliveryAddressScreen({ navigation, route }) {
           onPress={() => setSaveForFuture(!saveForFuture)}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24, paddingVertical: 4 }}
         >
-          <Ionicons name={saveForFuture ? "checkbox" : "square-outline"} size={22} color={saveForFuture ? "#EA580C" : "#9CA3AF"} />
+          <Ionicons name={saveForFuture ? "checkbox" : "square-outline"} size={22} color={saveForFuture ? "#E27A53" : "#9CA3AF"} />
           <Text style={{ fontSize: 13, color: '#374151', flex: 1 }}>Save these details for future orders</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={handleContinue}
           disabled={saving}
-          style={{ backgroundColor: saving ? '#9CA3AF' : '#EA580C', borderRadius: 16, paddingVertical: 17, alignItems: 'center' }}
+          style={{ backgroundColor: saving ? '#9CA3AF' : '#E27A53', borderRadius: 16, paddingVertical: 17, alignItems: 'center' }}
         >
           {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontSize: 16, fontWeight: '800' }}>Confirm Delivery Details</Text>}
         </TouchableOpacity>
@@ -4717,14 +4841,10 @@ function CartScreen({ navigation, route }) {
       };
       const response = await axios.post(`${API_URL}/orders`, payload, { headers: { Authorization: `Bearer ${token}` } });
       const receiptGroups = response.data?.receipt_groups || [];
-      const tenantParam = route.params?.tenant || (cartItems[0]?.tenant_id ? {
-        id: cartItems[0].tenant_id,
-        name: cartItems[0].tenant_name || storeName,
-      } : null);
 
       const finishUp = () => {
         clearCart();
-        navigation.navigate('Discover', tenantParam ? { tenant: tenantParam } : undefined);
+        navigation.navigate('ExploreTenants');
 
         if (receiptGroups.length > 0) {
           receiptGroups.forEach((group) => {
@@ -4791,7 +4911,7 @@ function CartScreen({ navigation, route }) {
       : 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&auto=format&fit=crop';
       
     return (
-      <View style={{ flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 12, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+      <View style={{ flexDirection: 'row', backgroundColor: '#FFF6E9', borderRadius: 16, padding: 12, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
         <Image source={{ uri: imageUrl }} style={{ width: 80, height: 80, borderRadius: 12 }} />
         <View style={{ flex: 1, marginLeft: 12, justifyContent: 'space-between' }}>
           <View>
@@ -4823,9 +4943,9 @@ function CartScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FDF3E4' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 10 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, backgroundColor: '#FFFFFF', borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 40, height: 40, backgroundColor: '#FFF6E9', borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}>
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
         <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827', marginLeft: 16 }}>Your Cart</Text>
@@ -4836,21 +4956,22 @@ function CartScreen({ navigation, route }) {
           <Ionicons name="cart-outline" size={80} color="#D1D5DB" />
           <Text style={{ fontSize: 20, fontWeight: '700', color: '#374151', marginTop: 16 }}>Your cart is empty</Text>
           <Text style={{ fontSize: 15, color: '#6B7280', textAlign: 'center', marginTop: 8 }}>Looks like you haven't added any items yet.</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 24, backgroundColor: '#EA580C', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 24, backgroundColor: '#E27A53', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}>
             <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>Start Browsing</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <>
-          <FlatList
-            data={cartItems}
-            keyExtractor={item => `${item.type}_${item.id}`}
-            renderItem={renderItem}
-            contentContainerStyle={{ padding: 20 }}
-          />
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+            {cartItems.map((item) => (
+              <View key={`${item.type}_${item.id}`}>
+                {renderItem({ item })}
+              </View>
+            ))}
+          </ScrollView>
           
           <View style={{ 
-            backgroundColor: '#FFFFFF', 
+            backgroundColor: '#FFF6E9', 
             paddingHorizontal: 24, 
             paddingTop: 24, 
             paddingBottom: Math.max(insets.bottom + 12, 100), 
@@ -4875,18 +4996,18 @@ function CartScreen({ navigation, route }) {
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <TouchableOpacity
                   onPress={() => setDeliveryInfo(prev => ({ ...prev, fulfillmentType: 'pickup' }))}
-                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: !isDelivery ? '#EA580C' : '#E5E7EB', backgroundColor: !isDelivery ? '#FFF7ED' : '#F9FAFB' }}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: !isDelivery ? '#E27A53' : '#E5E7EB', backgroundColor: !isDelivery ? '#FFF7ED' : '#F9FAFB' }}
                 >
-                  <Ionicons name="storefront-outline" size={16} color={!isDelivery ? '#EA580C' : '#6B7280'} />
-                  <Text style={{ fontWeight: '700', fontSize: 13, color: !isDelivery ? '#EA580C' : '#6B7280' }}>Pickup</Text>
+                  <Ionicons name="storefront-outline" size={16} color={!isDelivery ? '#E27A53' : '#6B7280'} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: !isDelivery ? '#E27A53' : '#6B7280' }}>Pickup</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => deliveryEligible && goToDeliveryAddress()}
                   disabled={!deliveryEligible}
-                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isDelivery ? '#EA580C' : '#E5E7EB', backgroundColor: isDelivery ? '#FFF7ED' : (deliveryEligible ? '#F9FAFB' : '#F3F4F6'), opacity: deliveryEligible ? 1 : 0.5 }}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isDelivery ? '#E27A53' : '#E5E7EB', backgroundColor: isDelivery ? '#FFF7ED' : (deliveryEligible ? '#F9FAFB' : '#F3F4F6'), opacity: deliveryEligible ? 1 : 0.5 }}
                 >
-                  <Ionicons name="bicycle-outline" size={16} color={isDelivery ? '#EA580C' : '#6B7280'} />
-                  <Text style={{ fontWeight: '700', fontSize: 13, color: isDelivery ? '#EA580C' : '#6B7280' }}>Delivery</Text>
+                  <Ionicons name="bicycle-outline" size={16} color={isDelivery ? '#E27A53' : '#6B7280'} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: isDelivery ? '#E27A53' : '#6B7280' }}>Delivery</Text>
                 </TouchableOpacity>
               </View>
               {!deliveryEligible && (
@@ -4900,12 +5021,12 @@ function CartScreen({ navigation, route }) {
               <View style={{ backgroundColor: '#FFF7ED', borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: '#FED7AA' }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#EA580C', textTransform: 'uppercase', letterSpacing: 0.5 }}>Deliver To</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#E27A53', textTransform: 'uppercase', letterSpacing: 0.5 }}>Deliver To</Text>
                     <Text style={{ fontSize: 13, color: '#111827', fontWeight: '600', marginTop: 4 }} numberOfLines={2}>{deliveryInfo.address || 'No address added'}</Text>
                     <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{deliveryInfo.phone}</Text>
                   </View>
                   <TouchableOpacity onPress={goToDeliveryAddress}>
-                    <Text style={{ color: '#EA580C', fontWeight: '700', fontSize: 12 }}>Change</Text>
+                    <Text style={{ color: '#E27A53', fontWeight: '700', fontSize: 12 }}>Change</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8, lineHeight: 15 }}>
@@ -4929,7 +5050,7 @@ function CartScreen({ navigation, route }) {
                 </View>
               </View>
             </View>
-            <TouchableOpacity onPress={handleCheckout} disabled={checkingOut} style={[styles.primaryButton, { backgroundColor: checkingOut ? '#9CA3AF' : '#EA580C', paddingVertical: 18 }]}>
+            <TouchableOpacity onPress={handleCheckout} disabled={checkingOut} style={[styles.primaryButton, { backgroundColor: checkingOut ? '#9CA3AF' : '#E27A53', paddingVertical: 18 }]}>
               {checkingOut ? (
                 <ActivityIndicator color="white" />
               ) : (
@@ -4981,7 +5102,7 @@ function BookingsScreen({ navigation }) {
     };
     const statusBadge = CUSTOMER_STATUS_BADGES[item.status];
     return (
-      <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+      <View style={{ backgroundColor: '#FFF6E9', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
           <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600' }}>{date}</Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -5036,8 +5157,8 @@ function BookingsScreen({ navigation }) {
             }}
             style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF7ED', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#FED7AA', gap: 6 }}
           >
-            <Ionicons name="receipt-outline" size={15} color="#EA580C" />
-            <Text style={{ color: '#EA580C', fontSize: 12, fontWeight: '700' }}>Download Receipt</Text>
+            <Ionicons name="receipt-outline" size={15} color="#E27A53" />
+            <Text style={{ color: '#E27A53', fontSize: 12, fontWeight: '700' }}>Download Receipt</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => openChatWithStore({ id: item.store_id, name: item.store_name })}
@@ -5063,25 +5184,31 @@ function BookingsScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FDF3E4' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 10 }}>
+        <TouchableOpacity
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('ExploreTenants')}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF6E9', justifyContent: 'center', alignItems: 'center', marginRight: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}
+        >
+          <Ionicons name="arrow-back" size={20} color="#111827" />
+        </TouchableOpacity>
         <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827', flex: 1 }}>Your Bookings</Text>
       </View>
       {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color="#EA580C" /></View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color="#E27A53" /></View>
       ) : orders.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
           <Ionicons name="receipt-outline" size={80} color="#D1D5DB" />
           <Text style={{ fontSize: 20, fontWeight: '700', color: '#374151', marginTop: 16 }}>No bookings yet</Text>
         </View>
       ) : (
-        <FlatList
-          data={orders}
-          keyExtractor={item => item.id.toString()}
-          renderItem={renderOrderItem}
-          contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
-          showsVerticalScrollIndicator={false}
-        />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+          {orders.map((item) => (
+            <View key={item.id.toString()}>
+              {renderOrderItem({ item })}
+            </View>
+          ))}
+        </ScrollView>
       )}
       <SharedBottomNav navigation={navigation} activeTab="Bookings" cartTotalCount={cartTotalCount} />
     </SafeAreaView>
@@ -5089,7 +5216,13 @@ function BookingsScreen({ navigation }) {
 }
 
 // --- Seller Screens ---
-const SELLER_BRAND = '#FF5A00';
+const SELLER_BRAND = '#E27A53';
+const STORE_CATEGORIES = [
+  { key: 'Restaurants', label: 'Restaurants', icon: '🍽️' },
+  { key: 'Bakeries', label: 'Bakeries', icon: '🥐' },
+  { key: 'Cafes', label: 'Cafes', icon: '☕' },
+  { key: 'Grocery Store', label: 'Grocery Store', icon: '🛒' },
+];
 const SELLER_NAV_ITEMS = (isAdmin) => [
   { key: 'stores', icon: 'storefront-outline', label: 'Stores' },
   { key: 'bags', icon: 'bag-handle-outline', label: 'Surprise Bags' },
@@ -5102,7 +5235,7 @@ const SELLER_NAV_ITEMS = (isAdmin) => [
 
 function SellerStatCard({ label, value }) {
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#FED7AA' }}>
+    <View style={{ flex: 1, backgroundColor: '#FFF6E9', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#FED7AA' }}>
       <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 18 }}>{value}</Text>
       <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 4, fontWeight: '600' }}>{label}</Text>
     </View>
@@ -5130,6 +5263,7 @@ function SellerDashboardScreen() {
   const [storeLng, setStoreLng] = useState(-0.1278);
   const [storeDeliveryEnabled, setStoreDeliveryEnabled] = useState(false);
   const [storeDeliveryFeeNote, setStoreDeliveryFeeNote] = useState('');
+  const [storeCategory, setStoreCategory] = useState(null);
 
   const [bagStoreId, setBagStoreId] = useState(null);
   const [bagPrice, setBagPrice] = useState('');
@@ -5505,16 +5639,17 @@ function SellerDashboardScreen() {
 
   const handleCreateStore = async () => {
     if (!storeName || !storeAddress) return Alert.alert("Error", "Please fill all store fields.");
+    if (!storeCategory) return Alert.alert("Category Required", "Please select what kind of store this is.");
     try {
       if (editingStoreId) {
-        await axios.put(`${API_URL}/stores/${editingStoreId}`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_fee_note: storeDeliveryFeeNote.trim() || null }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(`${API_URL}/stores/${editingStoreId}`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_fee_note: storeDeliveryFeeNote.trim() || null, category: storeCategory }, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Store updated successfully!");
         setEditingStoreId(null);
       } else {
-        await axios.post(`${API_URL}/stores`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_fee_note: storeDeliveryFeeNote.trim() || null }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post(`${API_URL}/stores`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_fee_note: storeDeliveryFeeNote.trim() || null, category: storeCategory }, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Store created successfully!");
       }
-      setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryFeeNote('');
+      setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryFeeNote(''); setStoreCategory(null);
       setShowStoreModal(false);
       fetchStores();
       fetchStats();
@@ -5655,7 +5790,7 @@ function SellerDashboardScreen() {
       <StatusBar style="dark" />
 
       {/* Header */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', backgroundColor: '#FFFFFF' }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', backgroundColor: '#FFF6E9' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
             {user?.logo ? (
@@ -5680,7 +5815,7 @@ function SellerDashboardScreen() {
       {/* Side drawer navigation */}
       <Modal visible={menuOpen} animationType="fade" transparent onRequestClose={() => setMenuOpen(false)}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} activeOpacity={1} onPress={() => setMenuOpen(false)}>
-          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '82%', maxWidth: 320, backgroundColor: '#FFFFFF', paddingTop: 56, paddingHorizontal: 16 }}>
+          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '82%', maxWidth: 320, backgroundColor: '#FFF6E9', paddingTop: 56, paddingHorizontal: 16 }}>
             <View style={{ paddingHorizontal: 8, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', marginBottom: 12 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>Seller Menu</Text>
               <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 4 }}>{user?.email}</Text>
@@ -5710,7 +5845,7 @@ function SellerDashboardScreen() {
       </Modal>
 
       {/* Quick nav chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 52, marginTop: 12, flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 52, marginTop: 12, flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }} renderToHardwareTextureAndroid collapsable={false}>
         {navItems.map(item => (
           <TouchableOpacity
             key={item.key}
@@ -5718,7 +5853,7 @@ function SellerDashboardScreen() {
             style={{
               flexDirection: 'row', alignItems: 'center', gap: 6,
               paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-              backgroundColor: sellerTab === item.key ? SELLER_BRAND : '#FFFFFF',
+              backgroundColor: sellerTab === item.key ? SELLER_BRAND : '#FFF6E9',
               borderWidth: 1, borderColor: sellerTab === item.key ? SELLER_BRAND : '#E5E7EB',
             }}>
             <Ionicons name={item.icon} size={16} color={sellerTab === item.key ? '#FFFFFF' : '#6B7280'} />
@@ -5744,8 +5879,8 @@ function SellerDashboardScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {CURRENCIES.map(c => (
             <TouchableOpacity key={c.code} onPress={() => changeCurrency(c.code)}
-              style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, marginRight: 6, borderWidth: 1, borderColor: currencyCode === c.code ? '#EA580C' : '#E5E7EB', backgroundColor: currencyCode === c.code ? '#FFF7ED' : '#F9FAFB' }}>
-              <Text style={{ fontWeight: '700', fontSize: 12, color: currencyCode === c.code ? '#EA580C' : '#6B7280' }}>
+              style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, marginRight: 6, borderWidth: 1, borderColor: currencyCode === c.code ? '#E27A53' : '#E5E7EB', backgroundColor: currencyCode === c.code ? '#FFF7ED' : '#F9FAFB' }}>
+              <Text style={{ fontWeight: '700', fontSize: 12, color: currencyCode === c.code ? '#E27A53' : '#6B7280' }}>
                 {c.symbol.trim()} {c.code}
               </Text>
             </TouchableOpacity>
@@ -5755,14 +5890,11 @@ function SellerDashboardScreen() {
 
       {/* ── STORES TAB ── */}
       {sellerTab === 'stores' && (
-        <FlatList
-          data={stores}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          removeClippedSubviews={false}
-          ListEmptyComponent={<SellerEmptyState icon="storefront-outline" title="No stores yet" subtitle="Tap + to add your first store location" />}
-          renderItem={({ item: store }) => (
-            <View style={[styles.card, { marginBottom: 12 }]}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+          {stores.length === 0 ? (
+            <SellerEmptyState icon="storefront-outline" title="No stores yet" subtitle="Tap + to add your first store location" />
+          ) : (stores.map((store) => (
+            <View key={store.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 {store.image ? (
                   <Image source={{ uri: store.image }} style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0 }} />
@@ -5774,6 +5906,11 @@ function SellerDashboardScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{store.name}</Text>
                   <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{store.address}</Text>
+                  {store.category && (
+                    <View style={{ alignSelf: 'flex-start', backgroundColor: '#FFF7ED', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginTop: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: SELLER_BRAND }}>{store.category}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
@@ -5792,7 +5929,7 @@ function SellerDashboardScreen() {
               </View>
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                 <TouchableOpacity
-                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setStoreDeliveryEnabled(!!store.delivery_enabled); setStoreDeliveryFeeNote(store.delivery_fee_note || ''); setEditingStoreId(store.id); setShowStoreModal(true); }}
+                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setStoreDeliveryEnabled(!!store.delivery_enabled); setStoreDeliveryFeeNote(store.delivery_fee_note || ''); setStoreCategory(store.category || null); setEditingStoreId(store.id); setShowStoreModal(true); }}
                   style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FFF7ED', borderRadius: 10, alignItems: 'center' }}>
                   <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 13 }}>Edit</Text>
                 </TouchableOpacity>
@@ -5803,20 +5940,17 @@ function SellerDashboardScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          )}
-        />
+          )))}
+        </ScrollView>
       )}
 
       {/* ── SURPRISE BAGS TAB ── */}
       {sellerTab === 'bags' && (
-        <FlatList
-          data={sellerBags}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          removeClippedSubviews={false}
-          ListEmptyComponent={<SellerEmptyState icon="bag-handle-outline" title="No surprise bags yet" subtitle="Create your first surprise bag listing" />}
-          renderItem={({ item: bag }) => (
-            <View style={[styles.card, { marginBottom: 12 }]}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+          {sellerBags.length === 0 ? (
+            <SellerEmptyState icon="bag-handle-outline" title="No surprise bags yet" subtitle="Create your first surprise bag listing" />
+          ) : (sellerBags.map((bag) => (
+            <View key={bag.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{bag.store_name}</Text>
@@ -5826,12 +5960,12 @@ function SellerDashboardScreen() {
                   {bag.original_price ? (
                     <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{formatMoney(bag.original_price, currencySymbol)}</Text>
                   ) : null}
-                  <Text style={{ color: '#EA580C', fontWeight: '800', fontSize: 18 }}>{formatMoney(bag.price, currencySymbol)}</Text>
+                  <Text style={{ color: '#E27A53', fontWeight: '800', fontSize: 18 }}>{formatMoney(bag.price, currencySymbol)}</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
                 <View style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                  <Text style={{ color: '#EA580C', fontWeight: '700', fontSize: 12 }}>{bag.quantity} left</Text>
+                  <Text style={{ color: '#E27A53', fontWeight: '700', fontSize: 12 }}>{bag.quantity} left</Text>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
@@ -5866,20 +6000,17 @@ function SellerDashboardScreen() {
                 </View>
               </View>
             </View>
-          )}
-        />
+          )))}
+        </ScrollView>
       )}
 
       {/* ── OPEN FOOD TAB ── */}
       {sellerTab === 'food' && (
-        <FlatList
-          data={sellerFoodItems}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          removeClippedSubviews={false}
-          ListEmptyComponent={<SellerEmptyState icon="cart-outline" title="No products yet" subtitle="Add grocery, household, and other store items" />}
-          renderItem={({ item }) => (
-            <View style={[styles.card, { marginBottom: 12 }]}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+          {sellerFoodItems.length === 0 ? (
+            <SellerEmptyState icon="cart-outline" title="No products yet" subtitle="Add grocery, household, and other store items" />
+          ) : (sellerFoodItems.map((item) => (
+            <View key={item.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{item.name}</Text>
@@ -5932,18 +6063,15 @@ function SellerDashboardScreen() {
                 </View>
               </View>
             </View>
-          )}
-        />
+          )))}
+        </ScrollView>
       )}
 
       {sellerTab === 'orders' && (
-        <FlatList
-          data={sellerOrders}
-          keyExtractor={item => String(item.id)}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          removeClippedSubviews={false}
-          ListEmptyComponent={<SellerEmptyState icon="receipt-outline" title="No orders yet" subtitle="Customer orders will appear here" />}
-          renderItem={({ item: order }) => {
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+          {sellerOrders.length === 0 ? (
+            <SellerEmptyState icon="receipt-outline" title="No orders yet" subtitle="Customer orders will appear here" />
+          ) : (sellerOrders.map((order) => {
             const isDelivery = order.fulfillment_type === 'delivery';
             const status = order.status || 'pending';
             const isSettled = ['paid', 'rejected', 'cancelled'].includes(status);
@@ -5957,7 +6085,7 @@ function SellerDashboardScreen() {
             };
             const statusBadge = STATUS_BADGES[status];
             return (
-            <View style={[styles.card, { marginBottom: 12 }]}>
+            <View key={String(order.id)} style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -6026,19 +6154,16 @@ function SellerDashboardScreen() {
                 </View>
               )}
             </View>
-          );}}
-        />
+          );}))}
+        </ScrollView>
       )}
 
       {sellerTab === 'reviews' && (
-        <FlatList
-          data={sellerReviews}
-          keyExtractor={item => String(item.id)}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          removeClippedSubviews={false}
-          ListEmptyComponent={<SellerEmptyState icon="star-outline" title="No reviews yet" subtitle="Customer reviews will show here" />}
-          renderItem={({ item: review }) => (
-            <View style={[styles.card, { marginBottom: 12 }]}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+          {sellerReviews.length === 0 ? (
+            <SellerEmptyState icon="star-outline" title="No reviews yet" subtitle="Customer reviews will show here" />
+          ) : (sellerReviews.map((review) => (
+            <View key={String(review.id)} style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{review.customer_name || 'Customer'}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -6049,8 +6174,8 @@ function SellerDashboardScreen() {
               <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{review.store_name}</Text>
               {review.comment ? <Text style={{ color: '#374151', fontSize: 14, marginTop: 8, lineHeight: 20 }}>{review.comment}</Text> : null}
             </View>
-          )}
-        />
+          )))}
+        </ScrollView>
       )}
 
       {sellerTab === 'chats' && (
@@ -6111,7 +6236,7 @@ function SellerDashboardScreen() {
       {inventoryTab && (
       <TouchableOpacity
         onPress={() => {
-          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryFeeNote(''); setShowStoreModal(true); }
+          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryFeeNote(''); setStoreCategory(null); setShowStoreModal(true); }
           else if (sellerTab === 'bags') { setEditingBagId(null); setBagStoreId(null); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setActiveTimePicker(null); setShowBagModal(true); }
           else { setEditingFoodId(null); setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]); setFoodSaleEndsAt(null); setFoodSalePicker(null); setShowFoodModal(true); }
         }}
@@ -6129,7 +6254,7 @@ function SellerDashboardScreen() {
       {/* ── STORE MODAL ── */}
       <Modal visible={showStoreModal} animationType="slide" transparent onRequestClose={() => setShowStoreModal(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
+          <View style={{ backgroundColor: '#FFF6E9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>{editingStoreId ? 'Edit Store' : 'Add New Store'}</Text>
               <TouchableOpacity onPress={() => setShowStoreModal(false)}><Ionicons name="close" size={24} color="#6B7280" /></TouchableOpacity>
@@ -6139,6 +6264,25 @@ function SellerDashboardScreen() {
               <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. Green Grocer" placeholderTextColor="#9CA3AF" value={storeName} onChangeText={setStoreName} />
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Address *</Text>
               <TextInput style={[styles.input, { marginBottom: 14 }]} placeholder="e.g. 10 Oxford Street" placeholderTextColor="#9CA3AF" value={storeAddress} onChangeText={setStoreAddress} />
+
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Store Category *</Text>
+              <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>
+                Helps customers find you by browsing categories
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                {STORE_CATEGORIES.map(cat => (
+                  <TouchableOpacity
+                    key={cat.key}
+                    onPress={() => setStoreCategory(cat.key)}
+                    style={{
+                      paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20,
+                      backgroundColor: storeCategory === cat.key ? SELLER_BRAND : '#F9FAFB',
+                      borderWidth: 1, borderColor: storeCategory === cat.key ? SELLER_BRAND : '#E5E7EB',
+                    }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: storeCategory === cat.key ? '#FFFFFF' : '#6B7280' }}>{cat.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Store Location *</Text>
               <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>
@@ -6232,7 +6376,7 @@ function SellerDashboardScreen() {
       {/* ── BAG MODAL ── */}
       <Modal visible={showBagModal} animationType="slide" transparent onRequestClose={() => setShowBagModal(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' }}>
+          <View style={{ backgroundColor: '#FFF6E9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>{editingBagId ? 'Edit Bag' : 'Add Surprise Bag'}</Text>
               <TouchableOpacity onPress={() => setShowBagModal(false)}><Ionicons name="close" size={24} color="#6B7280" /></TouchableOpacity>
@@ -6241,7 +6385,7 @@ function SellerDashboardScreen() {
               <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Select Store *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                 {stores.map(store => (
-                  <TouchableOpacity key={store.id} onPress={() => setBagStoreId(store.id)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: bagStoreId === store.id ? '#EA580C' : '#F3F4F6' }}>
+                  <TouchableOpacity key={store.id} onPress={() => setBagStoreId(store.id)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: bagStoreId === store.id ? '#E27A53' : '#F3F4F6' }}>
                     <Text style={{ color: bagStoreId === store.id ? '#FFFFFF' : '#374151', fontWeight: '600', fontSize: 13 }}>{store.name}</Text>
                   </TouchableOpacity>
                 ))}
@@ -6265,7 +6409,7 @@ function SellerDashboardScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
                 {ALL_DAYS.map(day => (
                   <TouchableOpacity key={day} onPress={() => togglePickupDay(day)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginRight: 6, borderWidth: 1, borderColor: pickupDays.includes(day) ? '#EA580C' : '#D1D5DB', backgroundColor: pickupDays.includes(day) ? '#EA580C' : '#F9FAFB' }}>
+                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginRight: 6, borderWidth: 1, borderColor: pickupDays.includes(day) ? '#E27A53' : '#D1D5DB', backgroundColor: pickupDays.includes(day) ? '#E27A53' : '#F9FAFB' }}>
                     <Text style={{ color: pickupDays.includes(day) ? '#FFFFFF' : '#6B7280', fontWeight: '700', fontSize: 12 }}>{day}</Text>
                   </TouchableOpacity>
                 ))}
@@ -6332,7 +6476,7 @@ function SellerDashboardScreen() {
                    ))}
                  </View>
                ) : null}
-              <TouchableOpacity onPress={() => { handleCreateBag(); setShowBagModal(false); }} style={[styles.primaryButton, { backgroundColor: '#EA580C' }]}>
+              <TouchableOpacity onPress={() => { handleCreateBag(); setShowBagModal(false); }} style={[styles.primaryButton, { backgroundColor: '#E27A53' }]}>
                 <Text style={styles.primaryButtonText}>{editingBagId ? 'Update Bag' : 'Create Bag'}</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -6343,7 +6487,7 @@ function SellerDashboardScreen() {
       {/* ── FOOD MODAL ── */}
       <Modal visible={showFoodModal} animationType="slide" transparent onRequestClose={() => setShowFoodModal(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '92%' }}>
+          <View style={{ backgroundColor: '#FFF6E9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '92%' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>{editingFoodId ? 'Edit Food Item' : 'Add Food Item'}</Text>
               <TouchableOpacity onPress={() => setShowFoodModal(false)}><Ionicons name="close" size={24} color="#6B7280" /></TouchableOpacity>
@@ -6443,7 +6587,7 @@ function SellerDashboardScreen() {
 
       {/* ── SELLER CHAT MODAL ── */}
       <Modal visible={showSellerChatModal} animationType="slide" onRequestClose={() => setShowSellerChatModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FDF3E4' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
             <TouchableOpacity onPress={() => setShowSellerChatModal(false)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}>
               <Ionicons name="arrow-back" size={20} color="#111827" />
@@ -6455,6 +6599,7 @@ function SellerDashboardScreen() {
           </View>
           <FlatList
             ref={sellerChatListRef}
+            removeClippedSubviews={false}
             data={sellerChatMessages}
             keyExtractor={item => String(item.id)}
             contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12 }}
@@ -6496,7 +6641,7 @@ function SellerDashboardScreen() {
       {/* ── STAFF MODAL ── */}
       <Modal visible={showStaffModal} animationType="slide" transparent onRequestClose={() => setShowStaffModal(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
+          <View style={{ backgroundColor: '#FFF6E9', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>Add Staff Member</Text>
               <TouchableOpacity onPress={() => setShowStaffModal(false)}><Ionicons name="close" size={24} color="#6B7280" /></TouchableOpacity>
@@ -6529,6 +6674,7 @@ export default function App() {
   const [cartItems, setCartItems] = useState([]);
   const DEFAULT_DELIVERY_INFO = { fulfillmentType: 'pickup', address: '', phone: '' };
   const [deliveryInfo, setDeliveryInfo] = useState(DEFAULT_DELIVERY_INFO);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
 
   // Global Currency State
   const [currencyCode, setCurrencyCode] = useState('GBP');
@@ -6672,9 +6818,12 @@ export default function App() {
       currencyCode,
       currencySymbol,
       changeCurrency,
-      CURRENCIES: CURRENCIES_LIST
+      CURRENCIES: CURRENCIES_LIST,
+      profileModalVisible,
+      openProfile: () => setProfileModalVisible(true),
+      closeProfile: () => setProfileModalVisible(false),
     }),
-    [state, currencyCode, currencySymbol, changeCurrency]
+    [state, currencyCode, currencySymbol, changeCurrency, profileModalVisible]
   );
 
   if (state.isLoading) {
@@ -6687,7 +6836,7 @@ export default function App() {
         <CartContext.Provider value={cartContext}>
           <ChatProvider>
             <NavigationContainer>
-              <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFFFFF' } }}>
+              <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFF6E9' } }}>
                 {state.userToken == null ? (
                 // Auth Stack
                 <>
@@ -6716,6 +6865,7 @@ export default function App() {
           <GlobalToast />
           <GlobalChatModal />
           <GlobalReceiptModal />
+          <GlobalProfileModal />
         </ChatProvider>
       </CartContext.Provider>
     </AuthContext.Provider>
@@ -6724,7 +6874,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#FDF3E4' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 20 },
   headerTitle: { fontSize: 32, fontWeight: '800', color: '#111827', marginBottom: 4 },
@@ -6739,12 +6889,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   primaryButton: {
-    backgroundColor: '#FF5A00',
+    backgroundColor: '#E27A53',
     borderRadius: 30,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#FF5A00',
+    shadowColor: '#E27A53',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -6754,7 +6904,7 @@ const styles = StyleSheet.create({
   logoutButton: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 20 },
   listContainer: { paddingHorizontal: 20, paddingBottom: 40 },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF6E9',
     borderRadius: 24,
     padding: 20,
     marginBottom: 20,
@@ -6768,7 +6918,7 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   storeName: { fontSize: 20, fontWeight: '700', color: '#111827', flex: 1 },
-  priceTag: { backgroundColor: '#FF5A00', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  priceTag: { backgroundColor: '#E27A53', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   priceText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
   address: { color: '#6B7280', fontSize: 14, marginBottom: 16, fontWeight: '500' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
@@ -6798,13 +6948,13 @@ const styles = StyleSheet.create({
   glassCardDesc: { fontSize: 12, color: '#4B5563', textAlign: 'center', marginBottom: 16, lineHeight: 16 },
   glassCardFooter: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginTop: 'auto' },
   glassCardPrice: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  glassCardAdd: { backgroundColor: '#FFFFFF', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  glassCardAdd: { backgroundColor: '#FFF6E9', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 
   // New Grid System styles
   iconCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
   iconText: { fontSize: 12, color: '#4B5563', fontWeight: '500' },
   gridCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF6E9',
     borderRadius: 20,
     width: '47%',
     padding: 10,
@@ -6821,7 +6971,7 @@ const styles = StyleSheet.create({
   gridFavoriteBtn: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.9)', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   gridTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 4 },
   gridRating: { fontSize: 12, color: '#111827', fontWeight: '600', marginBottom: 8 },
-  gridPriceTag: { backgroundColor: '#EA580C', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
+  gridPriceTag: { backgroundColor: '#E64A33', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
   gridPriceText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
   gridNavBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
 
@@ -6830,7 +6980,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF6E9',
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 40,
@@ -6852,7 +7002,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toastBody: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF6E9',
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -6864,6 +7014,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#EA580C',
+    borderLeftColor: '#E27A53',
   }
 });

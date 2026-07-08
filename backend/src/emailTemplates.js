@@ -35,7 +35,7 @@ function emailSimpleLayout({ title, bodyHtml }) {
     </div>`;
 }
 
-function emailSellerWelcomeLayout({ brandName: storeName, storeUrl, loginUrl }) {
+function emailSellerWelcomeLayout({ brandName: storeName, loginUrl }) {
   return emailSimpleLayout({
     title: 'Your store is ready!',
     bodyHtml: `
@@ -45,10 +45,6 @@ function emailSellerWelcomeLayout({ brandName: storeName, storeUrl, loginUrl }) 
         <a href="${loginUrl}" style="background:#FF5A00;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">
           Open my store portal
         </a>
-      </p>
-      <p style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;font-size:14px;word-break:break-all;">
-        <strong>Your store link:</strong><br />
-        <a href="${storeUrl}" style="color:#FF5A00;">${storeUrl}</a>
       </p>
       <p style="font-size:14px;color:#666;">Bookmark this link — all seller sign-ins happen on your dedicated store portal, not the main ${brandName} website.</p>
       <p style="font-size:14px;color:#666;">Need help? Contact us at <a href="mailto:${supportEmail}" style="color:#FF5A00;">${supportEmail}</a>.</p>`,

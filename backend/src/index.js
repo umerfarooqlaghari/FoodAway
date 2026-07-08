@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+const STORE_CATEGORIES = ['Restaurants', 'Bakeries', 'Cafes', 'Grocery Store'];
+
 const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
@@ -244,7 +246,8 @@ app.get('/api/public/tenants', async (req, res) => {
       SELECT t.id, t.name, t.subdomain, t.logo,
              COUNT(DISTINCT s.id)::int AS store_count,
              AVG(s.lat) AS avg_lat,
-             AVG(s.lng) AS avg_lng
+             AVG(s.lng) AS avg_lng,
+             array_remove(array_agg(DISTINCT s.category), NULL) AS categories
       FROM tenants t
       INNER JOIN stores s ON s.tenant_id = t.id AND s.is_active = TRUE
       GROUP BY t.id, t.name, t.subdomain, t.logo
@@ -261,6 +264,7 @@ app.get('/api/public/tenants', async (req, res) => {
         subdomain: row.subdomain,
         logo: signedLogo,
         store_count: row.store_count,
+        categories: row.categories || [],
         storeUrl: tenantStoreUrl(row.subdomain, { path: '/shop' }),
         lat: avgLat,
         lng: avgLng,
@@ -352,7 +356,8 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required' });
-    const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'Customers', phone || null);
+    if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Phone number is required' });
+    const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'Customers', phone.trim());
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
     const mapped = mapRegistrationError(err);
@@ -631,10 +636,14 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin' && req.user.id !== parseInt(req.params.id)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
-  const { logo, name, phone, delivery_address } = req.body;
+  const { logo, name, phone, delivery_address, email } = req.body;
   try {
+    if (email) {
+      const existing = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, req.params.id);
+      if (existing) return res.status(400).json({ error: 'Email is already in use' });
+    }
     const logoUrl = logo ? await uploadImageToS3(logo) : logo;
-    await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name), phone = COALESCE(?, phone), delivery_address = COALESCE(?, delivery_address) WHERE id = ?').run(logoUrl, name, phone, delivery_address, req.params.id);
+    await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name), phone = COALESCE(?, phone), delivery_address = COALESCE(?, delivery_address), email = COALESCE(?, email) WHERE id = ?').run(logoUrl, name, phone, delivery_address, email, req.params.id);
     const updatedUser = await db.prepare('SELECT id, name, email, role, logo, phone, delivery_address FROM users WHERE id = ?').get(req.params.id);
     const signedUser = { ...updatedUser, logo: await getPresignedUrl(updatedUser.logo) };
     res.json({ message: 'User updated successfully', user: signedUser });
@@ -655,18 +664,21 @@ app.post('/api/users/push-token', verifyToken, async (req, res) => {
 });
 
 app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req, res) => {
-  const { name, address, lat, lng, image, delivery_enabled, delivery_fee_note } = req.body;
+  const { name, address, lat, lng, image, delivery_enabled, delivery_fee_note, category } = req.body;
 
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({ error: 'Latitude and Longitude are required' });
+  }
+  if (!category || !STORE_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: `category is required and must be one of: ${STORE_CATEGORIES.join(', ')}` });
   }
 
   try {
     const targetTenantId = requireTenantId(req.user);
     const imageUrl = image ? await uploadImageToS3(image) : null;
     const deliveryEnabledBool = Boolean(delivery_enabled);
-    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null);
-    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null });
+    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category);
+    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -674,7 +686,10 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
 
 app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (req, res) => {
   const { id } = req.params;
-  const { lat, lng, is_active, name, address, image, delivery_enabled, delivery_fee_note } = req.body;
+  const { lat, lng, is_active, name, address, image, delivery_enabled, delivery_fee_note, category } = req.body;
+  if (category !== undefined && category !== null && !STORE_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: `category must be one of: ${STORE_CATEGORIES.join(', ')}` });
+  }
   try {
     await assertStoreAccess(db, id, req.user);
 
@@ -693,10 +708,11 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
         address = COALESCE(?, address),
         image = COALESCE(?, image),
         delivery_enabled = COALESCE(?, delivery_enabled),
-        delivery_fee_note = CASE WHEN ?::boolean THEN ?::text ELSE delivery_fee_note END
+        delivery_fee_note = CASE WHEN ?::boolean THEN ?::text ELSE delivery_fee_note END,
+        category = COALESCE(?, category)
        WHERE id = ?`
     ).run(lat, lng, isActiveBool, name, address, imageUrl, deliveryEnabledBool,
-      delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, id);
+      delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category, id);
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

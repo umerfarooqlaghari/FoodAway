@@ -274,6 +274,7 @@ const initDB = async () => {
   try { await db.exec("UPDATE orders SET type = 'food' WHERE type = 'food_item'"); } catch (e) {}
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_enabled BOOLEAN DEFAULT FALSE"); } catch (e) {}
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_fee_note TEXT"); } catch (e) {}
+  try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS category TEXT"); } catch (e) {}
   try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS delivery_address TEXT"); } catch (e) {}
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_type TEXT DEFAULT 'pickup'"); } catch (e) {}
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT"); } catch (e) {}
