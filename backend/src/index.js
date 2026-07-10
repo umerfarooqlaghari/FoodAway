@@ -210,6 +210,72 @@ app.get('/health', async (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/privacy', (req, res) => {
+  res.type('html').send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Privacy Policy — ${brandName}</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 32px 24px 80px; color: #1f2937; line-height: 1.65; }
+  h1 { color: #E27A53; }
+  h2 { color: #111827; margin-top: 32px; }
+  a { color: #E27A53; }
+  ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p><em>Last updated: ${new Date().toISOString().slice(0, 10)}</em></p>
+  <p>${brandName} ("we", "our", "us") operates the ${brandName} mobile app, which connects customers with local stores selling surplus food at a discount. This policy explains what information we collect and how we use it.</p>
+
+  <h2>Information we collect</h2>
+  <ul>
+    <li><strong>Account details:</strong> name, email address, phone number, and password (stored hashed) when you register.</li>
+    <li><strong>Location:</strong> with your permission, we use your device location to show nearby stores and calculate distance filters. Location is not stored on our servers beyond what's needed to serve that request.</li>
+    <li><strong>Camera and photos:</strong> sellers can upload photos of stores, products, and surprise bags from the camera or photo library. Customers may use the camera to update their profile photo.</li>
+    <li><strong>Order and payment information:</strong> order history, pickup/delivery details, and payment method selection (payment card details themselves are handled by our payment provider, not stored by us).</li>
+    <li><strong>Push notification token:</strong> used to send order status updates and alerts.</li>
+    <li><strong>Communications:</strong> messages sent through in-app chat between customers and sellers, and reviews/ratings you submit.</li>
+  </ul>
+
+  <h2>How we use your information</h2>
+  <ul>
+    <li>To create and manage your account and process orders.</li>
+    <li>To show you nearby stores and relevant listings.</li>
+    <li>To send order updates, receipts, and account-related notifications.</li>
+    <li>To enable in-app chat between customers and sellers.</li>
+    <li>To improve the app and troubleshoot issues.</li>
+  </ul>
+
+  <h2>Sharing of information</h2>
+  <p>We do not sell your personal information. We share information with:</p>
+  <ul>
+    <li>Sellers, for orders you place with their store (name, phone number, order details, delivery address if applicable).</li>
+    <li>Service providers that help us operate the app (cloud hosting, image storage, email delivery, push notifications).</li>
+    <li>Law enforcement or regulators, only if required by law.</li>
+  </ul>
+
+  <h2>Data retention</h2>
+  <p>We retain account and order data for as long as your account is active, or as needed to comply with legal obligations. You can request deletion of your account and associated data at any time by contacting us.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li>You can edit your name, email, and phone number from the Profile tab in the app.</li>
+    <li>You can disable location access at any time from your device settings; distance-based filtering will be unavailable.</li>
+    <li>You can request account deletion by contacting us at <a href="mailto:${supportEmail}">${supportEmail}</a>.</li>
+  </ul>
+
+  <h2>Children's privacy</h2>
+  <p>${brandName} is not directed at children under 13, and we do not knowingly collect information from them.</p>
+
+  <h2>Contact us</h2>
+  <p>Questions about this policy? Contact us at <a href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+</body>
+</html>`);
+});
+
 app.get('/api/public/tenant/:subdomain', async (req, res) => {
   try {
     const validation = validateSubdomain(req.params.subdomain);

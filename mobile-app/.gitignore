@@ -43,3 +43,6 @@ example
 /android
 *.ipa
 
+# Play Store service account credentials
+google-play-service-account.json
+

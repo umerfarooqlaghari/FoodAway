@@ -25,8 +25,13 @@
       }
     },
     "android": {
-      "package": "com.alphadevs.mobileapp",
+      "package": "com.grabengo.app",
       "versionCode": 18,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBLxu-iMnH8KQnlVvjPKpXEu-aakSohOLo"
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#D4651A",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
@@ -34,8 +39,6 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.RECEIVE_BOOT_COMPLETED",
@@ -88,19 +91,28 @@
         "expo-image-picker",
         {
           "photosPermission": "Grabengo needs photo library access to select images.",
-          "cameraPermission": "Grabengo needs camera access to take photos."
+          "cameraPermission": "Grabengo needs camera access to take photos.",
+          "microphonePermission": false
         }
       ],
       "expo-image",
       "expo-asset",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
     ],
     "experiments": {},
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6944ca8b-950c-4cae-ae56-c849fa660e57"
+        "projectId": "0388fcf5-5a72-45a0-85b1-d445a6a07f23"
       }
-    }
+    },
+    "owner": "umer.farooq"
   }
 }

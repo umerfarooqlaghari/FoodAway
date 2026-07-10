@@ -21,10 +21,17 @@ Notifications.setNotificationHandler({
 let MapView, Marker, Callout;
 if (Platform.OS !== 'web') {
   try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default || Maps;
-    Marker = Maps.Marker;
-    Callout = Maps.Callout;
+    // Standalone Android builds crash natively if the Google Maps SDK initializes
+    // without an API key in the manifest — only mount the real map when it's safe.
+    const Constants = require('expo-constants').default;
+    const isExpoGo = Constants.executionEnvironment === 'storeClient';
+    const hasMapsKey = !!Constants.expoConfig?.android?.config?.googleMaps?.apiKey;
+    if (Platform.OS === 'ios' || isExpoGo || hasMapsKey) {
+      const Maps = require('react-native-maps');
+      MapView = Maps.default || Maps;
+      Marker = Maps.Marker;
+      Callout = Maps.Callout;
+    }
   } catch (e) {
     console.warn("Could not require react-native-maps:", e);
   }
