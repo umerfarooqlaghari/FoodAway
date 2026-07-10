@@ -81,6 +81,29 @@ async function assertFoodItemAccess(db, itemId, user) {
   return item;
 }
 
+async function assertOrderAccess(db, orderId, user) {
+  const order = await db.prepare(`
+    SELECT o.*, s.tenant_id, s.name as store_name
+    FROM orders o
+    JOIN stores s ON o.store_id = s.id
+    WHERE o.id = ?
+  `).get(orderId);
+  if (!order) {
+    const err = new Error('Order not found');
+    err.status = 404;
+    throw err;
+  }
+  if (!isSuperAdmin(user)) {
+    const tenantId = requireTenantId(user);
+    if (Number(order.tenant_id) !== Number(tenantId)) {
+      const err = new Error('Forbidden');
+      err.status = 403;
+      throw err;
+    }
+  }
+  return order;
+}
+
 module.exports = {
   getTenantId,
   requireTenantId,
@@ -88,4 +111,5 @@ module.exports = {
   assertStoreAccess,
   assertBagAccess,
   assertFoodItemAccess,
+  assertOrderAccess,
 };
