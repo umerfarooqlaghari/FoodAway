@@ -2079,11 +2079,11 @@ function ExploreTenantsScreen({ navigation }) {
           {/* Distance filters */}
           {coords && (
             <View style={{ marginTop: 12 }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 44, flexGrow: 0 }} contentContainerStyle={{ gap: 8, paddingRight: 8, alignItems: 'center' }} renderToHardwareTextureAndroid collapsable={false}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <TouchableOpacity
                   onPress={() => { setMaxDistance(null); setCustomDistanceMode(false); }}
                   style={{
-                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
                     backgroundColor: maxDistance == null ? '#111827' : '#FFF6E9',
                     borderWidth: 1, borderColor: maxDistance == null ? '#111827' : '#E5E7EB',
                   }}
@@ -2093,7 +2093,7 @@ function ExploreTenantsScreen({ navigation }) {
                 <TouchableOpacity
                   onPress={() => { setMaxDistance(5); setCustomDistanceMode(false); }}
                   style={{
-                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
                     backgroundColor: maxDistance === 5 ? '#111827' : '#FFF6E9',
                     borderWidth: 1, borderColor: maxDistance === 5 ? '#111827' : '#E5E7EB',
                   }}
@@ -2103,7 +2103,7 @@ function ExploreTenantsScreen({ navigation }) {
                 <TouchableOpacity
                   onPress={() => { setMaxDistance(10); setCustomDistanceMode(false); }}
                   style={{
-                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
                     backgroundColor: maxDistance === 10 ? '#111827' : '#FFF6E9',
                     borderWidth: 1, borderColor: maxDistance === 10 ? '#111827' : '#E5E7EB',
                   }}
@@ -2113,7 +2113,7 @@ function ExploreTenantsScreen({ navigation }) {
                 <TouchableOpacity
                   onPress={() => setCustomDistanceMode(!customDistanceMode)}
                   style={{
-                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
                     backgroundColor: customDistanceMode ? '#111827' : '#FFF6E9',
                     borderWidth: 1, borderColor: customDistanceMode ? '#111827' : '#E5E7EB',
                   }}
@@ -2141,63 +2141,60 @@ function ExploreTenantsScreen({ navigation }) {
         </View>
 
         {/* Category tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 52, marginTop: 16, flexGrow: 0 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, alignItems: 'center' }} renderToHardwareTextureAndroid collapsable={false}>
-          <TouchableOpacity
-            onPress={() => setSelectedCategory('All')}
-            style={{
-              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
-              backgroundColor: selectedCategory === 'All' ? '#E27A53' : '#FFF6E9',
-              borderWidth: 1, borderColor: selectedCategory === 'All' ? '#E27A53' : '#E5E7EB',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'All' ? '#fff' : '#111827' }}>All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setSelectedCategory('Restaurants')}
-            style={{
-              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
-              backgroundColor: selectedCategory === 'Restaurants' ? '#E27A53' : '#FFF6E9',
-              borderWidth: 1, borderColor: selectedCategory === 'Restaurants' ? '#E27A53' : '#E5E7EB',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Restaurants' ? '#fff' : '#111827' }}>Restaurants</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setSelectedCategory('Bakeries')}
-            style={{
-              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
-              backgroundColor: selectedCategory === 'Bakeries' ? '#E27A53' : '#FFF6E9',
-              borderWidth: 1, borderColor: selectedCategory === 'Bakeries' ? '#E27A53' : '#E5E7EB',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Bakeries' ? '#fff' : '#111827' }}>Bakeries</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setSelectedCategory('Cafes')}
-            style={{
-              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
-              backgroundColor: selectedCategory === 'Cafes' ? '#E27A53' : '#FFF6E9',
-              borderWidth: 1, borderColor: selectedCategory === 'Cafes' ? '#E27A53' : '#E5E7EB',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Cafes' ? '#fff' : '#111827' }}>Cafes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setSelectedCategory('Grocery Store')}
-            style={{
-              paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
-              backgroundColor: selectedCategory === 'Grocery Store' ? '#E27A53' : '#FFF6E9',
-              borderWidth: 1, borderColor: selectedCategory === 'Grocery Store' ? '#E27A53' : '#E5E7EB',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Grocery Store' ? '#fff' : '#111827' }}>Grocery Store</Text>
-          </TouchableOpacity>
-        </ScrollView>
+        <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TouchableOpacity
+              onPress={() => setSelectedCategory('All')}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8,
+                backgroundColor: selectedCategory === 'All' ? '#E27A53' : '#FFF6E9',
+                borderWidth: 1, borderColor: selectedCategory === 'All' ? '#E27A53' : '#E5E7EB',
+              }}
+            >
+              <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'All' ? '#fff' : '#111827' }}>All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setSelectedCategory('Restaurants')}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8,
+                backgroundColor: selectedCategory === 'Restaurants' ? '#E27A53' : '#FFF6E9',
+                borderWidth: 1, borderColor: selectedCategory === 'Restaurants' ? '#E27A53' : '#E5E7EB',
+              }}
+            >
+              <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Restaurants' ? '#fff' : '#111827' }}>Restaurants</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setSelectedCategory('Bakeries')}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8,
+                backgroundColor: selectedCategory === 'Bakeries' ? '#E27A53' : '#FFF6E9',
+                borderWidth: 1, borderColor: selectedCategory === 'Bakeries' ? '#E27A53' : '#E5E7EB',
+              }}
+            >
+              <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Bakeries' ? '#fff' : '#111827' }}>Bakeries</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setSelectedCategory('Cafes')}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8,
+                backgroundColor: selectedCategory === 'Cafes' ? '#E27A53' : '#FFF6E9',
+                borderWidth: 1, borderColor: selectedCategory === 'Cafes' ? '#E27A53' : '#E5E7EB',
+              }}
+            >
+              <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Cafes' ? '#fff' : '#111827' }}>Cafes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setSelectedCategory('Grocery Store')}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8,
+                backgroundColor: selectedCategory === 'Grocery Store' ? '#E27A53' : '#FFF6E9',
+                borderWidth: 1, borderColor: selectedCategory === 'Grocery Store' ? '#E27A53' : '#E5E7EB',
+              }}
+            >
+              <Text style={{ fontWeight: '700', fontSize: 13, color: selectedCategory === 'Grocery Store' ? '#fff' : '#111827' }}>Grocery Store</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
           <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>
@@ -2324,7 +2321,7 @@ const SharedBottomNav = ({ navigation, activeTab, cartTotalCount }) => {
   const { openProfile } = useContext(AuthContext);
   const isHome = activeTab === 'Home' || activeTab === 'Explore';
   return (
-    <View style={styles.bottomNavContainer} renderToHardwareTextureAndroid collapsable={false}>
+    <View style={styles.bottomNavContainer}>
       <View style={styles.bottomNav}>
         <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => !isHome && navigation.navigate('ExploreTenants')}>
           <View style={{ backgroundColor: isHome ? '#E27A53' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
@@ -3998,7 +3995,7 @@ function StoreDetailsScreen({ navigation, route }) {
           backgroundColor: '#F1F5F9',
           padding: 4,
           borderRadius: 16
-        }} renderToHardwareTextureAndroid collapsable={false}>
+        }}>
           {['menu', 'reviews'].map(tab => {
             const isActive = activeTab === tab;
             let iconName = '';
@@ -4969,16 +4966,17 @@ function CartScreen({ navigation, route }) {
         </View>
       ) : (
         <>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
-            {cartItems.map((item) => (
-              <View key={`${item.type}_${item.id}`}>
-                {renderItem({ item })}
-              </View>
-            ))}
-          </ScrollView>
-          
-          <View style={{ 
-            backgroundColor: '#FFF6E9', 
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
+            <View style={{ padding: 20, flexGrow: 1 }}>
+              {cartItems.map((item) => (
+                <View key={`${item.type}_${item.id}`}>
+                  {renderItem({ item })}
+                </View>
+              ))}
+            </View>
+
+          <View style={{
+            backgroundColor: '#FFF6E9',
             paddingHorizontal: 24, 
             paddingTop: 24, 
             paddingBottom: Math.max(insets.bottom + 12, 100), 
@@ -5065,6 +5063,7 @@ function CartScreen({ navigation, route }) {
               )}
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </>
       )}
       <SharedBottomNav navigation={navigation} activeTab="Cart" cartTotalCount={cartTotalCount} />
@@ -5852,22 +5851,24 @@ function SellerDashboardScreen() {
       </Modal>
 
       {/* Quick nav chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 52, marginTop: 12, flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }} renderToHardwareTextureAndroid collapsable={false}>
-        {navItems.map(item => (
-          <TouchableOpacity
-            key={item.key}
-            onPress={() => setSellerTab(item.key)}
-            style={{
-              flexDirection: 'row', alignItems: 'center', gap: 6,
-              paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-              backgroundColor: sellerTab === item.key ? SELLER_BRAND : '#FFF6E9',
-              borderWidth: 1, borderColor: sellerTab === item.key ? SELLER_BRAND : '#E5E7EB',
-            }}>
-            <Ionicons name={item.icon} size={16} color={sellerTab === item.key ? '#FFFFFF' : '#6B7280'} />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: sellerTab === item.key ? '#FFFFFF' : '#6B7280' }}>{item.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {navItems.map(item => (
+            <TouchableOpacity
+              key={item.key}
+              onPress={() => setSellerTab(item.key)}
+              style={{
+                flexDirection: 'row', alignItems: 'center',
+                paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
+                backgroundColor: sellerTab === item.key ? SELLER_BRAND : '#FFF6E9',
+                borderWidth: 1, borderColor: sellerTab === item.key ? SELLER_BRAND : '#E5E7EB',
+              }}>
+              <Ionicons name={item.icon} size={16} color={sellerTab === item.key ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: sellerTab === item.key ? '#FFFFFF' : '#6B7280' }}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       {/* KPI Strip */}
       <View style={{ gap: 10, paddingHorizontal: 16, marginTop: 12, marginBottom: 8 }}>
@@ -6186,14 +6187,11 @@ function SellerDashboardScreen() {
       )}
 
       {sellerTab === 'chats' && (
-        <FlatList
-          data={sellerChats}
-          keyExtractor={item => `${item.store_id}_${item.customer_id}`}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          removeClippedSubviews={false}
-          ListEmptyComponent={<SellerEmptyState icon="chatbubbles-outline" title="No conversations yet" subtitle="Customer chat messages will appear here" />}
-          renderItem={({ item: chat }) => (
-            <TouchableOpacity onPress={() => openSellerChat(chat)} style={[styles.card, { marginBottom: 12 }]}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+          {sellerChats.length === 0 ? (
+            <SellerEmptyState icon="chatbubbles-outline" title="No conversations yet" subtitle="Customer chat messages will appear here" />
+          ) : (sellerChats.map((chat) => (
+            <TouchableOpacity key={`${chat.store_id}_${chat.customer_id}`} onPress={() => openSellerChat(chat)} style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{chat.customer_name || chat.customer_email}</Text>
@@ -6207,24 +6205,19 @@ function SellerDashboardScreen() {
                 )}
               </View>
             </TouchableOpacity>
-          )}
-        />
+          )))}
+        </ScrollView>
       )}
 
       {sellerTab === 'staff' && user?.role === 'SellersAdmin' && (
-        <FlatList
-          data={staffList}
-          keyExtractor={item => String(item.id)}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          removeClippedSubviews={false}
-          ListEmptyComponent={<SellerEmptyState icon="people-outline" title="No staff yet" subtitle="Add team members to help manage your stores" />}
-          ListHeaderComponent={
-            <TouchableOpacity onPress={() => setShowStaffModal(true)} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND, marginBottom: 16 }]}>
-              <Text style={styles.primaryButtonText}>Add Staff Member</Text>
-            </TouchableOpacity>
-          }
-          renderItem={({ item: staff }) => (
-            <View style={[styles.card, { marginBottom: 12 }]}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+          <TouchableOpacity onPress={() => setShowStaffModal(true)} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND, marginBottom: 16 }]}>
+            <Text style={styles.primaryButtonText}>Add Staff Member</Text>
+          </TouchableOpacity>
+          {staffList.length === 0 ? (
+            <SellerEmptyState icon="people-outline" title="No staff yet" subtitle="Add team members to help manage your stores" />
+          ) : (staffList.map((staff) => (
+            <View key={String(staff.id)} style={[styles.card, { marginBottom: 12 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center' }}>
                   <Ionicons name="person-outline" size={22} color={SELLER_BRAND} />
@@ -6235,8 +6228,8 @@ function SellerDashboardScreen() {
                 </View>
               </View>
             </View>
-          )}
-        />
+          )))}
+        </ScrollView>
       )}
 
       {/* FAB Add Button */}
@@ -6604,17 +6597,16 @@ function SellerDashboardScreen() {
               <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }} numberOfLines={1}>{activeSellerChat?.store_name}</Text>
             </View>
           </View>
-          <FlatList
+          <ScrollView
             ref={sellerChatListRef}
-            removeClippedSubviews={false}
-            data={sellerChatMessages}
-            keyExtractor={item => String(item.id)}
+            style={{ flex: 1 }}
             contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12 }}
             onContentSizeChange={() => sellerChatListRef.current?.scrollToEnd({ animated: true })}
-            renderItem={({ item }) => {
+          >
+            {sellerChatMessages.map((item) => {
               const isMe = item.sender_role === 'Seller';
               return (
-                <View style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                <View key={String(item.id)} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
                   <View style={{
                     backgroundColor: isMe ? SELLER_BRAND : '#F3F4F6',
                     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18,
@@ -6627,8 +6619,8 @@ function SellerDashboardScreen() {
                   </Text>
                 </View>
               );
-            }}
-          />
+            })}
+          </ScrollView>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
             <TextInput
               style={{ flex: 1, backgroundColor: '#F3F4F6', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#111827', maxHeight: 100 }}
