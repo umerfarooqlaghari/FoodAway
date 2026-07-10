@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 
 const { PRODUCT_CATEGORIES } = require('./shared/productCategories');
@@ -131,8 +132,28 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
   const [pickupDays, setPickupDays] = useState([]);
   const [pickupFrom, setPickupFrom] = useState('18:00');
   const [pickupTo, setPickupTo] = useState('20:00');
+  const [activeTimePicker, setActiveTimePicker] = useState(null); // 'from' | 'to' | null
 
   const buildPickupTime = (days, from, to) => days.length === 0 ? `${from} - ${to}` : `${days.join(', ')} ${from} - ${to}`;
+  const timeToDate = (hhmm) => {
+    const [h, m] = (hhmm || '').split(':').map(Number);
+    const d = new Date();
+    d.setHours(Number.isFinite(h) ? h : 18, Number.isFinite(m) ? m : 0, 0, 0);
+    return d;
+  };
+  const formatTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const onTimePicked = (which) => (_event, date) => {
+    if (Platform.OS === 'android') setActiveTimePicker(null);
+    if (!date) return;
+    const value = formatTime(date);
+    if (which === 'from') {
+      setPickupFrom(value);
+      setPickupTime(buildPickupTime(pickupDays, value, pickupTo));
+    } else {
+      setPickupTo(value);
+      setPickupTime(buildPickupTime(pickupDays, pickupFrom, value));
+    }
+  };
   const togglePickupDay = (day) => {
     setPickupDays(prev => {
       const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
@@ -548,7 +569,7 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
                   setBagDescription(bag.description || ''); setBagImages(parsedImgs);
                   const d = parsePickupTimeDetails(bag.pickup_time);
                   setPickupDays(d.days); setPickupFrom(d.from); setPickupTo(d.to);
-                  setEditingBagId(bag.id); setShowBagModal(true);
+                  setActiveTimePicker(null); setEditingBagId(bag.id); setShowBagModal(true);
                 }}><Text style={s.actionEdit}>Edit</Text></TouchableOpacity>
                 <TouchableOpacity style={[s.actionBtn, s.actionDelete]} onPress={() => handleDeleteBag(bag.id)}>
                   <Text style={s.actionDeleteText}>Delete</Text>
@@ -666,7 +687,7 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
             setStoreLat(51.5074); setStoreLng(-0.1278); setShowStoreModal(true);
           } else if (sellerTab === 'bags') {
             setEditingBagId(null); setBagStoreId(null); setBagPrice(''); setBagOriginalPrice('');
-            setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setShowBagModal(true);
+            setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setActiveTimePicker(null); setShowBagModal(true);
           } else {
             setEditingFoodId(null); setFoodStoreId(null); setFoodName(''); setFoodDescription('');
             setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other');
@@ -758,9 +779,38 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
                 ))}
               </ScrollView>
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}><Text style={s.label}>From</Text><TextInput style={s.input} value={pickupFrom} onChangeText={v => { setPickupFrom(v); setPickupTime(buildPickupTime(pickupDays, v, pickupTo)); }} /></View>
-                <View style={{ flex: 1 }}><Text style={s.label}>To</Text><TextInput style={s.input} value={pickupTo} onChangeText={v => { setPickupTo(v); setPickupTime(buildPickupTime(pickupDays, pickupFrom, v)); }} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.label}>From</Text>
+                  <TouchableOpacity style={s.timeField} onPress={() => setActiveTimePicker(activeTimePicker === 'from' ? null : 'from')}>
+                    <Text style={s.timeFieldText}>{pickupFrom}</Text>
+                    <Ionicons name="time-outline" size={18} color={activeTimePicker === 'from' ? ORANGE : '#64748B'} />
+                  </TouchableOpacity>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.label}>To</Text>
+                  <TouchableOpacity style={s.timeField} onPress={() => setActiveTimePicker(activeTimePicker === 'to' ? null : 'to')}>
+                    <Text style={s.timeFieldText}>{pickupTo}</Text>
+                    <Ionicons name="time-outline" size={18} color={activeTimePicker === 'to' ? ORANGE : '#64748B'} />
+                  </TouchableOpacity>
+                </View>
               </View>
+              {activeTimePicker && (
+                <View style={{ marginBottom: 14 }}>
+                  <DateTimePicker
+                    value={timeToDate(activeTimePicker === 'from' ? pickupFrom : pickupTo)}
+                    mode="time"
+                    is24Hour
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onValueChange={onTimePicked(activeTimePicker)}
+                    onDismiss={() => setActiveTimePicker(null)}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <TouchableOpacity style={s.timeDoneBtn} onPress={() => setActiveTimePicker(null)}>
+                      <Text style={s.timeDoneBtnText}>Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               {pickupTime ? <Text style={s.pickupPreview}>{pickupTime}</Text> : null}
               <Text style={s.label}>Description</Text>
               <TextInput style={[s.input, { height: 70 }]} value={bagDescription} onChangeText={setBagDescription} multiline />
@@ -934,6 +984,10 @@ const s = StyleSheet.create({
   chipText: { color: '#374151', fontWeight: '600', fontSize: 13 },
   chipTextActive: { color: '#fff' },
   pickupPreview: { color: ORANGE_DARK, fontWeight: '700', fontSize: 12, marginBottom: 12, backgroundColor: ORANGE_LIGHT, padding: 8, borderRadius: 8 },
+  timeField: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timeFieldText: { fontSize: 15, color: '#111827' },
+  timeDoneBtn: { alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: ORANGE, borderRadius: 8 },
+  timeDoneBtnText: { color: '#fff', fontWeight: '700' },
   uploadBox: { padding: 20, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: '#D1D5DB', alignItems: 'center', marginBottom: 14, backgroundColor: '#F9FAFB' },
   uploadText: { color: '#64748B', fontWeight: '600', marginTop: 6, fontSize: 13 },
   map: { height: 200, borderRadius: 12, marginBottom: 8 },

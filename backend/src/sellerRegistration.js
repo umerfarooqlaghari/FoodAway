@@ -41,6 +41,7 @@ async function registerSellerAdmin(db, {
   logoUrl,
   requestedSubdomain,
 }) {
+  // db.transaction(fn) returns a wrapper that must be invoked (see db.js)
   return db.transaction(async () => {
     await deleteOrphanTenants(db);
 
@@ -74,7 +75,7 @@ async function registerSellerAdmin(db, {
       tenantId: tenant.id,
       subdomain,
     };
-  });
+  })();
 }
 
 function mapRegistrationError(err) {

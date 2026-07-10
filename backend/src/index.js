@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+const STORE_CATEGORIES = ['Restaurants', 'Bakeries', 'Cafes', 'Grocery Store'];
+
 const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
@@ -26,7 +28,7 @@ const {
   ensureTenantSubdomain,
   listTenantsForSuperAdmin,
 } = require('./tenants');
-const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess } = require('./tenant');
+const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess, assertOrderAccess } = require('./tenant');
 const { registerSellerAdmin, mapRegistrationError, deleteOrphanTenants } = require('./sellerRegistration');
 const { formatStoreReview, formatAppReview, stripStoreTenantId } = require('./serializers');
 const { normalizePhone, phoneDigits, phoneLookupVariants, phonesMatch } = require('./phone');
@@ -79,6 +81,8 @@ async function formatUserForClient(user) {
     subdomain,
     storeUrl,
     tenant: tenant ? { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain } : null,
+    phone: user.phone || null,
+    delivery_address: user.delivery_address || null,
   };
 }
 
@@ -242,7 +246,8 @@ app.get('/api/public/tenants', async (req, res) => {
       SELECT t.id, t.name, t.subdomain, t.logo,
              COUNT(DISTINCT s.id)::int AS store_count,
              AVG(s.lat) AS avg_lat,
-             AVG(s.lng) AS avg_lng
+             AVG(s.lng) AS avg_lng,
+             array_remove(array_agg(DISTINCT s.category), NULL) AS categories
       FROM tenants t
       INNER JOIN stores s ON s.tenant_id = t.id AND s.is_active = TRUE
       GROUP BY t.id, t.name, t.subdomain, t.logo
@@ -259,6 +264,7 @@ app.get('/api/public/tenants', async (req, res) => {
         subdomain: row.subdomain,
         logo: signedLogo,
         store_count: row.store_count,
+        categories: row.categories || [],
         storeUrl: tenantStoreUrl(row.subdomain, { path: '/shop' }),
         lat: avgLat,
         lng: avgLng,
@@ -334,9 +340,9 @@ app.post('/api/auth/register', async (req, res) => {
 
       sendEmail({
         to: email,
-        subject: `Your ${brandName} store portal is ready`,
-        html: emailSellerWelcomeLayout({ brandName: finalName, storeUrl, loginUrl }),
-        text: `Welcome to ${brandName}! Your store portal: ${storeUrl}`,
+        subject: `Your ${brandName} store is onboarded`,
+        html: emailSellerWelcomeLayout({ brandName: finalName }),
+        text: `Your store has been onboarded onto ${brandName}. You can now log in with the ${brandName} mobile app to manage your stores, orders, and inventory.`,
       }).catch(err => console.error('Failed to send seller welcome email:', err.message));
 
       return res.status(201).json({
@@ -345,12 +351,13 @@ app.post('/api/auth/register', async (req, res) => {
         subdomain,
         storeUrl,
         loginUrl,
-        message: 'Seller account registered successfully. Your store link has been emailed to you.',
+        message: 'Seller account registered successfully. You can now log in with the mobile app.',
       });
     }
 
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required' });
-    const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'Customers', phone || null);
+    if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Phone number is required' });
+    const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'Customers', phone.trim());
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
     const mapped = mapRegistrationError(err);
@@ -425,7 +432,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', verifyToken, async (req, res) => {
   try {
-    const user = await db.prepare('SELECT id, name, email, role, logo, tenant_id FROM users WHERE id = ?').get(req.user.id);
+    const user = await db.prepare('SELECT id, name, email, role, logo, tenant_id, phone, delivery_address FROM users WHERE id = ?').get(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(await formatUserForClient(user));
   } catch (err) {
@@ -528,7 +535,7 @@ app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) 
   const { all, tenant_id } = req.query;
   try {
     let query = `
-      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image, s.tenant_id,
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note,
              CASE WHEN f.user_id IS NOT NULL THEN 1 ELSE 0 END as is_favorited
       FROM surprise_bags b
       JOIN stores s ON b.store_id = s.id
@@ -629,11 +636,15 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin' && req.user.id !== parseInt(req.params.id)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
-  const { logo, name } = req.body;
+  const { logo, name, phone, delivery_address, email } = req.body;
   try {
+    if (email) {
+      const existing = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, req.params.id);
+      if (existing) return res.status(400).json({ error: 'Email is already in use' });
+    }
     const logoUrl = logo ? await uploadImageToS3(logo) : logo;
-    await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name) WHERE id = ?').run(logoUrl, name, req.params.id);
-    const updatedUser = await db.prepare('SELECT id, name, email, role, logo FROM users WHERE id = ?').get(req.params.id);
+    await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name), phone = COALESCE(?, phone), delivery_address = COALESCE(?, delivery_address), email = COALESCE(?, email) WHERE id = ?').run(logoUrl, name, phone, delivery_address, email, req.params.id);
+    const updatedUser = await db.prepare('SELECT id, name, email, role, logo, phone, delivery_address FROM users WHERE id = ?').get(req.params.id);
     const signedUser = { ...updatedUser, logo: await getPresignedUrl(updatedUser.logo) };
     res.json({ message: 'User updated successfully', user: signedUser });
   } catch(err) {
@@ -653,17 +664,21 @@ app.post('/api/users/push-token', verifyToken, async (req, res) => {
 });
 
 app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req, res) => {
-  const { name, address, lat, lng, image } = req.body;
-  
+  const { name, address, lat, lng, image, delivery_enabled, delivery_fee_note, category } = req.body;
+
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({ error: 'Latitude and Longitude are required' });
+  }
+  if (!category || !STORE_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: `category is required and must be one of: ${STORE_CATEGORIES.join(', ')}` });
   }
 
   try {
     const targetTenantId = requireTenantId(req.user);
     const imageUrl = image ? await uploadImageToS3(image) : null;
-    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image) VALUES (?, ?, ?, ?, ?, TRUE, ?)').run(targetTenantId, name, address, lat, lng, imageUrl);
-    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl });
+    const deliveryEnabledBool = Boolean(delivery_enabled);
+    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category);
+    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -671,7 +686,10 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
 
 app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (req, res) => {
   const { id } = req.params;
-  const { lat, lng, is_active, name, address, image } = req.body;
+  const { lat, lng, is_active, name, address, image, delivery_enabled, delivery_fee_note, category } = req.body;
+  if (category !== undefined && category !== null && !STORE_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: `category must be one of: ${STORE_CATEGORIES.join(', ')}` });
+  }
   try {
     await assertStoreAccess(db, id, req.user);
 
@@ -680,7 +698,21 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
       imageUrl = image ? await uploadImageToS3(image) : null;
     }
     const isActiveBool = is_active !== undefined && is_active !== null ? Boolean(is_active) : null;
-    await db.prepare('UPDATE stores SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), is_active = COALESCE(?, is_active), name = COALESCE(?, name), address = COALESCE(?, address), image = COALESCE(?, image) WHERE id = ?').run(lat, lng, isActiveBool, name, address, imageUrl, id);
+    const deliveryEnabledBool = delivery_enabled !== undefined && delivery_enabled !== null ? Boolean(delivery_enabled) : null;
+    await db.prepare(
+      `UPDATE stores SET
+        lat = COALESCE(?, lat),
+        lng = COALESCE(?, lng),
+        is_active = COALESCE(?, is_active),
+        name = COALESCE(?, name),
+        address = COALESCE(?, address),
+        image = COALESCE(?, image),
+        delivery_enabled = COALESCE(?, delivery_enabled),
+        delivery_fee_note = CASE WHEN ?::boolean THEN ?::text ELSE delivery_fee_note END,
+        category = COALESCE(?, category)
+       WHERE id = ?`
+    ).run(lat, lng, isActiveBool, name, address, imageUrl, deliveryEnabledBool,
+      delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category, id);
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -793,8 +825,8 @@ app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async
   try {
     let query = `
       SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
-             f.quantity, f.category, f.is_available, f.store_id, f.created_at,
-             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image, s.tenant_id,
+             f.quantity, f.category, f.is_available, f.store_id, f.created_at, f.sale_ends_at,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note,
              CASE WHEN fav.user_id IS NOT NULL THEN 1 ELSE 0 END as is_favorited
       FROM food_items f
       JOIN stores s ON f.store_id = s.id
@@ -833,8 +865,11 @@ app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async
 });
 
 app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
-  const { store_id, name, description, price, original_price, images, quantity, category } = req.body;
+  const { store_id, name, description, price, original_price, images, quantity, category, sale_ends_at } = req.body;
   if (!store_id || !name || !price) return res.status(400).json({ error: 'store_id, name, and price are required.' });
+  if (sale_ends_at && Number.isNaN(Date.parse(sale_ends_at))) {
+    return res.status(400).json({ error: 'sale_ends_at must be a valid date-time.' });
+  }
   try {
     await assertStoreAccess(db, store_id, req.user);
     let s3Images = null;
@@ -847,8 +882,8 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
     }
     const normalizedCategory = normalizeProductCategory(category);
     const info = await db.prepare(
-      'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(store_id, name, description, price, original_price || null, s3Images, quantity || 1, normalizedCategory);
+      'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category, sale_ends_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(store_id, name, description, price, original_price || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null);
     res.json({ id: info.lastInsertRowid, store_id, name, price, quantity, category: normalizedCategory });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -857,7 +892,10 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
 
 app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
   const { id } = req.params;
-  const { name, description, price, original_price, images, quantity, category, is_available } = req.body;
+  const { name, description, price, original_price, images, quantity, category, is_available, sale_ends_at } = req.body;
+  if (sale_ends_at && Number.isNaN(Date.parse(sale_ends_at))) {
+    return res.status(400).json({ error: 'sale_ends_at must be a valid date-time.' });
+  }
   try {
     const item = await assertFoodItemAccess(db, id, req.user);
     
@@ -886,9 +924,11 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
         images = COALESCE(?, images),
         quantity = COALESCE(?, quantity),
         category = COALESCE(?, category),
-        is_available = COALESCE(?, is_available)
+        is_available = COALESCE(?, is_available),
+        sale_ends_at = CASE WHEN ?::boolean THEN ?::timestamptz ELSE sale_ends_at END
        WHERE id = ?`
-    ).run(name, description, price, original_price, s3Images, quantity, normalizedCategory, isAvailableBool, id);
+    ).run(name, description, price, original_price, s3Images, quantity, normalizedCategory, isAvailableBool,
+      sale_ends_at !== undefined, sale_ends_at !== undefined ? (sale_ends_at || null) : null, id);
     res.json({ message: 'Food item updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -914,9 +954,14 @@ app.post('/api/orders', verifyToken, async (req, res) => {
   if (req.user.role !== 'Customers') {
     return res.status(403).json({ error: 'Only customers can place orders' });
   }
-  const { items, paymentMethod } = req.body;
+  const { items, paymentMethod, fulfillmentType, deliveryAddress, deliveryPhone } = req.body;
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Cart is empty' });
   const method = paymentMethod || 'Card';
+  const isDelivery = fulfillmentType === 'delivery';
+
+  if (isDelivery && (!deliveryAddress || !deliveryAddress.trim() || !deliveryPhone || !deliveryPhone.trim())) {
+    return res.status(400).json({ error: 'Delivery address and phone number are required for delivery orders.' });
+  }
 
   try {
     const preview = await previewCheckoutItems(items);
@@ -926,27 +971,33 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     if (preview.length !== items.length) {
       return res.status(400).json({ error: 'Some items in your cart are no longer available. Please refresh and try again.' });
     }
+    if (isDelivery && preview.some((p) => !p.delivery_enabled)) {
+      return res.status(400).json({ error: 'One or more stores in your cart do not offer delivery. Please switch to pickup or remove those items.' });
+    }
 
     const orderIds = [];
-    
+    const fulfillment = isDelivery ? 'delivery' : 'pickup';
+    const orderDeliveryAddress = isDelivery ? deliveryAddress.trim() : null;
+    const orderDeliveryPhone = isDelivery ? deliveryPhone.trim() : null;
+
     // Start transaction
     const processOrder = db.transaction(async (orderItems, userId) => {
       for (const item of orderItems) {
         const { id, type, quantity, price } = item;
-        
+
         if (type === 'bag') {
           const bag = await db.prepare('SELECT * FROM surprise_bags WHERE id = ?').get(id);
           if (!bag || bag.quantity < quantity) throw new Error(`Bag ${id} not available in requested quantity`);
-          
+
           await db.prepare('UPDATE surprise_bags SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
-          const info = await db.prepare('INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, bag.store_id, userId, price, method);
+          const info = await db.prepare('INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, bag.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone);
           orderIds.push(info.lastInsertRowid);
         } else if (type === 'food') {
           const food = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
           if (!food || food.quantity < quantity || !food.is_available) throw new Error(`Food item ${id} not available in requested quantity`);
-          
+
           await db.prepare('UPDATE food_items SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
-          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method);
+          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone);
           orderIds.push(info.lastInsertRowid);
         } else {
           throw new Error(`Invalid item type: ${type}`);
@@ -961,6 +1012,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     for (const orderId of orderIds) {
       const order = await db.prepare(`
         SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+               o.fulfillment_type, o.delivery_address, o.delivery_phone,
                s.name as store_name, s.tenant_id,
                t.name as tenant_name,
                u.name as customer_name,
@@ -994,7 +1046,10 @@ app.post('/api/orders', verifyToken, async (req, res) => {
           price: order.price,
           store_name: order.store_name,
           item_name: order.item_name,
-          pickup_time: order.pickup_time
+          pickup_time: order.pickup_time,
+          fulfillment_type: order.fulfillment_type,
+          delivery_address: order.delivery_address,
+          delivery_phone: order.delivery_phone,
         }
       });
     }
@@ -1006,6 +1061,12 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       const itemsList = placedOrders.map(o =>
         `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — £${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
       ).join('');
+      const anyDelivery = placedOrders.some(o => o.fulfillment_type === 'delivery');
+      const deliveryNoteHtml = anyDelivery ? `
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:14px;margin-top:16px;">
+                <p style="margin:0;color:#1d4ed8;font-weight:bold;">🛵 Delivery order</p>
+                <p style="margin:6px 0 0;color:#555;font-size:13px;">The store will deliver this order directly (not Grabengo) and may call you to confirm. Delivery charges, if any, are set by the store and are not included in the total below — pay them directly to the store.</p>
+              </div>` : '';
 
       buildReceiptAttachments(receiptGroups, {
         name: customer.name,
@@ -1029,6 +1090,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
                 <p style="margin:0;color:#FF5A00;font-weight:bold;">Payment: Cash at Pickup</p>
                 <p style="margin:6px 0 0;color:#555;font-size:13px;">Present your receipt at the store when collecting your order.</p>
               </div>
+              ${deliveryNoteHtml}
             </div>
             <div style="background:#f5f5f5;padding:14px 32px;text-align:center;border-radius:0 0 8px 8px;">
               ${emailFooter()}
@@ -1065,12 +1127,20 @@ app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), async (
         queryFilter = 'WHERE s.tenant_id = ?';
         params.push(tenant_id);
       } else if (req.query.all !== 'true') {
-        return res.json({ totalRevenue: 0, bagsSold: 0, dailySales: [] });
+        return res.json({ totalRevenue: 0, bagsSold: 0, productsSold: 0, dailySales: [] });
       }
     }
 
+    // Only orders the seller has actually been paid for count toward revenue/units-sold —
+    // pending/confirmed/rejected/cancelled orders must not inflate the dashboard stats.
+    queryFilter = queryFilter ? `${queryFilter} AND o.status = 'paid'` : `WHERE o.status = 'paid'`;
+
     const totalRevenueRow = await db.prepare(`SELECT SUM(o.price * o.quantity) as total_revenue FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
-    const totalBagsSoldRow = await db.prepare(`SELECT SUM(o.quantity) as bags_sold FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
+    const totalSoldRow = await db.prepare(`
+      SELECT
+        SUM(CASE WHEN o.type = 'food' THEN 0 ELSE o.quantity END) as bags_sold,
+        SUM(CASE WHEN o.type = 'food' THEN o.quantity ELSE 0 END) as products_sold
+      FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
     
     const dailySales = await db.prepare(`
       SELECT date(o.created_at) as date, SUM(o.price * o.quantity) as revenue, SUM(o.quantity) as bags 
@@ -1084,7 +1154,8 @@ app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), async (
     
     res.json({
       totalRevenue: totalRevenueRow.total_revenue || 0,
-      bagsSold: totalBagsSoldRow.bags_sold || 0,
+      bagsSold: totalSoldRow.bags_sold || 0,
+      productsSold: totalSoldRow.products_sold || 0,
       dailySales
     });
   } catch (err) {
@@ -1128,7 +1199,8 @@ app.get('/api/orders/me', verifyToken, async (req, res) => {
   try {
     const orders = await db.prepare(`
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
-             s.name as store_name, s.address, s.image as store_image,
+             o.fulfillment_type, o.delivery_address, o.delivery_phone, o.status,
+             s.name as store_name, s.address, s.image as store_image, s.delivery_fee_note,
              COALESCE(b.description, f.name) as item_name
       FROM orders o
       JOIN stores s ON o.store_id = s.id
@@ -1173,6 +1245,8 @@ app.get('/api/seller/orders', verifyToken, async (req, res) => {
 
     const orders = await db.prepare(`
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+             o.fulfillment_type, o.delivery_address, o.status,
+             COALESCE(o.delivery_phone, u.phone) as customer_phone,
              u.name as customer_name, u.email as customer_email,
              s.name as store_name,
              COALESCE(b.pickup_time, 'N/A') as pickup_time,
@@ -1188,6 +1262,119 @@ app.get('/api/seller/orders', verifyToken, async (req, res) => {
     res.json(orders);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+const ORDER_ACTION_MESSAGES = {
+  confirmed: {
+    title: 'Order Confirmed',
+    body: (order) => `${order.store_name} confirmed your delivery order and will call you soon.`,
+  },
+  rejected: {
+    title: 'Delivery Declined',
+    body: (order) => `${order.store_name} can't deliver your order. It's been cancelled and any charge will not be collected.`,
+  },
+  converted_pickup: {
+    title: 'Switched to Pickup',
+    body: (order) => `${order.store_name} switched your order to pickup instead of delivery. No delivery charge will apply.`,
+  },
+  cancelled: {
+    title: 'Order Cancelled',
+    body: (order) => `${order.store_name} cancelled your order (Ref #${order.id}).`,
+  },
+};
+
+async function notifyCustomerOfOrderUpdate(order, messageKey) {
+  const template = ORDER_ACTION_MESSAGES[messageKey];
+  if (!template) return;
+  const body = template.body(order);
+  sendToUser(order.customer_id, {
+    type: 'order_status_update',
+    order: {
+      id: order.id,
+      store_name: order.store_name,
+      status: order.status,
+      fulfillment_type: order.fulfillment_type,
+      title: template.title,
+      message: body,
+    },
+  });
+  const customer = await db.prepare('SELECT push_token FROM users WHERE id = ?').get(order.customer_id);
+  if (customer?.push_token) {
+    await sendPushNotification(customer.push_token, template.title, body, { type: 'order_status', orderId: order.id });
+  }
+}
+
+app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
+  if (!['SuperAdmin', 'SellersAdmin', 'SellersStaff'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const { action } = req.body;
+  const validActions = ['confirm', 'reject', 'convert_to_pickup', 'mark_paid', 'cancel'];
+  if (!validActions.includes(action)) {
+    return res.status(400).json({ error: 'Invalid action' });
+  }
+
+  try {
+    const order = await assertOrderAccess(db, req.params.id, req.user);
+    const isSettled = ['paid', 'rejected', 'cancelled'].includes(order.status);
+
+    const restock = async () => {
+      if (order.type === 'bag') {
+        await db.prepare('UPDATE surprise_bags SET quantity = quantity + ? WHERE id = ?').run(order.quantity, order.bag_id);
+      } else if (order.type === 'food') {
+        await db.prepare('UPDATE food_items SET quantity = quantity + ? WHERE id = ?').run(order.quantity, order.food_item_id);
+      }
+    };
+
+    let newStatus = order.status;
+    let newFulfillment = order.fulfillment_type;
+    let notifyKey = null;
+
+    if (action === 'confirm') {
+      if (order.fulfillment_type !== 'delivery' || order.status !== 'pending') {
+        return res.status(400).json({ error: 'This order cannot be confirmed right now.' });
+      }
+      newStatus = 'confirmed';
+      notifyKey = 'confirmed';
+    } else if (action === 'reject') {
+      if (order.fulfillment_type !== 'delivery' || order.status !== 'pending') {
+        return res.status(400).json({ error: 'This order cannot be rejected right now.' });
+      }
+      newStatus = 'rejected';
+      await restock();
+      notifyKey = 'rejected';
+    } else if (action === 'convert_to_pickup') {
+      if (order.fulfillment_type !== 'delivery' || order.status !== 'pending') {
+        return res.status(400).json({ error: 'This order cannot be converted to pickup right now.' });
+      }
+      newStatus = 'confirmed';
+      newFulfillment = 'pickup';
+      notifyKey = 'converted_pickup';
+    } else if (action === 'mark_paid') {
+      if (isSettled) {
+        return res.status(400).json({ error: 'This order has already been settled.' });
+      }
+      newStatus = 'paid';
+    } else if (action === 'cancel') {
+      if (isSettled) {
+        return res.status(400).json({ error: 'This order has already been settled.' });
+      }
+      newStatus = 'cancelled';
+      await restock();
+      notifyKey = 'cancelled';
+    }
+
+    await db.prepare('UPDATE orders SET status = ?, fulfillment_type = ? WHERE id = ?').run(newStatus, newFulfillment, order.id);
+
+    const updatedOrder = { ...order, status: newStatus, fulfillment_type: newFulfillment };
+    if (notifyKey) {
+      notifyCustomerOfOrderUpdate(updatedOrder, notifyKey).catch(err => console.error('Failed to notify customer of order update:', err.message));
+    }
+
+    res.json({ message: 'Order updated successfully', status: newStatus, fulfillment_type: newFulfillment });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -2151,7 +2338,7 @@ app.get('/api/public/food-items', async (req, res) => {
 
     let query = `
       SELECT f.id, f.name, f.description, f.price, f.original_price,
-             f.images, f.quantity, f.category, f.store_id, f.created_at,
+             f.images, f.quantity, f.category, f.store_id, f.created_at, f.sale_ends_at,
              s.name as store_name, s.address, s.lat, s.lng, s.image as store_image,
              s.tenant_id, t.name AS tenant_name, t.subdomain AS tenant_subdomain
       FROM food_items f
@@ -2227,6 +2414,8 @@ async function previewCheckoutItems(items) {
         id, type, quantity,
         item_name: bag.description || 'Surprise Bag',
         store_name: store.name,
+        store_id: store.id,
+        delivery_enabled: !!store.delivery_enabled,
         price: bag.price,
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
@@ -2241,6 +2430,8 @@ async function previewCheckoutItems(items) {
         id, type, quantity,
         item_name: food.name,
         store_name: store.name,
+        store_id: store.id,
+        delivery_enabled: !!store.delivery_enabled,
         price: food.price,
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
