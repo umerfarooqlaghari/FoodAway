@@ -210,6 +210,48 @@ app.get('/health', async (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/delete-account', (req, res) => {
+  res.type('html').send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Delete Your Account — ${brandName}</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 32px 24px 80px; color: #1f2937; line-height: 1.65; }
+  h1 { color: #E27A53; }
+  h2 { color: #111827; margin-top: 32px; }
+  a { color: #E27A53; }
+  .steps { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; padding: 16px 20px; }
+</style>
+</head>
+<body>
+  <h1>Delete Your ${brandName} Account</h1>
+  <p>You can request deletion of your ${brandName} account and all associated personal data at any time.</p>
+
+  <h2>How to request deletion</h2>
+  <div class="steps">
+    <p>Email us at <a href="mailto:${supportEmail}?subject=Account%20Deletion%20Request">${supportEmail}</a> from the email address linked to your account, with the subject line <strong>"Account Deletion Request"</strong>.</p>
+  </div>
+  <p>We will verify the request came from your account's email address and complete the deletion within <strong>30 days</strong>, confirming by reply once done.</p>
+
+  <h2>What gets deleted</h2>
+  <ul>
+    <li>Your account (name, email, phone number, password)</li>
+    <li>Your order history and delivery addresses</li>
+    <li>Your chat messages, reviews, and favorites</li>
+    <li>Your push-notification token and profile photo</li>
+  </ul>
+
+  <h2>What may be retained</h2>
+  <p>We may retain minimal records where required by law (e.g. transactional records for tax/accounting purposes), retained only as long as legally necessary and not used for any other purpose.</p>
+
+  <h2>Questions</h2>
+  <p>Contact us at <a href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+</body>
+</html>`);
+});
+
 app.get('/privacy', (req, res) => {
   res.type('html').send(`<!DOCTYPE html>
 <html lang="en">
