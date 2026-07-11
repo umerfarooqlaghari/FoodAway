@@ -1009,7 +1009,7 @@ function GlobalReceiptModal() {
 
   if (!receiptModalData) return null;
 
-  const { orderIds, storeName, items, total, pickupTime, customerName, dateTime, fulfillmentType, deliveryAddress, deliveryPhone } = receiptModalData;
+  const { orderIds, storeName, items, total, pickupTime, customerName, dateTime, fulfillmentType, deliveryAddress, deliveryPhone, partnerDelivery } = receiptModalData;
   const isDeliveryReceipt = fulfillmentType === 'delivery';
   const orderRef = Array.isArray(orderIds)
     ? orderIds.map(id => `GTG-${String(id).padStart(5, '0')}`).join(', ')
@@ -1127,7 +1127,9 @@ function GlobalReceiptModal() {
                   {deliveryAddress ? <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827' }}>{deliveryAddress}</Text> : null}
                   {deliveryPhone ? <Text style={{ fontSize: 12, color: '#374151', marginTop: 2 }}>{deliveryPhone}</Text> : null}
                   <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 8, lineHeight: 15 }}>
-                    Delivered by the store directly, not Grabengo. The store may call to confirm your order. Delivery charges, if any, are excluded from the total above.
+                    {partnerDelivery
+                      ? 'Delivered by a Grabengo Partner. Give the rider your 4-digit PIN from Bookings and pay the order total plus the delivery fee in cash.'
+                      : 'Delivered by the store directly, not Grabengo. The store may call to confirm your order. Delivery charges, if any, are excluded from the total above.'}
                   </Text>
                 </View>
               ) : null}
@@ -4975,7 +4977,9 @@ function CartScreen({ navigation, route }) {
       if (isDelivery) {
         Alert.alert(
           "Order Placed! 🛵",
-          `${storeName} will call you shortly to confirm your order and any delivery charges. Delivery cost is not included in the app total — pay it directly to the store.`,
+          partnerDelivery
+            ? `Once ${storeName} confirms, a Grabengo partner will pick up your order and deliver it to you. Your 4-digit delivery PIN is in Bookings — give it to the rider on arrival and pay the total plus the delivery fee in cash.`
+            : `${storeName} will call you shortly to confirm your order and any delivery charges. Delivery cost is not included in the app total — pay it directly to the store.`,
           [{ text: "Got it", onPress: finishUp }]
         );
       } else {
@@ -5221,7 +5225,7 @@ function BookingsScreen({ navigation }) {
         {isDelivery && (
           <View style={{ backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, marginTop: 10 }}>
             <Text style={{ fontSize: 12, color: '#1D4ED8', fontWeight: '700' }}>{item.delivery_address}</Text>
-            <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>Delivered by the store · delivery cost excluded from total above</Text>
+            <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>{item.delivery_status ? 'Delivered by a Grabengo Partner · fee paid in cash to the rider' : 'Delivered by the store · delivery cost excluded from total above'}</Text>
           </View>
         )}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 10, gap: 8 }}>
@@ -5236,6 +5240,7 @@ function BookingsScreen({ navigation }) {
                 fulfillmentType: item.fulfillment_type,
                 deliveryAddress: item.delivery_address,
                 deliveryPhone: item.delivery_phone,
+                partnerDelivery: !!item.delivery_status,
                 customerName: user?.name || null,
                 dateTime: new Date(item.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
                 paymentMethod: item.payment_method || 'Cash at Pickup',
@@ -5283,7 +5288,7 @@ function BookingsScreen({ navigation }) {
                 : item.delivery_status === 'failed' ? 'Delivery could not be completed. The store will contact you.'
                 : ''}
             </Text>
-            {item.delivery_pin && ['pending', 'assigned', 'picked_up'].includes(item.delivery_status) ? (
+            {item.delivery_pin && ['awaiting_confirmation', 'pending', 'assigned', 'picked_up'].includes(item.delivery_status) ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
                 <View style={{ backgroundColor: '#E27A53', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
                   <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, letterSpacing: 4 }}>{item.delivery_pin}</Text>

@@ -1262,10 +1262,13 @@ app.post('/api/orders', verifyToken, async (req, res) => {
         `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — £${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
       ).join('');
       const anyDelivery = placedOrders.some(o => o.fulfillment_type === 'delivery');
+      const isPartnerDelivery = createdDeliveries.length > 0;
       const deliveryNoteHtml = anyDelivery ? `
               <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:14px;margin-top:16px;">
                 <p style="margin:0;color:#1d4ed8;font-weight:bold;">🛵 Delivery order</p>
-                <p style="margin:6px 0 0;color:#555;font-size:13px;">The store will deliver this order directly (not Grabengo) and may call you to confirm. Delivery charges, if any, are set by the store and are not included in the total below — pay them directly to the store.</p>
+                <p style="margin:6px 0 0;color:#555;font-size:13px;">${isPartnerDelivery
+                  ? `A Grabengo delivery partner will bring your order once the store confirms it. Your 4-digit delivery PIN is shown in the app under Bookings — give it to the rider on arrival and pay the order total plus the delivery fee (Rs${createdDeliveries.reduce((t, d) => t + Number(d.fee), 0)}) in cash.`
+                  : 'The store will deliver this order directly (not Grabengo) and may call you to confirm. Delivery charges, if any, are set by the store and are not included in the total below — pay them directly to the store.'}</p>
               </div>` : '';
 
       buildReceiptAttachments(receiptGroups, {
