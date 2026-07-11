@@ -1652,7 +1652,8 @@ app.get('/api/partner/deliveries/available', verifyToken, async (req, res) => {
     const me = await db.prepare('SELECT duty_lat, duty_lng FROM users WHERE id = ?').get(req.user.id);
     const rows = await db.prepare(`
       SELECT d.*, s.name AS store_name, s.address AS store_address, s.lat AS store_lat, s.lng AS store_lng,
-             u.name AS customer_name
+             u.name AS customer_name,
+             EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - d.dispatched_at)) AS waited_sec
       FROM deliveries d
       JOIN stores s ON d.store_id = s.id
       JOIN users u ON d.customer_id = u.id
@@ -1663,8 +1664,7 @@ app.get('/api/partner/deliveries/available', verifyToken, async (req, res) => {
       if (me?.duty_lat == null || d.store_lat == null) return true;
       const dist = haversineKm(me.duty_lat, me.duty_lng, d.store_lat, d.store_lng);
       if (dist <= DELIVERY_CFG.dispatchRadiusKm) return true;
-      const waitedMin = (Date.now() - new Date(d.dispatched_at).getTime()) / 60000;
-      return waitedMin >= 10;
+      return Number(d.waited_sec) >= 600; // 10 min starvation fallback (DB clock, tz-safe)
     }).map((d) => ({ ...d, pin: undefined }));
     res.json(visible);
   } catch (err) {
