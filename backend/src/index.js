@@ -235,6 +235,9 @@ app.get('/delete-account', (req, res) => {
   </div>
   <p>We will verify the request came from your account's email address and complete the deletion within <strong>30 days</strong>, confirming by reply once done.</p>
 
+  <h2>Deleting specific data without closing your account</h2>
+  <p>You can also request deletion of specific data — such as your chat history, reviews, or saved delivery addresses — without deleting your whole account. Use the same email channel above and state which data you'd like removed. The same 30-day timeline applies.</p>
+
   <h2>What gets deleted</h2>
   <ul>
     <li>Your account (name, email, phone number, password)</li>
