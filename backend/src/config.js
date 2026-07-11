@@ -17,8 +17,19 @@ function tenantStoreUrl(subdomain, options) {
   return buildUrl(subdomain, options);
 }
 
+// Partner delivery economics & limits (Rs)
+const delivery = {
+  maxRadiusKm: Number(process.env.DELIVERY_MAX_RADIUS_KM || 12),       // stores/partners deliver within this of the store
+  baseFee: Number(process.env.DELIVERY_BASE_FEE || 50),                // minimum fee, covers the first baseKm
+  baseKm: Number(process.env.DELIVERY_BASE_KM || 5),
+  perKm: Number(process.env.DELIVERY_PER_KM || 10),                    // beyond baseKm
+  roadFactor: Number(process.env.DELIVERY_ROAD_FACTOR || 1.3),         // straight-line -> road distance estimate
+  dispatchRadiusKm: Number(process.env.DELIVERY_DISPATCH_RADIUS_KM || 15), // rider sees jobs from stores within this of their duty location
+};
+
 module.exports = {
   brandName,
+  delivery,
   tagline: process.env.APP_TAGLINE || 'Reducing food waste, one meal at a time.',
   siteUrl,
   siteHost: process.env.APP_SITE_HOST || siteHostFromUrl(siteUrl),

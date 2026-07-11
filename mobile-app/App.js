@@ -4691,15 +4691,40 @@ function DeliveryAddressScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const feeNotes = route.params?.feeNotes || [];
   const storeNames = route.params?.storeNames || [];
+  const partnerDelivery = !!route.params?.partnerDelivery;
+  const feeEstimate = route.params?.feeEstimate ?? null;
 
   const [address, setAddress] = useState(deliveryInfo.address || user?.delivery_address || '');
   const [phone, setPhone] = useState(deliveryInfo.phone || user?.phone || '');
+  const [pin, setPin] = useState(deliveryInfo.lat != null ? { lat: deliveryInfo.lat, lng: deliveryInfo.lng } : null);
+  const [pinning, setPinning] = useState(false);
   const [saveForFuture, setSaveForFuture] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const captureLocation = async () => {
+    setPinning(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Location needed', 'Allow location access so the rider can find your exact spot.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setPin({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+    } catch (_) {
+      Alert.alert('Location unavailable', 'Could not get your location. Check GPS and try again.');
+    } finally {
+      setPinning(false);
+    }
+  };
 
   const handleContinue = async () => {
     if (!address.trim() || !phone.trim()) {
       Alert.alert("Required", "Please enter your delivery address and phone number.");
+      return;
+    }
+    if (!pin) {
+      Alert.alert("Pin your location", "Tap 'Pin my location' so the rider can navigate to you.");
       return;
     }
     setSaving(true);
@@ -4709,7 +4734,7 @@ function DeliveryAddressScreen({ navigation, route }) {
           headers: { Authorization: `Bearer ${token}` }
         });
       }
-      setDeliveryInfo({ fulfillmentType: 'delivery', address: address.trim(), phone: phone.trim() });
+      setDeliveryInfo({ fulfillmentType: 'delivery', address: address.trim(), phone: phone.trim(), lat: pin.lat, lng: pin.lng });
       navigation.goBack();
     } catch (e) {
       Alert.alert("Error", e.response?.data?.error || "Could not save delivery details. Please try again.");
@@ -4728,6 +4753,17 @@ function DeliveryAddressScreen({ navigation, route }) {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        {partnerDelivery ? (
+          <View style={{ backgroundColor: '#FFF7ED', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#FED7AA', marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <Ionicons name="bicycle" size={18} color="#E27A53" />
+              <Text style={{ fontWeight: '800', fontSize: 13, color: '#E27A53' }}>Delivered by a Grabengo Partner</Text>
+            </View>
+            <Text style={{ fontSize: 12.5, color: '#374151', lineHeight: 18 }}>
+              A Grabengo delivery partner will pick up your order and bring it to you. The delivery fee is based on distance{feeEstimate != null ? ` — estimated Rs${feeEstimate} for your pinned location` : ''} and is paid in cash along with your order. You'll get a 4-digit PIN to give the rider on arrival.
+            </Text>
+          </View>
+        ) : (
         <View style={{ backgroundColor: '#EFF6FF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <Ionicons name="information-circle" size={18} color="#1D4ED8" />
@@ -4747,6 +4783,28 @@ function DeliveryAddressScreen({ navigation, route }) {
             </View>
           )}
         </View>
+        )}
+
+        <Text style={{ color: '#374151', fontWeight: '700', marginBottom: 6, fontSize: 13 }}>Pin Your Location *</Text>
+        <TouchableOpacity
+          onPress={captureLocation}
+          disabled={pinning}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: pin ? '#F0FDF4' : '#FFF6E9', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1.5, borderColor: pin ? '#86EFAC' : '#E27A53' }}
+        >
+          {pinning ? (
+            <ActivityIndicator color="#E27A53" />
+          ) : (
+            <Ionicons name={pin ? 'checkmark-circle' : 'locate'} size={22} color={pin ? '#16A34A' : '#E27A53'} />
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: '700', fontSize: 14, color: pin ? '#166534' : '#E27A53' }}>
+              {pin ? 'Location pinned' : 'Pin my location'}
+            </Text>
+            <Text style={{ fontSize: 11.5, color: '#6B7280', marginTop: 2 }}>
+              {pin ? `${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)} — tap to re-pin` : 'The rider uses this exact spot to navigate to you'}
+            </Text>
+          </View>
+        </TouchableOpacity>
 
         <Text style={{ color: '#374151', fontWeight: '700', marginBottom: 6, fontSize: 13 }}>Delivery Address *</Text>
         <TextInput
@@ -4800,6 +4858,27 @@ function CartScreen({ navigation, route }) {
   const deliveryEligible = cartItems.length > 0 && cartItems.every(item => item.delivery_enabled);
   const feeNotes = [...new Set(cartItems.map(i => i.delivery_fee_note).filter(Boolean))];
   const storeNames = [...new Set(cartItems.map(i => i.store_name).filter(Boolean))];
+  const partnerDelivery = deliveryEligible && cartItems.every(item => item.delivery_mode === 'partner');
+
+  // Mirrors the backend fee formula (base Rs50 covers 5 road-km, Rs10/km beyond, x1.3 road factor).
+  const estimateDeliveryFee = () => {
+    if (!partnerDelivery || deliveryInfo.lat == null) return null;
+    let maxFee = 0;
+    const seen = new Set();
+    for (const item of cartItems) {
+      if (item.lat == null || seen.has(item.store_id)) continue;
+      seen.add(item.store_id);
+      const straightKm = getDistance(
+        { latitude: deliveryInfo.lat, longitude: deliveryInfo.lng },
+        { latitude: item.lat, longitude: item.lng }
+      ) / 1000;
+      const roadKm = straightKm * 1.3;
+      const raw = roadKm <= 5 ? 50 : 50 + (roadKm - 5) * 10;
+      maxFee += Math.max(50, Math.round(raw / 10) * 10);
+    }
+    return maxFee || null;
+  };
+  const deliveryFeeEstimate = estimateDeliveryFee();
 
   // If cart contents change such that delivery is no longer possible, fall back to pickup
   useEffect(() => {
@@ -4809,13 +4888,13 @@ function CartScreen({ navigation, route }) {
   }, [isDelivery, deliveryEligible]);
 
   const goToDeliveryAddress = () => {
-    navigation.navigate('DeliveryAddress', { feeNotes, storeNames });
+    navigation.navigate('DeliveryAddress', { feeNotes, storeNames, partnerDelivery, feeEstimate: deliveryFeeEstimate });
   };
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
-    if (isDelivery && (!deliveryInfo.address?.trim() || !deliveryInfo.phone?.trim())) {
-      Alert.alert("Delivery details needed", "Please add your delivery address and phone number.", [
+    if (isDelivery && (!deliveryInfo.address?.trim() || !deliveryInfo.phone?.trim() || deliveryInfo.lat == null)) {
+      Alert.alert("Delivery details needed", "Please add your delivery address, phone number and pin your location.", [
         { text: "Cancel", style: "cancel" },
         { text: "Add Details", onPress: goToDeliveryAddress },
       ]);
@@ -4841,7 +4920,7 @@ function CartScreen({ navigation, route }) {
         })),
         paymentMethod: paymentMethodLabel,
         fulfillmentType: isDelivery ? 'delivery' : 'pickup',
-        ...(isDelivery ? { deliveryAddress: deliveryInfo.address.trim(), deliveryPhone: deliveryInfo.phone.trim() } : {}),
+        ...(isDelivery ? { deliveryAddress: deliveryInfo.address.trim(), deliveryPhone: deliveryInfo.phone.trim(), deliveryLat: deliveryInfo.lat, deliveryLng: deliveryInfo.lng } : {}),
       };
       const response = await axios.post(`${API_URL}/orders`, payload, { headers: { Authorization: `Bearer ${token}` } });
       const receiptGroups = response.data?.receipt_groups || [];
@@ -5035,7 +5114,9 @@ function CartScreen({ navigation, route }) {
                   </TouchableOpacity>
                 </View>
                 <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8, lineHeight: 15 }}>
-                  Delivered by the store, not Grabengo. Delivery charges (if any) are excluded from the total below — pay the store directly. They may call to confirm.
+                  {partnerDelivery
+                    ? `Delivered by a Grabengo Partner.${deliveryFeeEstimate != null ? ` Estimated delivery fee: Rs${deliveryFeeEstimate} —` : ''} pay cash to the rider along with your order total. You'll get a PIN to confirm delivery.`
+                    : 'Delivered by the store, not Grabengo. Delivery charges (if any) are excluded from the total below — pay the store directly. They may call to confirm.'}
                 </Text>
               </View>
             )}
@@ -5185,6 +5266,38 @@ function BookingsScreen({ navigation }) {
             )}
           </TouchableOpacity>
         </View>
+        {item.delivery_status && !['cancelled'].includes(item.delivery_status) ? (
+          <View style={{ marginTop: 10, backgroundColor: '#FFF7ED', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FED7AA' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#E27A53', textTransform: 'uppercase' }}>Grabengo Partner Delivery</Text>
+              {item.delivery_fee != null && (
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#6B7280' }}>Fee: {currencySymbol}{Number(item.delivery_fee).toFixed(0)}</Text>
+              )}
+            </View>
+            <Text style={{ fontSize: 12.5, color: '#374151', marginTop: 4, lineHeight: 17 }}>
+              {item.delivery_status === 'awaiting_confirmation' ? 'Waiting for the store to confirm your order.'
+                : item.delivery_status === 'pending' ? 'Store confirmed — finding you a rider…'
+                : item.delivery_status === 'assigned' ? `${item.partner_name || 'Your rider'} is heading to the store.`
+                : item.delivery_status === 'picked_up' ? `${item.partner_name || 'Your rider'} is on the way to you!`
+                : item.delivery_status === 'delivered' ? 'Delivered — enjoy your food!'
+                : item.delivery_status === 'failed' ? 'Delivery could not be completed. The store will contact you.'
+                : ''}
+            </Text>
+            {item.delivery_pin && ['pending', 'assigned', 'picked_up'].includes(item.delivery_status) ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                <View style={{ backgroundColor: '#E27A53', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
+                  <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, letterSpacing: 4 }}>{item.delivery_pin}</Text>
+                </View>
+                <Text style={{ fontSize: 11, color: '#6B7280', flex: 1 }}>Give this PIN to the rider when your order arrives.</Text>
+              </View>
+            ) : null}
+            {item.partner_phone && ['assigned', 'picked_up'].includes(item.delivery_status) ? (
+              <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.partner_phone}`)} style={{ marginTop: 8 }}>
+                <Text style={{ fontSize: 12, color: '#E27A53', fontWeight: '700' }}>Call rider: {item.partner_phone}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -5260,6 +5373,284 @@ function SellerEmptyState({ icon, title, subtitle }) {
   );
 }
 
+// ── Grabengo Partner (rider) dashboard ──
+function PartnerDashboardScreen() {
+  const { user, token, logout } = useContext(AuthContext);
+  const insets = useSafeAreaInsets();
+  const [onDuty, setOnDuty] = useState(false);
+  const [available, setAvailable] = useState([]);
+  const [mine, setMine] = useState([]);
+  const [earnings, setEarnings] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshingNow, setRefreshingNow] = useState(false);
+  const [pinModal, setPinModal] = useState(null); // delivery id awaiting PIN entry
+  const [pinInput, setPinInput] = useState('');
+
+  const authHeaders = { headers: { Authorization: `Bearer ${token}` } };
+  const activeDelivery = mine.find(d => ['assigned', 'picked_up'].includes(d.status));
+
+  const refresh = async (quiet = true) => {
+    if (!quiet) setRefreshingNow(true);
+    try {
+      const [availRes, mineRes] = await Promise.all([
+        axios.get(`${API_URL}/partner/deliveries/available`, authHeaders),
+        axios.get(`${API_URL}/partner/deliveries/mine`, authHeaders),
+      ]);
+      setAvailable(Array.isArray(availRes.data) ? availRes.data : []);
+      setMine(mineRes.data?.deliveries || []);
+      setEarnings(mineRes.data?.earnings || 0);
+    } catch (_) {} finally {
+      setLoading(false);
+      setRefreshingNow(false);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 20000);
+    return () => clearInterval(t);
+  }, []);
+
+  const toggleDuty = async (next) => {
+    setOnDuty(next);
+    try {
+      let lat = null, lng = null;
+      if (next) {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({});
+          lat = loc.coords.latitude; lng = loc.coords.longitude;
+        }
+      }
+      await axios.patch(`${API_URL}/partner/duty`, { on_duty: next, lat, lng }, authHeaders);
+    } catch (_) {
+      setOnDuty(!next);
+      Alert.alert('Error', 'Could not update duty status. Try again.');
+    }
+  };
+
+  const acceptJob = async (d) => {
+    try {
+      await axios.post(`${API_URL}/partner/deliveries/${d.id}/accept`, {}, authHeaders);
+      refresh();
+    } catch (e) {
+      Alert.alert('Not available', e.response?.data?.error || 'Could not accept this delivery.');
+      refresh();
+    }
+  };
+
+  const markPickedUp = async (d) => {
+    try {
+      await axios.patch(`${API_URL}/partner/deliveries/${d.id}/status`, { action: 'picked_up' }, authHeaders);
+      refresh();
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || 'Could not update.');
+    }
+  };
+
+  const submitDeliveredPin = async () => {
+    try {
+      await axios.patch(`${API_URL}/partner/deliveries/${pinModal}/status`, { action: 'delivered', pin: pinInput.trim() }, authHeaders);
+      setPinModal(null); setPinInput('');
+      Alert.alert('Delivered ✓', 'Great job! The delivery fee has been added to your earnings.');
+      refresh();
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || 'Could not complete delivery.');
+    }
+  };
+
+  const markFailed = (d) => {
+    Alert.alert('Delivery failed?', 'Why could this delivery not be completed?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Customer unreachable', onPress: () => sendFailed(d, 'Customer unreachable') },
+      { text: 'Wrong address', onPress: () => sendFailed(d, 'Wrong address') },
+      { text: 'Customer refused', onPress: () => sendFailed(d, 'Customer refused order') },
+    ]);
+  };
+  const sendFailed = async (d, reason) => {
+    try {
+      await axios.patch(`${API_URL}/partner/deliveries/${d.id}/status`, { action: 'failed', reason }, authHeaders);
+      refresh();
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || 'Could not update.');
+    }
+  };
+
+  const openMaps = (lat, lng) => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+
+  const JobCard = ({ d, isActive }) => (
+    <View style={[styles.card, { marginBottom: 12, borderWidth: isActive ? 2 : 0, borderColor: '#E27A53' }]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text style={{ fontWeight: '800', fontSize: 15, color: '#111827' }}>{d.store_name}</Text>
+          <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }} numberOfLines={2}>{d.store_address}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={{ fontWeight: '900', fontSize: 16, color: '#E27A53' }}>Rs{Number(d.fee).toFixed(0)}</Text>
+          <Text style={{ fontSize: 10, color: '#9CA3AF' }}>your fee</Text>
+        </View>
+      </View>
+      <View style={{ marginTop: 10, backgroundColor: '#FFF6E9', borderRadius: 10, padding: 10 }}>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>Deliver to</Text>
+        <Text style={{ fontSize: 13, color: '#111827', fontWeight: '600', marginTop: 2 }} numberOfLines={2}>{d.address}</Text>
+        <Text style={{ fontSize: 11.5, color: '#6B7280', marginTop: 4 }}>~{Number(d.distance_km).toFixed(1)} km · Collect Rs{Number(d.cod_amount).toFixed(0)} cash (order + fee)</Text>
+        {d.prep_minutes ? <Text style={{ fontSize: 11.5, color: '#B45309', marginTop: 2 }}>Ready in ~{d.prep_minutes} min</Text> : null}
+      </View>
+      {d.items?.length ? (
+        <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 8 }} numberOfLines={2}>
+          {d.items.map(i => `${i.quantity}x ${i.item_name}`).join(', ')}
+        </Text>
+      ) : null}
+      {!isActive ? (
+        <TouchableOpacity onPress={() => acceptJob(d)} style={[styles.primaryButton, { backgroundColor: '#E27A53', marginTop: 12, paddingVertical: 13 }]}>
+          <Text style={styles.primaryButtonText}>Accept Delivery</Text>
+        </TouchableOpacity>
+      ) : (
+        <>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            <TouchableOpacity onPress={() => openMaps(d.store_lat, d.store_lng)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 10 }}>
+              <Ionicons name="storefront-outline" size={14} color="#1D4ED8" />
+              <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 12 }}>To Store</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => openMaps(d.lat, d.lng)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 10 }}>
+              <Ionicons name="navigate-outline" size={14} color="#1D4ED8" />
+              <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 12 }}>To Customer</Text>
+            </TouchableOpacity>
+            {d.customer_phone ? (
+              <TouchableOpacity onPress={() => Linking.openURL(`tel:${d.customer_phone}`)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: '#F0FDF4', borderRadius: 10 }}>
+                <Ionicons name="call-outline" size={14} color="#15803D" />
+                <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 12 }}>Call</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            {d.status === 'assigned' ? (
+              <TouchableOpacity onPress={() => markPickedUp(d)} style={[styles.primaryButton, { flex: 1, backgroundColor: '#E27A53', paddingVertical: 13 }]}>
+                <Text style={styles.primaryButtonText}>Picked Up</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => { setPinModal(d.id); setPinInput(''); }} style={[styles.primaryButton, { flex: 1, backgroundColor: '#16A34A', paddingVertical: 13 }]}>
+                <Text style={styles.primaryButtonText}>Delivered — Enter PIN</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => markFailed(d)} style={{ paddingHorizontal: 16, justifyContent: 'center', backgroundColor: '#FEE2E2', borderRadius: 30 }}>
+              <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Problem</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FDF3E4' }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', backgroundColor: '#FFF6E9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{user?.name || 'Partner'}</Text>
+          <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Grabengo Delivery Partner</Text>
+        </View>
+        <View style={{ alignItems: 'center', marginRight: 12 }}>
+          <Switch value={onDuty} onValueChange={toggleDuty} trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }} thumbColor={onDuty ? '#16A34A' : '#F3F4F6'} />
+          <Text style={{ fontSize: 10, fontWeight: '700', color: onDuty ? '#16A34A' : '#9CA3AF', marginTop: 2 }}>{onDuty ? 'ON DUTY' : 'OFF DUTY'}</Text>
+        </View>
+        <TouchableOpacity onPress={logout} style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center' }}>
+          <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#E27A53" />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: Math.max(insets.bottom, 24) + 20 }}>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+            <View style={[styles.card, { flex: 1, alignItems: 'center', paddingVertical: 14 }]}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: '#E27A53' }}>Rs{Number(earnings).toFixed(0)}</Text>
+              <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Total earnings</Text>
+            </View>
+            <View style={[styles.card, { flex: 1, alignItems: 'center', paddingVertical: 14 }]}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: '#111827' }}>{mine.filter(d => d.status === 'delivered').length}</Text>
+              <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Deliveries done</Text>
+            </View>
+          </View>
+
+          {activeDelivery ? (
+            <>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 10 }}>Current Delivery</Text>
+              <JobCard d={activeDelivery} isActive />
+            </>
+          ) : null}
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, marginBottom: 10 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827' }}>Available Jobs</Text>
+            <TouchableOpacity onPress={() => refresh(false)}>
+              {refreshingNow ? <ActivityIndicator size="small" color="#E27A53" /> : <Ionicons name="refresh" size={20} color="#E27A53" />}
+            </TouchableOpacity>
+          </View>
+          {!onDuty ? (
+            <View style={[styles.card, { alignItems: 'center', paddingVertical: 24 }]}>
+              <Ionicons name="moon-outline" size={32} color="#9CA3AF" />
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginTop: 8, textAlign: 'center' }}>You're off duty. Go on duty to see and accept delivery jobs.</Text>
+            </View>
+          ) : available.length === 0 ? (
+            <View style={[styles.card, { alignItems: 'center', paddingVertical: 24 }]}>
+              <Ionicons name="bicycle-outline" size={32} color="#9CA3AF" />
+              <Text style={{ color: '#6B7280', fontWeight: '600', marginTop: 8 }}>No jobs nearby right now</Text>
+              <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 2 }}>New jobs appear here automatically</Text>
+            </View>
+          ) : (
+            available.map(d => <JobCard key={d.id} d={d} isActive={false} />)
+          )}
+
+          {mine.filter(d => !['assigned', 'picked_up'].includes(d.status)).length > 0 ? (
+            <>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827', marginTop: 16, marginBottom: 10 }}>History</Text>
+              {mine.filter(d => !['assigned', 'picked_up'].includes(d.status)).map(d => (
+                <View key={d.id} style={[styles.card, { marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={{ fontWeight: '700', fontSize: 13, color: '#111827' }} numberOfLines={1}>{d.store_name}</Text>
+                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{new Date(d.created_at).toLocaleDateString()} · ~{Number(d.distance_km).toFixed(1)} km</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontWeight: '800', fontSize: 13, color: d.status === 'delivered' ? '#16A34A' : '#DC2626' }}>
+                      {d.status === 'delivered' ? `+Rs${Number(d.fee).toFixed(0)}` : d.status}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : null}
+        </ScrollView>
+      )}
+
+      {/* PIN entry modal */}
+      <Modal visible={pinModal != null} transparent animationType="fade" onRequestClose={() => setPinModal(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 32 }}>
+          <View style={{ backgroundColor: '#FFF6E9', borderRadius: 20, padding: 24 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827', textAlign: 'center' }}>Enter Delivery PIN</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 6 }}>Ask the customer for the 4-digit code in their booking.</Text>
+            <TextInput
+              value={pinInput}
+              onChangeText={setPinInput}
+              keyboardType="number-pad"
+              maxLength={4}
+              autoFocus
+              style={{ backgroundColor: '#FFFDF9', borderWidth: 2, borderColor: '#E27A53', borderRadius: 14, padding: 14, fontSize: 24, fontWeight: '900', textAlign: 'center', letterSpacing: 12, marginTop: 16, color: '#111827' }}
+            />
+            <TouchableOpacity onPress={submitDeliveredPin} disabled={pinInput.length !== 4} style={[styles.primaryButton, { backgroundColor: pinInput.length === 4 ? '#16A34A' : '#9CA3AF', marginTop: 16 }]}>
+              <Text style={styles.primaryButtonText}>Confirm Delivery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setPinModal(null)} style={{ alignItems: 'center', marginTop: 12 }}>
+              <Text style={{ color: '#6B7280', fontWeight: '600' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
 function SellerDashboardScreen() {
   const { token, logout, user } = useContext(AuthContext);
   const [stores, setStores] = useState([]);
@@ -5268,6 +5659,7 @@ function SellerDashboardScreen() {
   const [storeLat, setStoreLat] = useState(51.5074);
   const [storeLng, setStoreLng] = useState(-0.1278);
   const [storeDeliveryEnabled, setStoreDeliveryEnabled] = useState(false);
+  const [storeDeliveryMode, setStoreDeliveryMode] = useState('self');
   const [storeDeliveryFeeNote, setStoreDeliveryFeeNote] = useState('');
   const [storeCategory, setStoreCategory] = useState(null);
 
@@ -5648,14 +6040,14 @@ function SellerDashboardScreen() {
     if (!storeCategory) return Alert.alert("Category Required", "Please select what kind of store this is.");
     try {
       if (editingStoreId) {
-        await axios.put(`${API_URL}/stores/${editingStoreId}`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_fee_note: storeDeliveryFeeNote.trim() || null, category: storeCategory }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(`${API_URL}/stores/${editingStoreId}`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_mode: storeDeliveryEnabled ? storeDeliveryMode : null, delivery_fee_note: storeDeliveryFeeNote.trim() || null, category: storeCategory }, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Store updated successfully!");
         setEditingStoreId(null);
       } else {
-        await axios.post(`${API_URL}/stores`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_fee_note: storeDeliveryFeeNote.trim() || null, category: storeCategory }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post(`${API_URL}/stores`, { name: storeName, address: storeAddress, lat: storeLat, lng: storeLng, image: storeImage, delivery_enabled: storeDeliveryEnabled, delivery_mode: storeDeliveryEnabled ? storeDeliveryMode : null, delivery_fee_note: storeDeliveryFeeNote.trim() || null, category: storeCategory }, { headers: { Authorization: `Bearer ${token}` } });
         Alert.alert("Success", "Store created successfully!");
       }
-      setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryFeeNote(''); setStoreCategory(null);
+      setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryMode('self'); setStoreDeliveryFeeNote(''); setStoreCategory(null);
       setShowStoreModal(false);
       fetchStores();
       fetchStats();
@@ -5937,7 +6329,7 @@ function SellerDashboardScreen() {
               </View>
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                 <TouchableOpacity
-                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setStoreDeliveryEnabled(!!store.delivery_enabled); setStoreDeliveryFeeNote(store.delivery_fee_note || ''); setStoreCategory(store.category || null); setEditingStoreId(store.id); setShowStoreModal(true); }}
+                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setStoreDeliveryEnabled(!!store.delivery_enabled); setStoreDeliveryMode(store.delivery_mode === 'partner' ? 'partner' : 'self'); setStoreDeliveryFeeNote(store.delivery_fee_note || ''); setStoreCategory(store.category || null); setEditingStoreId(store.id); setShowStoreModal(true); }}
                   style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FFF7ED', borderRadius: 10, alignItems: 'center' }}>
                   <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 13 }}>Edit</Text>
                 </TouchableOpacity>
@@ -6135,6 +6527,35 @@ function SellerDashboardScreen() {
                   <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13 }}>{order.customer_phone}</Text>
                 </TouchableOpacity>
               ) : null}
+              {order.fulfillment_type === 'delivery' && order.delivery_lat != null ? (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${order.delivery_lat},${order.delivery_lng}`)}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
+                >
+                  <Ionicons name="navigate-outline" size={14} color="#1D4ED8" />
+                  <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Open Customer Location in Maps</Text>
+                </TouchableOpacity>
+              ) : null}
+              {order.delivery_id ? (
+                <View style={{ marginTop: 8, backgroundColor: '#FFF7ED', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#E27A53', textTransform: 'uppercase' }}>Grabengo Partner Delivery</Text>
+                  <Text style={{ fontSize: 12, color: '#374151', marginTop: 3 }}>
+                    {order.delivery_status === 'awaiting_confirmation' ? 'Confirm the order to notify nearby riders.'
+                      : order.delivery_status === 'pending' ? 'Waiting for a rider to accept…'
+                      : order.delivery_status === 'assigned' ? `Rider ${order.partner_name || ''} is on the way to pick up.`
+                      : order.delivery_status === 'picked_up' ? `Rider ${order.partner_name || ''} has picked up the order.`
+                      : order.delivery_status === 'delivered' ? 'Delivered to the customer.'
+                      : order.delivery_status === 'failed' ? 'Delivery failed — contact the customer.'
+                      : order.delivery_status === 'cancelled' ? 'Delivery cancelled.'
+                      : ''}
+                  </Text>
+                  {order.partner_phone && ['assigned', 'picked_up'].includes(order.delivery_status) ? (
+                    <TouchableOpacity onPress={() => Linking.openURL(`tel:${order.partner_phone}`)} style={{ marginTop: 6 }}>
+                      <Text style={{ fontSize: 12, color: '#E27A53', fontWeight: '700' }}>Call rider: {order.partner_phone}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ) : null}
 
               {showTriad && (
                 <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
@@ -6236,7 +6657,7 @@ function SellerDashboardScreen() {
       {inventoryTab && (
       <TouchableOpacity
         onPress={() => {
-          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryFeeNote(''); setStoreCategory(null); setShowStoreModal(true); }
+          if (sellerTab === 'stores') { setEditingStoreId(null); setStoreName(''); setStoreAddress(''); setStoreImage(null); setStoreLat(51.5074); setStoreLng(-0.1278); setStoreDeliveryEnabled(false); setStoreDeliveryMode('self'); setStoreDeliveryFeeNote(''); setStoreCategory(null); setShowStoreModal(true); }
           else if (sellerTab === 'bags') { setEditingBagId(null); setBagStoreId(null); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setActiveTimePicker(null); setShowBagModal(true); }
           else { setEditingFoodId(null); setFoodStoreId(null); setFoodName(''); setFoodDescription(''); setFoodPrice(''); setFoodOriginalPrice(''); setFoodQuantity(''); setFoodCategory('Other'); setFoodImages([]); setFoodSaleEndsAt(null); setFoodSalePicker(null); setShowFoodModal(true); }
         }}
@@ -6352,6 +6773,23 @@ function SellerDashboardScreen() {
                 </View>
                 {storeDeliveryEnabled && (
                   <View style={{ marginTop: 14 }}>
+                    <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 8, fontSize: 13 }}>Who delivers the orders?</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                      <TouchableOpacity
+                        onPress={() => setStoreDeliveryMode('self')}
+                        style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: storeDeliveryMode === 'self' ? SELLER_BRAND : '#E5E7EB', backgroundColor: storeDeliveryMode === 'self' ? '#FFF7ED' : '#FFF6E9' }}>
+                        <Text style={{ fontWeight: '800', fontSize: 13, color: storeDeliveryMode === 'self' ? SELLER_BRAND : '#374151' }}>Self delivery</Text>
+                        <Text style={{ fontSize: 10.5, color: '#6B7280', marginTop: 3, lineHeight: 14 }}>Your own riders deliver. You set and collect any charges.</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setStoreDeliveryMode('partner')}
+                        style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: storeDeliveryMode === 'partner' ? SELLER_BRAND : '#E5E7EB', backgroundColor: storeDeliveryMode === 'partner' ? '#FFF7ED' : '#FFF6E9' }}>
+                        <Text style={{ fontWeight: '800', fontSize: 13, color: storeDeliveryMode === 'partner' ? SELLER_BRAND : '#374151' }}>Grabengo Partner</Text>
+                        <Text style={{ fontSize: 10.5, color: '#6B7280', marginTop: 3, lineHeight: 14 }}>A Grabengo rider picks up and delivers. Fee is charged to the customer by distance.</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {storeDeliveryMode === 'self' ? (
+                    <>
                     <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Delivery Fee / Notes (optional)</Text>
                     <TextInput
                       style={[styles.input, { marginBottom: 0 }]}
@@ -6361,6 +6799,10 @@ function SellerDashboardScreen() {
                       onChangeText={setStoreDeliveryFeeNote}
                     />
                     <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>Shown to customers before they choose delivery. You collect this charge directly — it's not processed by Grabengo.</Text>
+                    </>
+                    ) : (
+                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2, lineHeight: 15 }}>When you confirm a delivery order, nearby Grabengo partners are notified. The rider collects the order total plus the distance-based delivery fee in cash from the customer. Deliveries are limited to 12 km from your store.</Text>
+                    )}
                   </View>
                 )}
               </View>
@@ -6671,7 +7113,7 @@ export default function App() {
   });
 
   const [cartItems, setCartItems] = useState([]);
-  const DEFAULT_DELIVERY_INFO = { fulfillmentType: 'pickup', address: '', phone: '' };
+  const DEFAULT_DELIVERY_INFO = { fulfillmentType: 'pickup', address: '', phone: '', lat: null, lng: null };
   const [deliveryInfo, setDeliveryInfo] = useState(DEFAULT_DELIVERY_INFO);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
 
@@ -6847,6 +7289,9 @@ export default function App() {
               ) : state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff' ? (
                 // Seller Stack
                 <Stack.Screen name="SellerDashboard" component={SellerDashboardScreen} />
+              ) : state.user?.role === 'Partner' ? (
+                // Delivery Partner Stack
+                <Stack.Screen name="PartnerDashboard" component={PartnerDashboardScreen} />
               ) : (
                 // App Stack
                 <>

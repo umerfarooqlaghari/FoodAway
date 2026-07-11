@@ -7,7 +7,7 @@ const STORE_CATEGORIES = ['Restaurants', 'Bakeries', 'Cafes', 'Grocery Store'];
 const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
-const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl } = require('./config');
+const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl, delivery: DELIVERY_CFG } = require('./config');
 const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout, emailSellerWelcomeLayout } = require('./emailTemplates');
 const {
   validateSubdomain,
@@ -95,6 +95,38 @@ function resolveRequestSubdomain(req) {
 
 function isMobileAppClient(req) {
   return req.headers['x-grabengo-client'] === 'mobile';
+}
+
+// ── Partner delivery helpers ──
+// Straight-line -> estimated road km, then base fee covers the first baseKm, perKm beyond.
+// Rounded to the nearest 10 so fees read as intentional prices.
+function computeDeliveryFee(straightKm) {
+  const roadKm = straightKm * DELIVERY_CFG.roadFactor;
+  const raw = roadKm <= DELIVERY_CFG.baseKm
+    ? DELIVERY_CFG.baseFee
+    : DELIVERY_CFG.baseFee + (roadKm - DELIVERY_CFG.baseKm) * DELIVERY_CFG.perKm;
+  return { fee: Math.max(DELIVERY_CFG.baseFee, Math.round(raw / 10) * 10), roadKm };
+}
+
+function generateDeliveryPin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+async function notifyOnDutyPartners(deliveryRow, storeName) {
+  const partners = await db.prepare(
+    "SELECT id, push_token, duty_lat, duty_lng FROM users WHERE role = 'Partner' AND is_on_duty = TRUE"
+  ).all();
+  for (const p of partners) {
+    if (p.duty_lat != null && p.duty_lng != null && deliveryRow.store_lat != null) {
+      const dist = haversineKm(p.duty_lat, p.duty_lng, deliveryRow.store_lat, deliveryRow.store_lng);
+      if (dist > DELIVERY_CFG.dispatchRadiusKm) continue;
+    }
+    sendToUser(p.id, { type: 'new_delivery_job', delivery_id: deliveryRow.id, store_name: storeName });
+    if (p.push_token) {
+      sendPushNotification(p.push_token, 'New delivery job', `Pickup from ${storeName} — Rs${deliveryRow.fee} fee`, { type: 'delivery_job', deliveryId: deliveryRow.id })
+        .catch(() => {});
+    }
+  }
 }
 
 async function fetchOrderForNotification(orderId) {
@@ -646,7 +678,7 @@ app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) 
   const { all, tenant_id } = req.query;
   try {
     let query = `
-      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note,
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note, s.delivery_mode,
              CASE WHEN f.user_id IS NOT NULL THEN 1 ELSE 0 END as is_favorited
       FROM surprise_bags b
       JOIN stores s ON b.store_id = s.id
@@ -775,7 +807,7 @@ app.post('/api/users/push-token', verifyToken, async (req, res) => {
 });
 
 app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req, res) => {
-  const { name, address, lat, lng, image, delivery_enabled, delivery_fee_note, category } = req.body;
+  const { name, address, lat, lng, image, delivery_enabled, delivery_fee_note, category, delivery_mode } = req.body;
 
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({ error: 'Latitude and Longitude are required' });
@@ -788,8 +820,9 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
     const targetTenantId = requireTenantId(req.user);
     const imageUrl = image ? await uploadImageToS3(image) : null;
     const deliveryEnabledBool = Boolean(delivery_enabled);
-    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category);
-    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category });
+    const deliveryMode = deliveryEnabledBool ? (delivery_mode === 'partner' ? 'partner' : 'self') : null;
+    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category, delivery_mode) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category, deliveryMode);
+    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category, delivery_mode: deliveryMode });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -797,7 +830,7 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
 
 app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (req, res) => {
   const { id } = req.params;
-  const { lat, lng, is_active, name, address, image, delivery_enabled, delivery_fee_note, category } = req.body;
+  const { lat, lng, is_active, name, address, image, delivery_enabled, delivery_fee_note, category, delivery_mode } = req.body;
   if (category !== undefined && category !== null && !STORE_CATEGORIES.includes(category)) {
     return res.status(400).json({ error: `category must be one of: ${STORE_CATEGORIES.join(', ')}` });
   }
@@ -820,10 +853,12 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
         image = COALESCE(?, image),
         delivery_enabled = COALESCE(?, delivery_enabled),
         delivery_fee_note = CASE WHEN ?::boolean THEN ?::text ELSE delivery_fee_note END,
-        category = COALESCE(?, category)
+        category = COALESCE(?, category),
+        delivery_mode = CASE WHEN ?::boolean THEN ?::text ELSE delivery_mode END
        WHERE id = ?`
     ).run(lat, lng, isActiveBool, name, address, imageUrl, deliveryEnabledBool,
-      delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category, id);
+      delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category,
+      delivery_mode !== undefined, delivery_mode !== undefined ? (delivery_mode === 'partner' ? 'partner' : (delivery_mode === 'self' ? 'self' : null)) : null, id);
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -937,7 +972,7 @@ app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async
     let query = `
       SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
              f.quantity, f.category, f.is_available, f.store_id, f.created_at, f.sale_ends_at,
-             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note, s.delivery_mode,
              CASE WHEN fav.user_id IS NOT NULL THEN 1 ELSE 0 END as is_favorited
       FROM food_items f
       JOIN stores s ON f.store_id = s.id
@@ -1065,7 +1100,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
   if (req.user.role !== 'Customers') {
     return res.status(403).json({ error: 'Only customers can place orders' });
   }
-  const { items, paymentMethod, fulfillmentType, deliveryAddress, deliveryPhone } = req.body;
+  const { items, paymentMethod, fulfillmentType, deliveryAddress, deliveryPhone, deliveryLat, deliveryLng } = req.body;
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Cart is empty' });
   const method = paymentMethod || 'Card';
   const isDelivery = fulfillmentType === 'delivery';
@@ -1086,6 +1121,36 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'One or more stores in your cart do not offer delivery. Please switch to pickup or remove those items.' });
     }
 
+    // Delivery orders need a pinned location so riders (store or partner) can navigate,
+    // and so the 12 km delivery radius can be enforced per store.
+    const custLat = deliveryLat != null ? Number(deliveryLat) : null;
+    const custLng = deliveryLng != null ? Number(deliveryLng) : null;
+    const deliveryFees = {}; // store_id -> { fee, distance_km, mode }
+    if (isDelivery) {
+      if (custLat == null || custLng == null || isNaN(custLat) || isNaN(custLng)) {
+        return res.status(400).json({ error: 'Please pin your delivery location so the rider can find you.' });
+      }
+      const storeGroups = {};
+      for (const p of preview) {
+        if (!storeGroups[p.store_id]) storeGroups[p.store_id] = p;
+      }
+      for (const p of Object.values(storeGroups)) {
+        if (p.store_lat == null || p.store_lng == null) continue;
+        const straightKm = haversineKm(custLat, custLng, p.store_lat, p.store_lng);
+        if (straightKm > DELIVERY_CFG.maxRadiusKm) {
+          return res.status(400).json({ error: `${p.store_name} only delivers within ${DELIVERY_CFG.maxRadiusKm} km. Your pinned location is too far — switch to pickup instead.` });
+        }
+        const { fee, roadKm } = computeDeliveryFee(straightKm);
+        deliveryFees[p.store_id] = {
+          fee,
+          distance_km: Math.round(roadKm * 10) / 10,
+          mode: p.delivery_mode || 'self',
+          store_lat: p.store_lat,
+          store_lng: p.store_lng,
+        };
+      }
+    }
+
     const orderIds = [];
     const fulfillment = isDelivery ? 'delivery' : 'pickup';
     const orderDeliveryAddress = isDelivery ? deliveryAddress.trim() : null;
@@ -1101,14 +1166,14 @@ app.post('/api/orders', verifyToken, async (req, res) => {
           if (!bag || bag.quantity < quantity) throw new Error(`Bag ${id} not available in requested quantity`);
 
           await db.prepare('UPDATE surprise_bags SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
-          const info = await db.prepare('INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, bag.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone);
+          const info = await db.prepare('INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone, delivery_lat, delivery_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, bag.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone, isDelivery ? custLat : null, isDelivery ? custLng : null);
           orderIds.push(info.lastInsertRowid);
         } else if (type === 'food') {
           const food = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
           if (!food || food.quantity < quantity || !food.is_available) throw new Error(`Food item ${id} not available in requested quantity`);
 
           await db.prepare('UPDATE food_items SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
-          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone);
+          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone, delivery_lat, delivery_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone, isDelivery ? custLat : null, isDelivery ? custLng : null);
           orderIds.push(info.lastInsertRowid);
         } else {
           throw new Error(`Invalid item type: ${type}`);
@@ -1117,6 +1182,30 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     });
 
     await processOrder(items, req.user.id);
+
+    // One delivery record per partner-mode store group; dispatched when the seller confirms.
+    const createdDeliveries = [];
+    if (isDelivery) {
+      for (const [storeId, info] of Object.entries(deliveryFees)) {
+        if (info.mode !== 'partner') continue;
+        const storeOrderIds = [];
+        for (const oid of orderIds) {
+          const o = await db.prepare('SELECT id, store_id, price, quantity FROM orders WHERE id = ?').get(oid);
+          if (o && Number(o.store_id) === Number(storeId)) storeOrderIds.push(o);
+        }
+        if (storeOrderIds.length === 0) continue;
+        const cod = storeOrderIds.reduce((sum, o) => sum + Number(o.price) * (o.quantity || 1), 0) + info.fee;
+        const dInfo = await db.prepare(
+          `INSERT INTO deliveries (store_id, customer_id, status, address, lat, lng, distance_km, fee, cod_amount, pin)
+           VALUES (?, ?, 'awaiting_confirmation', ?, ?, ?, ?, ?, ?, ?)`
+        ).run(storeId, req.user.id, orderDeliveryAddress, custLat, custLng, info.distance_km, info.fee, cod, generateDeliveryPin());
+        const deliveryId = dInfo.lastInsertRowid;
+        for (const o of storeOrderIds) {
+          await db.prepare('UPDATE orders SET delivery_id = ? WHERE id = ?').run(deliveryId, o.id);
+        }
+        createdDeliveries.push({ delivery_id: deliveryId, store_id: Number(storeId), fee: info.fee });
+      }
+    }
 
     // Retrieve order details to trigger notifications
     const placedOrders = [];
@@ -1217,6 +1306,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       order_ids: orderIds,
       orders: placedOrders,
       receipt_groups: receiptGroups,
+      deliveries: createdDeliveries,
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -1312,9 +1402,14 @@ app.get('/api/orders/me', verifyToken, async (req, res) => {
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
              o.fulfillment_type, o.delivery_address, o.delivery_phone, o.status,
              s.name as store_name, s.address, s.image as store_image, s.delivery_fee_note,
-             COALESCE(b.description, f.name) as item_name
+             s.delivery_mode,
+             COALESCE(b.description, f.name) as item_name,
+             d.status AS delivery_status, d.fee AS delivery_fee, d.pin AS delivery_pin,
+             d.cod_amount AS delivery_cod, p.name AS partner_name, p.phone AS partner_phone
       FROM orders o
       JOIN stores s ON o.store_id = s.id
+      LEFT JOIN deliveries d ON o.delivery_id = d.id
+      LEFT JOIN users p ON d.partner_id = p.id
       LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
       LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
       WHERE o.customer_id = ?
@@ -1357,14 +1452,19 @@ app.get('/api/seller/orders', verifyToken, async (req, res) => {
     const orders = await db.prepare(`
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
              o.fulfillment_type, o.delivery_address, o.status,
+             o.delivery_lat, o.delivery_lng, o.delivery_id,
              COALESCE(o.delivery_phone, u.phone) as customer_phone,
              u.name as customer_name, u.email as customer_email,
-             s.name as store_name,
+             s.name as store_name, s.delivery_mode,
              COALESCE(b.pickup_time, 'N/A') as pickup_time,
-             COALESCE(b.description, f.name) as item_name
+             COALESCE(b.description, f.name) as item_name,
+             d.status AS delivery_status, d.fee AS delivery_fee, d.cod_amount AS delivery_cod,
+             p.name AS partner_name, p.phone AS partner_phone
       FROM orders o
       JOIN users u ON o.customer_id = u.id
       JOIN stores s ON o.store_id = s.id
+      LEFT JOIN deliveries d ON o.delivery_id = d.id
+      LEFT JOIN users p ON d.partner_id = p.id
       LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
       LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
       ${queryFilter}
@@ -1384,6 +1484,10 @@ const ORDER_ACTION_MESSAGES = {
   rejected: {
     title: 'Delivery Declined',
     body: (order) => `${order.store_name} can't deliver your order. It's been cancelled and any charge will not be collected.`,
+  },
+  confirmed_partner: {
+    title: 'Order Confirmed',
+    body: (order) => `${order.store_name} confirmed your order. A Grabengo delivery partner will pick it up and bring it to you.`,
   },
   converted_pickup: {
     title: 'Switched to Pickup',
@@ -1448,6 +1552,20 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
       }
       newStatus = 'confirmed';
       notifyKey = 'confirmed';
+      // Partner-mode orders: first confirmation dispatches the delivery to on-duty riders.
+      if (order.delivery_id) {
+        const prepMinutes = Number(req.body.prep_minutes) || null;
+        const dispatched = await db.prepare(
+          `UPDATE deliveries SET status = 'pending', dispatched_at = CURRENT_TIMESTAMP, prep_minutes = COALESCE(?, prep_minutes)
+           WHERE id = ? AND status = 'awaiting_confirmation' RETURNING *`
+        ).get(prepMinutes, order.delivery_id);
+        if (dispatched) {
+          const store = await db.prepare('SELECT name, lat, lng FROM stores WHERE id = ?').get(dispatched.store_id);
+          notifyOnDutyPartners({ ...dispatched, store_lat: store?.lat, store_lng: store?.lng }, store?.name || order.store_name)
+            .catch(err => console.error('Partner dispatch notify failed:', err.message));
+        }
+        notifyKey = 'confirmed_partner';
+      }
     } else if (action === 'reject') {
       if (order.fulfillment_type !== 'delivery' || order.status !== 'pending') {
         return res.status(400).json({ error: 'This order cannot be rejected right now.' });
@@ -1478,6 +1596,18 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
 
     await db.prepare('UPDATE orders SET status = ?, fulfillment_type = ? WHERE id = ?').run(newStatus, newFulfillment, order.id);
 
+    // If a partner delivery loses all its orders (rejected/cancelled), cancel it before pickup.
+    if (order.delivery_id && ['rejected', 'cancelled'].includes(newStatus)) {
+      const remaining = await db.prepare(
+        "SELECT COUNT(*) AS cnt FROM orders WHERE delivery_id = ? AND status NOT IN ('rejected', 'cancelled')"
+      ).get(order.delivery_id);
+      if (Number(remaining.cnt) === 0) {
+        await db.prepare(
+          "UPDATE deliveries SET status = 'cancelled' WHERE id = ? AND status IN ('awaiting_confirmation', 'pending', 'assigned')"
+        ).run(order.delivery_id);
+      }
+    }
+
     const updatedOrder = { ...order, status: newStatus, fulfillment_type: newFulfillment };
     if (notifyKey) {
       notifyCustomerOfOrderUpdate(updatedOrder, notifyKey).catch(err => console.error('Failed to notify customer of order update:', err.message));
@@ -1489,7 +1619,234 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
   }
 });
 
+// ── Partner (rider) endpoints ──
+function requirePartner(req, res) {
+  if (req.user.role !== 'Partner') {
+    res.status(403).json({ error: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
+
+const ACTIVE_DELIVERY_STATUSES = ['assigned', 'picked_up'];
+
+// Go on/off duty; duty location anchors which jobs the rider sees.
+app.patch('/api/partner/duty', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  const { on_duty, lat, lng } = req.body;
+  try {
+    await db.prepare('UPDATE users SET is_on_duty = ?, duty_lat = COALESCE(?, duty_lat), duty_lng = COALESCE(?, duty_lng) WHERE id = ?')
+      .run(Boolean(on_duty), lat != null ? Number(lat) : null, lng != null ? Number(lng) : null, req.user.id);
+    res.json({ on_duty: Boolean(on_duty) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dispatch feed: pending jobs from stores near the rider's duty location.
+// Falls back to all pending jobs when the rider has no location on file, and
+// always includes jobs that have waited 10+ minutes so nothing starves.
+app.get('/api/partner/deliveries/available', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  try {
+    const me = await db.prepare('SELECT duty_lat, duty_lng FROM users WHERE id = ?').get(req.user.id);
+    const rows = await db.prepare(`
+      SELECT d.*, s.name AS store_name, s.address AS store_address, s.lat AS store_lat, s.lng AS store_lng,
+             u.name AS customer_name
+      FROM deliveries d
+      JOIN stores s ON d.store_id = s.id
+      JOIN users u ON d.customer_id = u.id
+      WHERE d.status = 'pending'
+      ORDER BY d.dispatched_at ASC
+    `).all();
+    const visible = rows.filter((d) => {
+      if (me?.duty_lat == null || d.store_lat == null) return true;
+      const dist = haversineKm(me.duty_lat, me.duty_lng, d.store_lat, d.store_lng);
+      if (dist <= DELIVERY_CFG.dispatchRadiusKm) return true;
+      const waitedMin = (Date.now() - new Date(d.dispatched_at).getTime()) / 60000;
+      return waitedMin >= 10;
+    }).map((d) => ({ ...d, pin: undefined }));
+    res.json(visible);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// First accept wins — atomic claim; one active delivery per rider.
+app.post('/api/partner/deliveries/:id/accept', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  try {
+    const active = await db.prepare(
+      `SELECT COUNT(*) AS cnt FROM deliveries WHERE partner_id = ? AND status = ANY(?)`
+    ).get(req.user.id, ACTIVE_DELIVERY_STATUSES);
+    if (Number(active.cnt) > 0) {
+      return res.status(400).json({ error: 'Finish your current delivery before accepting another one.' });
+    }
+    const claimed = await db.prepare(
+      `UPDATE deliveries SET partner_id = ?, status = 'assigned', assigned_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'pending' AND partner_id IS NULL RETURNING *`
+    ).get(req.user.id, req.params.id);
+    if (!claimed) {
+      return res.status(409).json({ error: 'This delivery was already taken by another partner.' });
+    }
+    await notifyDeliveryParties(claimed.id, 'assigned');
+    res.json({ message: 'Delivery accepted', delivery: claimed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rider status transitions: picked_up -> delivered (PIN required) or failed (reason).
+app.patch('/api/partner/deliveries/:id/status', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  const { action, pin, reason } = req.body;
+  try {
+    const d = await db.prepare('SELECT * FROM deliveries WHERE id = ? AND partner_id = ?').get(req.params.id, req.user.id);
+    if (!d) return res.status(404).json({ error: 'Delivery not found' });
+
+    if (action === 'picked_up') {
+      if (d.status !== 'assigned') return res.status(400).json({ error: 'This delivery is not awaiting pickup.' });
+      await db.prepare("UPDATE deliveries SET status = 'picked_up', picked_up_at = CURRENT_TIMESTAMP WHERE id = ?").run(d.id);
+      await notifyDeliveryParties(d.id, 'picked_up');
+      return res.json({ message: 'Marked as picked up' });
+    }
+    if (action === 'delivered') {
+      if (d.status !== 'picked_up') return res.status(400).json({ error: 'Mark the order as picked up first.' });
+      if (!pin || String(pin).trim() !== String(d.pin)) {
+        return res.status(400).json({ error: 'Wrong PIN. Ask the customer for the 4-digit code in their booking.' });
+      }
+      await db.prepare("UPDATE deliveries SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?").run(d.id);
+      await db.prepare("UPDATE orders SET status = 'paid' WHERE delivery_id = ? AND status NOT IN ('rejected', 'cancelled')").run(d.id);
+      await notifyDeliveryParties(d.id, 'delivered');
+      return res.json({ message: 'Delivery completed' });
+    }
+    if (action === 'failed') {
+      if (!ACTIVE_DELIVERY_STATUSES.includes(d.status)) return res.status(400).json({ error: 'This delivery is not active.' });
+      await db.prepare("UPDATE deliveries SET status = 'failed', fail_reason = ? WHERE id = ?").run(reason || 'Unspecified', d.id);
+      await notifyDeliveryParties(d.id, 'failed');
+      return res.json({ message: 'Delivery marked as failed' });
+    }
+    res.status(400).json({ error: 'Invalid action' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rider's own deliveries: active job + history + earnings.
+app.get('/api/partner/deliveries/mine', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  try {
+    const rows = await db.prepare(`
+      SELECT d.*, s.name AS store_name, s.address AS store_address, s.lat AS store_lat, s.lng AS store_lng,
+             u.name AS customer_name, COALESCE(o.delivery_phone, u.phone) AS customer_phone
+      FROM deliveries d
+      JOIN stores s ON d.store_id = s.id
+      JOIN users u ON d.customer_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT delivery_phone FROM orders WHERE delivery_id = d.id LIMIT 1
+      ) o ON TRUE
+      WHERE d.partner_id = ?
+      ORDER BY d.created_at DESC
+    `).all(req.user.id);
+    const items = [];
+    for (const d of rows) {
+      const orderItems = await db.prepare(`
+        SELECT o.quantity, COALESCE(b.description, f.name) AS item_name
+        FROM orders o
+        LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
+        LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
+        WHERE o.delivery_id = ? AND o.status NOT IN ('rejected', 'cancelled')
+      `).all(d.id);
+      items.push({ ...d, pin: undefined, items: orderItems });
+    }
+    const earnings = rows.filter(d => d.status === 'delivered').reduce((sum, d) => sum + Number(d.fee || 0), 0);
+    res.json({ deliveries: items, earnings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Notify customer + store sellers when a delivery changes state.
+async function notifyDeliveryParties(deliveryId, event) {
+  const d = await db.prepare(`
+    SELECT d.*, s.name AS store_name, s.tenant_id, p.name AS partner_name, p.phone AS partner_phone
+    FROM deliveries d
+    JOIN stores s ON d.store_id = s.id
+    LEFT JOIN users p ON d.partner_id = p.id
+    WHERE d.id = ?
+  `).get(deliveryId);
+  if (!d) return;
+  const messages = {
+    assigned: { title: 'Rider assigned', body: `${d.partner_name || 'A Grabengo partner'} will deliver your order from ${d.store_name}.` },
+    picked_up: { title: 'Order picked up', body: `Your order from ${d.store_name} is on its way. Have your PIN and Rs${Number(d.cod_amount).toFixed(0)} cash ready.` },
+    delivered: { title: 'Order delivered', body: `Your order from ${d.store_name} was delivered. Enjoy!` },
+    failed: { title: 'Delivery problem', body: `We couldn't complete your delivery from ${d.store_name}. The store will contact you.` },
+  };
+  const msg = messages[event];
+  if (msg) {
+    sendToUser(d.customer_id, { type: 'delivery_update', delivery_id: d.id, event, title: msg.title, message: msg.body });
+    const customer = await db.prepare('SELECT push_token FROM users WHERE id = ?').get(d.customer_id);
+    if (customer?.push_token) {
+      sendPushNotification(customer.push_token, msg.title, msg.body, { type: 'delivery_update', deliveryId: d.id }).catch(() => {});
+    }
+  }
+  if (d.tenant_id) sendToTenantSellers(d.tenant_id, { type: 'delivery_update', delivery_id: d.id, event });
+}
+
 // New Management Endpoints (Tenants, Staff, App Reviews)
+// Partners are provisioned by the platform (no self-signup).
+app.post('/api/superadmin/partners', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  const { name, email, password, phone } = req.body;
+  if (!name || !email || !password || !phone) {
+    return res.status(400).json({ error: 'name, email, password and phone are required' });
+  }
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const info = await db.prepare(
+      "INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, 'Partner', ?)"
+    ).run(name, email, hashedPassword, phone);
+    res.status(201).json({ id: info.lastInsertRowid, name, email, phone, role: 'Partner' });
+  } catch (err) {
+    const mapped = mapRegistrationError(err);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/superadmin/partners', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const partners = await db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.is_on_duty,
+             (SELECT COUNT(*) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS delivered_count,
+             (SELECT COALESCE(SUM(d.fee), 0) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS total_earnings,
+             (SELECT COALESCE(SUM(d.cod_amount), 0) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS total_cod_collected
+      FROM users u WHERE u.role = 'Partner' ORDER BY u.created_at DESC
+    `).all();
+    res.json(partners);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/superadmin/deliveries', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const rows = await db.prepare(`
+      SELECT d.*, s.name AS store_name, c.name AS customer_name, p.name AS partner_name
+      FROM deliveries d
+      JOIN stores s ON d.store_id = s.id
+      JOIN users c ON d.customer_id = c.id
+      LEFT JOIN users p ON d.partner_id = p.id
+      ORDER BY d.created_at DESC LIMIT 200
+    `).all();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   const { name, email, password, brand_name, logo } = req.body;
@@ -2527,6 +2884,8 @@ async function previewCheckoutItems(items) {
         store_name: store.name,
         store_id: store.id,
         delivery_enabled: !!store.delivery_enabled,
+        delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+        store_lat: store.lat, store_lng: store.lng,
         price: bag.price,
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
@@ -2543,6 +2902,8 @@ async function previewCheckoutItems(items) {
         store_name: store.name,
         store_id: store.id,
         delivery_enabled: !!store.delivery_enabled,
+        delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+        store_lat: store.lat, store_lng: store.lng,
         price: food.price,
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,

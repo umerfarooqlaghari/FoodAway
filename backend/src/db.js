@@ -24,6 +24,12 @@ const pgPool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Idle clients can drop their TLS connection (remote DB restarts, network blips).
+// Without this handler the 'error' event is unhandled and crashes the process.
+pgPool.on('error', (err) => {
+  console.error('Postgres pool idle-client error (recovered):', err.message);
+});
+
 class AsyncPostgresDB {
   constructor(pool) {
     this.pool = pool;
@@ -297,6 +303,44 @@ const initDB = async () => {
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Card'"); } catch (e) {}
   try { await db.exec("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT '[]'"); } catch (e) {}
   try { await db.exec("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE"); } catch (e) {}
+
+  // ── Partner delivery system ──
+  // delivery_mode: 'self' (store delivers, current flow) | 'partner' (Grabengo partner fleet).
+  // Backfilled from delivery_enabled so existing delivery stores keep working as self-delivery.
+  try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_mode TEXT"); } catch (e) {}
+  try { await db.exec("UPDATE stores SET delivery_mode = 'self' WHERE delivery_mode IS NULL AND delivery_enabled = TRUE"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lat REAL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lng REAL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_id INTEGER"); } catch (e) {}
+  // Rider duty state lives on the user row (role = 'Partner')
+  try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_on_duty BOOLEAN DEFAULT FALSE"); } catch (e) {}
+  try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS duty_lat REAL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS duty_lng REAL"); } catch (e) {}
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS deliveries (
+        id SERIAL PRIMARY KEY,
+        store_id INTEGER,
+        customer_id INTEGER,
+        partner_id INTEGER,
+        status TEXT DEFAULT 'awaiting_confirmation',
+        fail_reason TEXT,
+        address TEXT,
+        lat REAL,
+        lng REAL,
+        distance_km REAL,
+        fee REAL,
+        cod_amount REAL,
+        pin TEXT,
+        prep_minutes INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        dispatched_at TIMESTAMP,
+        assigned_at TIMESTAMP,
+        picked_up_at TIMESTAMP,
+        delivered_at TIMESTAMP
+      );
+    `);
+  } catch (e) {}
 
   await migrateToTenantsTable(db);
 
