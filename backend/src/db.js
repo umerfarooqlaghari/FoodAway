@@ -342,6 +342,48 @@ const initDB = async () => {
     `);
   } catch (e) {}
 
+  // ── Grabengo Deals: persistent vendor menu + time-boxed discounts ──
+  // menu_items = always-orderable catalog (no stock cap, no expiry).
+  // food_items continues to be the "deal" engine (price/original_price/quantity/expiry) —
+  // a deal is a food_items row denormalized from a menu_item at creation time.
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS menu_items (
+        id SERIAL PRIMARY KEY,
+        store_id INTEGER,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT DEFAULT 'Other',
+        price REAL NOT NULL,
+        image TEXT,
+        is_hidden BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (store_id) REFERENCES stores (id)
+      );
+    `);
+  } catch (e) {}
+  try { await db.exec("ALTER TABLE food_items ADD COLUMN IF NOT EXISTS menu_item_id INTEGER REFERENCES menu_items(id) ON DELETE SET NULL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE food_items ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ"); } catch (e) {}
+
+  // One-time backfill: give every pre-existing food_items row a menu_items twin so it's
+  // browsable in the always-on menu, not just while its (possibly expired) sale lasts.
+  try {
+    const orphans = await db.prepare('SELECT * FROM food_items WHERE menu_item_id IS NULL').all();
+    for (const item of orphans) {
+      const normalPrice = item.original_price || item.price;
+      let firstImage = null;
+      try {
+        const parsed = item.images ? JSON.parse(item.images) : null;
+        if (Array.isArray(parsed) && parsed.length) firstImage = parsed[0];
+      } catch (e) {}
+      const menuInfo = await db.prepare(
+        'INSERT INTO menu_items (store_id, name, description, category, price, image, is_hidden) VALUES (?, ?, ?, ?, ?, ?, FALSE)'
+      ).run(item.store_id, item.name, item.description, item.category, normalPrice, firstImage);
+      await db.prepare('UPDATE food_items SET menu_item_id = ? WHERE id = ?').run(menuInfo.lastInsertRowid, item.id);
+    }
+    if (orphans.length) console.log(`Backfilled ${orphans.length} legacy food_items into menu_items`);
+  } catch (e) { console.error('menu_items backfill failed:', e.message); }
+
   await migrateToTenantsTable(db);
 
   // Pre-populate random locations for stores missing coordinates

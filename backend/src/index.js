@@ -28,15 +28,21 @@ const {
   ensureTenantSubdomain,
   listTenantsForSuperAdmin,
 } = require('./tenants');
-const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess, assertOrderAccess } = require('./tenant');
+const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess, assertMenuItemAccess, assertOrderAccess } = require('./tenant');
 const { registerSellerAdmin, mapRegistrationError, deleteOrphanTenants } = require('./sellerRegistration');
 const { formatStoreReview, formatAppReview, stripStoreTenantId } = require('./serializers');
 const { normalizePhone, phoneDigits, phoneLookupVariants, phonesMatch } = require('./phone');
 const {
   PRODUCT_CATEGORY_GROUPS,
   PRODUCT_CATEGORIES,
-  normalizeProductCategory,
 } = require('./productCategories');
+
+// Vendor menu categories are suggestions, not an enforced enum — a vendor picking
+// "add a custom one" must have that name stick, not get silently coerced to "Other".
+function resolveVendorCategory(input) {
+  const trimmed = String(input || '').trim();
+  return trimmed || 'Other';
+}
 
 async function findUserForOrderLookup({ email, phone }) {
   const trimmedEmail = email?.trim().toLowerCase();
@@ -1011,40 +1017,58 @@ app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async
 });
 
 app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
-  const { store_id, name, description, price, original_price, images, quantity, category, sale_ends_at } = req.body;
-  if (!store_id || !name || !price) return res.status(400).json({ error: 'store_id, name, and price are required.' });
+  const { store_id, menu_item_id, name, description, price, original_price, images, quantity, category, sale_ends_at, starts_at } = req.body;
+  if (starts_at && Number.isNaN(Date.parse(starts_at))) {
+    return res.status(400).json({ error: 'starts_at must be a valid date-time.' });
+  }
   if (sale_ends_at && Number.isNaN(Date.parse(sale_ends_at))) {
     return res.status(400).json({ error: 'sale_ends_at must be a valid date-time.' });
   }
   try {
-    await assertStoreAccess(db, store_id, req.user);
+    // Deals are created against a dropdown-selected menu item — its name/description/
+    // category/image are authoritative so the deal stays consistent with the catalog.
+    let resolvedStoreId = store_id;
+    let resolvedName = name, resolvedDescription = description, resolvedCategory = category, resolvedImages = images;
+    if (menu_item_id) {
+      const menuItem = await assertMenuItemAccess(db, menu_item_id, req.user);
+      resolvedStoreId = menuItem.store_id;
+      resolvedName = menuItem.name;
+      resolvedDescription = menuItem.description;
+      resolvedCategory = menuItem.category;
+      resolvedImages = menuItem.image ? [menuItem.image] : null;
+    }
+    if (!resolvedStoreId || !resolvedName || !price) return res.status(400).json({ error: 'store_id (or menu_item_id), name, and price are required.' });
+    await assertStoreAccess(db, resolvedStoreId, req.user);
     let s3Images = null;
-    if (images) {
-      const parsedImages = typeof images === 'string' ? JSON.parse(images) : images;
+    if (resolvedImages) {
+      const parsedImages = typeof resolvedImages === 'string' ? JSON.parse(resolvedImages) : resolvedImages;
       if (Array.isArray(parsedImages)) {
         const uploaded = await Promise.all(parsedImages.map(img => uploadImageToS3(img)));
         s3Images = JSON.stringify(uploaded);
       }
     }
-    const normalizedCategory = normalizeProductCategory(category);
+    const normalizedCategory = resolveVendorCategory(resolvedCategory);
     const info = await db.prepare(
-      'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category, sale_ends_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(store_id, name, description, price, original_price || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null);
-    res.json({ id: info.lastInsertRowid, store_id, name, price, quantity, category: normalizedCategory });
+      'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category, sale_ends_at, starts_at, menu_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(resolvedStoreId, resolvedName, resolvedDescription, price, original_price || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null, starts_at || null, menu_item_id || null);
+    res.json({ id: info.lastInsertRowid, store_id: resolvedStoreId, name: resolvedName, price, quantity, category: normalizedCategory });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
   const { id } = req.params;
-  const { name, description, price, original_price, images, quantity, category, is_available, sale_ends_at } = req.body;
+  const { name, description, price, original_price, images, quantity, category, is_available, sale_ends_at, starts_at } = req.body;
   if (sale_ends_at && Number.isNaN(Date.parse(sale_ends_at))) {
     return res.status(400).json({ error: 'sale_ends_at must be a valid date-time.' });
   }
+  if (starts_at && Number.isNaN(Date.parse(starts_at))) {
+    return res.status(400).json({ error: 'starts_at must be a valid date-time.' });
+  }
   try {
     const item = await assertFoodItemAccess(db, id, req.user);
-    
+
     let s3Images = undefined;
     if (images !== undefined) {
       if (images) {
@@ -1060,7 +1084,7 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
 
     const isAvailableBool = is_available !== undefined && is_available !== null ? Boolean(is_available) : null;
     const normalizedCategory =
-      category !== undefined && category !== null ? normalizeProductCategory(category) : null;
+      category !== undefined && category !== null ? resolveVendorCategory(category) : null;
     await db.prepare(
       `UPDATE food_items SET
         name = COALESCE(?, name),
@@ -1071,11 +1095,26 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
         quantity = COALESCE(?, quantity),
         category = COALESCE(?, category),
         is_available = COALESCE(?, is_available),
-        sale_ends_at = CASE WHEN ?::boolean THEN ?::timestamptz ELSE sale_ends_at END
+        sale_ends_at = CASE WHEN ?::boolean THEN ?::timestamptz ELSE sale_ends_at END,
+        starts_at = CASE WHEN ?::boolean THEN ?::timestamptz ELSE starts_at END
        WHERE id = ?`
     ).run(name, description, price, original_price, s3Images, quantity, normalizedCategory, isAvailableBool,
-      sale_ends_at !== undefined, sale_ends_at !== undefined ? (sale_ends_at || null) : null, id);
+      sale_ends_at !== undefined, sale_ends_at !== undefined ? (sale_ends_at || null) : null,
+      starts_at !== undefined, starts_at !== undefined ? (starts_at || null) : null, id);
     res.json({ message: 'Food item updated successfully' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// End a deal early: fold sale_ends_at to now so it drops out of the customer-facing
+// Grabengo Deals feed immediately, without losing the row's history/quantity data.
+app.patch('/api/food-items/:id/end-sale', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    await assertFoodItemAccess(db, id, req.user);
+    await db.prepare("UPDATE food_items SET sale_ends_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    res.json({ message: 'Sale ended' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -1090,6 +1129,143 @@ app.delete('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'
     res.json({ message: 'Food item deleted successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── Menu Items (persistent vendor catalog, unlimited stock) ──────────────
+
+// Seller: list all items for a store, including hidden ones (for the Menu management screen)
+app.get('/api/seller/menu-items', verifyToken, requireRole('menu_items', 'read'), async (req, res) => {
+  const { store_id } = req.query;
+  try {
+    let rows;
+    if (store_id) {
+      await assertStoreAccess(db, store_id, req.user);
+      rows = await db.prepare('SELECT * FROM menu_items WHERE store_id = ? ORDER BY category, name').all(store_id);
+    } else if (req.user.role === 'SuperAdmin') {
+      rows = await db.prepare('SELECT * FROM menu_items ORDER BY category, name').all();
+    } else {
+      const tenantId = requireTenantId(req.user);
+      rows = await db.prepare(
+        `SELECT m.* FROM menu_items m JOIN stores s ON m.store_id = s.id WHERE s.tenant_id = ? ORDER BY m.category, m.name`
+      ).all(tenantId);
+    }
+    const signed = await Promise.all(rows.map(async r => ({ ...r, image: await getPresignedUrl(r.image) })));
+    res.json(signed);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.post('/api/seller/menu-items', verifyToken, requireRole('menu_items', 'write'), async (req, res) => {
+  const { store_id, name, description, category, price, image } = req.body;
+  if (!store_id || !name || !price) return res.status(400).json({ error: 'store_id, name, and price are required.' });
+  try {
+    await assertStoreAccess(db, store_id, req.user);
+    const s3Image = image ? await uploadImageToS3(image) : null;
+    const normalizedCategory = resolveVendorCategory(category);
+    const info = await db.prepare(
+      'INSERT INTO menu_items (store_id, name, description, category, price, image) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(store_id, name, description || null, normalizedCategory, price, s3Image);
+    res.json({ id: info.lastInsertRowid, store_id, name, price, category: normalizedCategory });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.put('/api/seller/menu-items/:id', verifyToken, requireRole('menu_items', 'write'), async (req, res) => {
+  const { id } = req.params;
+  const { name, description, category, price, image } = req.body;
+  try {
+    const item = await assertMenuItemAccess(db, id, req.user);
+    let s3Image = item.image;
+    if (image !== undefined) {
+      s3Image = image ? await uploadImageToS3(image) : null;
+    }
+    await db.prepare(
+      `UPDATE menu_items SET
+        name = COALESCE(?, name),
+        description = ?,
+        category = COALESCE(?, category),
+        price = COALESCE(?, price),
+        image = ?
+       WHERE id = ?`
+    ).run(
+      name || null,
+      description !== undefined ? description : item.description,
+      category ? resolveVendorCategory(category) : null,
+      price || null,
+      s3Image,
+      id
+    );
+    res.json({ message: 'Menu item updated' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/seller/menu-items/:id/hide', verifyToken, requireRole('menu_items', 'write'), async (req, res) => {
+  const { id } = req.params;
+  const { hidden } = req.body;
+  try {
+    await assertMenuItemAccess(db, id, req.user);
+    await db.prepare('UPDATE menu_items SET is_hidden = ? WHERE id = ?').run(!!hidden, id);
+    res.json({ message: hidden ? 'Item hidden from menu' : 'Item now visible on menu' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/seller/menu-items/:id', verifyToken, requireRole('menu_items', 'delete'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    await assertMenuItemAccess(db, id, req.user);
+    await db.prepare('DELETE FROM menu_items WHERE id = ?').run(id);
+    res.json({ message: 'Menu item deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// Customer-facing: full menu + active Grabengo Deals for a store.
+// Hidden menu items are excluded from `menuItems`, but a hidden item that's on an
+// active deal still surfaces via `deals` — deals are self-contained (denormalized)
+// food_items rows, independent of the underlying menu item's hidden flag.
+app.get('/api/stores/:storeId/menu', verifyToken, async (req, res) => {
+  const { storeId } = req.params;
+  try {
+    const store = await db.prepare('SELECT * FROM stores WHERE id = ? AND is_active = TRUE').get(storeId);
+    if (!store) return res.status(404).json({ error: 'Store not found' });
+    const menuItems = await db.prepare(
+      `SELECT id, name, description, category, price, image, created_at
+       FROM menu_items WHERE store_id = ? AND is_hidden = FALSE ORDER BY category, name`
+    ).all(storeId);
+    const deals = await db.prepare(
+      `SELECT id, menu_item_id, name, description, category, price, original_price, images, quantity, starts_at, sale_ends_at
+       FROM food_items
+       WHERE store_id = ? AND is_available = TRUE AND quantity > 0 AND original_price IS NOT NULL
+         AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+         AND (sale_ends_at IS NULL OR sale_ends_at > CURRENT_TIMESTAMP)
+       ORDER BY sale_ends_at ASC NULLS LAST`
+    ).all(storeId);
+    // Cart/checkout reads store context straight off each item (tenant_id is stripped
+    // from the store object itself for non-SuperAdmin roles), so stamp it on here —
+    // same convention /api/food-items already uses.
+    const storeContext = {
+      store_name: store.name,
+      store_id: store.id,
+      tenant_id: store.tenant_id,
+      delivery_enabled: !!store.delivery_enabled,
+      delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+      delivery_fee_note: store.delivery_fee_note,
+      store_lat: store.lat,
+      store_lng: store.lng,
+    };
+    const signedMenu = await Promise.all(menuItems.map(async m => ({ ...m, type: 'menu', image: await getPresignedUrl(m.image), ...storeContext })));
+    const signedDeals = await Promise.all(deals.map(async d => ({ ...d, type: 'food', images: await presignImages(d.images), ...storeContext })));
+    res.json({ menuItems: signedMenu, deals: signedDeals });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1174,6 +1350,13 @@ app.post('/api/orders', verifyToken, async (req, res) => {
 
           await db.prepare('UPDATE food_items SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
           const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone, delivery_lat, delivery_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone, isDelivery ? custLat : null, isDelivery ? custLng : null);
+          orderIds.push(info.lastInsertRowid);
+        } else if (type === 'menu') {
+          const menuItem = await db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
+          if (!menuItem || menuItem.is_hidden) throw new Error(`Menu item ${id} is no longer available`);
+
+          const snapshotId = await snapshotMenuItemForOrder(menuItem);
+          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone, delivery_lat, delivery_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(snapshotId, 'food', quantity, menuItem.store_id, userId, menuItem.price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone, isDelivery ? custLat : null, isDelivery ? custLng : null);
           orderIds.push(info.lastInsertRowid);
         } else {
           throw new Error(`Invalid item type: ${type}`);
@@ -2911,10 +3094,39 @@ async function previewCheckoutItems(items) {
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
       });
+    } else if (type === 'menu') {
+      const menuItem = await db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
+      if (!menuItem || menuItem.is_hidden) continue;
+      const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(menuItem.store_id);
+      if (!store?.is_active) continue;
+      const tenant = store.tenant_id ? await getTenantById(db, store.tenant_id) : null;
+      preview.push({
+        id, type, quantity,
+        item_name: menuItem.name,
+        store_name: store.name,
+        store_id: store.id,
+        delivery_enabled: !!store.delivery_enabled,
+        delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+        store_lat: store.lat, store_lng: store.lng,
+        price: menuItem.price,
+        tenant_id: store.tenant_id,
+        tenant_name: tenant?.name || store.name,
+      });
     }
   }
   assertSingleTenantCart(preview);
   return preview;
+}
+
+// Full-price menu items have no stock cap — ordering one snapshots it into a
+// single-use food_items row (quantity 0, never independently browsable) so the
+// order flows through the existing food-item order/receipt/delivery pipeline unchanged.
+async function snapshotMenuItemForOrder(menuItem) {
+  const images = menuItem.image ? JSON.stringify([menuItem.image]) : null;
+  const info = await db.prepare(
+    'INSERT INTO food_items (store_id, name, description, price, images, quantity, category, menu_item_id, is_available) VALUES (?, ?, ?, ?, ?, 0, ?, ?, TRUE)'
+  ).run(menuItem.store_id, menuItem.name, menuItem.description, menuItem.price, images, menuItem.category, menuItem.id);
+  return info.lastInsertRowid;
 }
 
 async function resolveCheckoutCustomer({ name, email, phone }) {
@@ -2995,6 +3207,32 @@ async function placeCheckoutOrders(user, items) {
         quantity,
         price: food.price,
         pickup_time: food.pickup_time || 'During opening hours',
+        tenant_id: store.tenant_id,
+        tenant_name: tenant?.name || store.name,
+      });
+    } else if (type === 'menu') {
+      const menuItem = await db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
+      if (!menuItem || menuItem.is_hidden) {
+        throw new Error(`Menu item #${id} is no longer available`);
+      }
+      const store = await db.prepare('SELECT * FROM stores WHERE id = ? AND is_active = TRUE').get(menuItem.store_id);
+      if (!store) {
+        throw new Error(`Store for menu item #${id} is unavailable`);
+      }
+      const tenant = store.tenant_id ? await getTenantById(db, store.tenant_id) : null;
+      const snapshotId = await snapshotMenuItemForOrder(menuItem);
+      const orderInfo = await db.prepare(
+        'INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(snapshotId, 'food', quantity, menuItem.store_id, user.id, menuItem.price, 'Cash at Pickup');
+      placedOrders.push({
+        id: orderInfo.lastInsertRowid,
+        type: 'food',
+        store_name: store.name,
+        store_address: store.address || '',
+        item_name: menuItem.name,
+        quantity,
+        price: menuItem.price,
+        pickup_time: 'During opening hours',
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
       });
