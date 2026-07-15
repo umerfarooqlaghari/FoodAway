@@ -2,7 +2,7 @@
   "expo": {
     "name": "Grabengo",
     "slug": "mobile-app",
-    "version": "1.1.2",
+    "version": "1.1.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "grabengo",
@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.alphadevs.mobileapp",
-      "buildNumber": "18",
+      "buildNumber": "19",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -26,7 +26,7 @@
     },
     "android": {
       "package": "com.grabengo.app",
-      "versionCode": 18,
+      "versionCode": 19,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBLxu-iMnH8KQnlVvjPKpXEu-aakSohOLo"

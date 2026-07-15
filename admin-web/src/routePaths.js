@@ -14,6 +14,7 @@ export const ROUTES = {
   doNotSell: '/do-not-sell',
   foodWaste: '/food-waste',
   status: '/status',
+  card: '/card',
   dashboard: '/dashboard',
   dashboardStores: '/dashboard/stores',
   dashboardOrders: '/dashboard/orders',

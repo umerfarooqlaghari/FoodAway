@@ -16,6 +16,7 @@ import DsaDisclosure from './pages/DsaDisclosure';
 import DoNotSell from './pages/DoNotSell';
 import FoodWasteSources from './pages/FoodWasteSources';
 import Status from './pages/Status';
+import CardPage from './pages/CardPage';
 import CustomerPage from './pages/CustomerPage';
 import TenantExplorePage from './pages/TenantExplorePage';
 import {
@@ -3246,6 +3247,7 @@ function App() {
       <Route path={ROUTES.doNotSell} element={<DoNotSell onBack={goHome} />} />
       <Route path={ROUTES.foodWaste} element={<FoodWasteSources onBack={goHome} />} />
       <Route path={ROUTES.status} element={<Status onBack={goHome} />} />
+      <Route path={ROUTES.card} element={<CardPage />} />
     </>
   );
 

@@ -35,6 +35,7 @@ describe('App routing', () => {
       [ROUTES.doNotSell, /Do Not Sell or Share My Data/i],
       [ROUTES.foodWaste, /Food Waste Sources/i],
       [ROUTES.status, /System Status/i],
+      [ROUTES.card, /Grabengo business card/i],
     ])('renders %s', async (path, matcher) => {
       renderApp(path);
       if (matcher.source.startsWith('^')) {

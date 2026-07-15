@@ -42,7 +42,10 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6781679450"
+        "ascAppId": "6781679450",
+        "ascApiKeyPath": "/Users/macbookpro/Desktop/projects/GoodtoGo/AuthKey.p8",
+        "ascApiKeyIssuerId": "138bd8ae-ea40-4c7b-a543-2964deb4a55b",
+        "ascApiKeyId": "VTVNRS996B"
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-service-account.json",
