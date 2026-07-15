@@ -1029,6 +1029,7 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
     // category/image are authoritative so the deal stays consistent with the catalog.
     let resolvedStoreId = store_id;
     let resolvedName = name, resolvedDescription = description, resolvedCategory = category, resolvedImages = images;
+    let resolvedOriginalPrice = original_price;
     if (menu_item_id) {
       const menuItem = await assertMenuItemAccess(db, menu_item_id, req.user);
       resolvedStoreId = menuItem.store_id;
@@ -1036,6 +1037,10 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
       resolvedDescription = menuItem.description;
       resolvedCategory = menuItem.category;
       resolvedImages = menuItem.image ? [menuItem.image] : null;
+      // The menu item's own listed price is the "before discount" price unless the
+      // seller explicitly overrides it — a deal without this is invisible to customers,
+      // since the deals feed only shows rows that actually have a discount to display.
+      if (resolvedOriginalPrice == null) resolvedOriginalPrice = menuItem.price;
     }
     if (!resolvedStoreId || !resolvedName || !price) return res.status(400).json({ error: 'store_id (or menu_item_id), name, and price are required.' });
     await assertStoreAccess(db, resolvedStoreId, req.user);
@@ -1050,7 +1055,7 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
     const normalizedCategory = resolveVendorCategory(resolvedCategory);
     const info = await db.prepare(
       'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category, sale_ends_at, starts_at, menu_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(resolvedStoreId, resolvedName, resolvedDescription, price, original_price || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null, starts_at || null, menu_item_id || null);
+    ).run(resolvedStoreId, resolvedName, resolvedDescription, price, resolvedOriginalPrice || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null, starts_at || null, menu_item_id || null);
     res.json({ id: info.lastInsertRowid, store_id: resolvedStoreId, name: resolvedName, price, quantity, category: normalizedCategory });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

@@ -2055,7 +2055,7 @@ function ExploreTenantsScreen({ navigation }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginRight: 10 }}>
-                <Image source={require('./assets/images/grabengo-logo-cream.png')} style={{ width: 96, height: 28 }} resizeMode="contain" />
+                <Image source={require('./assets/images/grabengo-logo.png')} style={{ width: 96, height: 28 }} resizeMode="contain" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12, color: '#6B7280' }} numberOfLines={1}>Hi, {user?.name?.split(' ')[0] || 'there'}</Text>
@@ -2327,7 +2327,7 @@ function SplashScreen({ navigation }) {
     <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
       <StatusBar style="dark" />
       <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, paddingHorizontal: 28, paddingVertical: 22 }}>
-        <Image source={require('./assets/images/grabengo-logo-cream.png')} style={{ width: 220, height: 64 }} resizeMode="contain" />
+        <Image source={require('./assets/images/grabengo-logo.png')} style={{ width: 220, height: 64 }} resizeMode="contain" />
       </View>
       <ActivityIndicator color="#E64A33" size="large" style={{ marginTop: 32 }} />
     </View>
