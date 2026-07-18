@@ -105,7 +105,7 @@ export default function Status({ onBack }) {
       <Section title="Subscribe to Updates">
         <p>
           For real-time incident updates and maintenance notifications, contact{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>{' '}
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>{' '}
           to be added to our status mailing list.
         </p>
       </Section>

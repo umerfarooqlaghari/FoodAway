@@ -127,7 +127,7 @@ export default function TermsAndConditions({ onBack }) {
       <Section title="11. Contact">
         <p>
           For questions about these Terms, contact us at{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
         </p>
       </Section>
 

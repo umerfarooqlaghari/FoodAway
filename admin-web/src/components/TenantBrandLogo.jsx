@@ -22,7 +22,7 @@ function FallbackBadge({ name, variant, uid, initials }) {
     >
       <defs>
         <linearGradient id={`accent-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#FF5A00" />
+          <stop offset="0%" stopColor="#FF5C00" />
           <stop offset="100%" stopColor="#1a1a1a" />
         </linearGradient>
       </defs>

@@ -44,24 +44,24 @@ function downloadReceipt(orders, contactInfo, tenantName) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f5f5f5; padding: 40px 20px; color: #1a1a1a; }
     .page { max-width: 620px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #FF5A00, #f7931e); padding: 32px 36px; text-align: center; }
+    .header { background: linear-gradient(135deg, #FF5C00, #FF5C00); padding: 32px 36px; text-align: center; }
     .header-icon { font-size: 40px; margin-bottom: 10px; }
     .header h1 { color: #fff; font-size: 26px; font-weight: 800; margin: 0 0 4px; }
     .header p { color: rgba(255,255,255,0.85); font-size: 14px; }
     .body { padding: 28px 36px; }
     .ref-box { background: #fff8f5; border: 1px solid #ffe0cc; border-radius: 10px; padding: 14px 18px; margin-bottom: 22px; display: flex; justify-content: space-between; align-items: center; }
     .ref-box .label { font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
-    .ref-box .value { font-size: 15px; font-weight: 700; color: #FF5A00; }
+    .ref-box .value { font-size: 15px; font-weight: 700; color: #FF5C00; }
     .contact { margin-bottom: 22px; }
     .contact h3 { font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
     .contact p { font-size: 14px; color: #333; line-height: 1.6; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
     thead tr { background: #fff8f5; }
-    th { padding: 10px 10px; text-align: left; font-size: 11px; color: #FF5A00; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 2px solid #ffe0cc; }
+    th { padding: 10px 10px; text-align: left; font-size: 11px; color: #FF5C00; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 2px solid #ffe0cc; }
     td { padding: 10px 10px; border-bottom: 1px solid #f5f5f5; color: #444; vertical-align: top; }
     .total-row { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; background: #fff8f5; border-radius: 10px; margin-bottom: 20px; }
     .total-row .label { font-size: 15px; color: #555; }
-    .total-row .amount { font-size: 22px; font-weight: 800; color: #FF5A00; }
+    .total-row .amount { font-size: 22px; font-weight: 800; color: #FF5C00; }
     .notice { background: #f5f5f5; border-radius: 10px; padding: 14px 18px; font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 20px; }
     .notice strong { color: #333; }
     .footer { background: #1a1a1a; padding: 18px 36px; text-align: center; }
@@ -71,8 +71,8 @@ function downloadReceipt(orders, contactInfo, tenantName) {
       .page { box-shadow: none; border-radius: 0; }
       .print-btn { display: none !important; }
     }
-    .print-btn { display: block; margin: 24px auto 0; padding: 12px 32px; background: #FF5A00; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; }
-    .print-btn:hover { background: #e04f00; }
+    .print-btn { display: block; margin: 24px auto 0; padding: 12px 32px; background: #FF5C00; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .print-btn:hover { background: #E55200; }
   </style>
 </head>
 <body>
@@ -143,7 +143,7 @@ function getCartQty(cart, id, type) {
 function PlaceholderImg({ type }) {
   return (
     <div className="pos-card-img-placeholder">
-      {type === 'bag' ? <BagIcon size={40} color="#FF5A00" /> : <FoodIcon size={40} color="#3b82f6" />}
+      {type === 'bag' ? <BagIcon size={40} color="#FF5C00" /> : <FoodIcon size={40} color="#3b82f6" />}
     </div>
   );
 }
@@ -558,7 +558,7 @@ export default function CustomerPage({
               onClick={() => setSelectedStoreId(null)}
             >
               <div className="pos-store-card-img pos-store-card-img--all">
-                <GridIcon size={28} color={selectedStoreId == null ? '#FF5A00' : '#888'} />
+                <GridIcon size={28} color={selectedStoreId == null ? '#FF5C00' : '#888'} />
               </div>
               <div className="pos-store-card-body">
                 <span className="pos-store-card-name">All stores</span>
@@ -579,7 +579,7 @@ export default function CustomerPage({
                     {store.image ? (
                       <img src={store.image} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
                     ) : (
-                      <StoreIcon size={28} color={isActive ? '#FF5A00' : '#888'} />
+                      <StoreIcon size={28} color={isActive ? '#FF5C00' : '#888'} />
                     )}
                   </div>
                   <div className="pos-store-card-body">
@@ -613,17 +613,17 @@ export default function CustomerPage({
           </button>
         )}
         <button className={`pos-cat-chip ${menuFilter === 'all' ? 'active' : ''}`} onClick={() => setMenuFilter('all')}>
-          <span className="pos-cat-icon"><GridIcon size={20} color={menuFilter === 'all' ? '#FF5A00' : '#888'} /></span>
+          <span className="pos-cat-icon"><GridIcon size={20} color={menuFilter === 'all' ? '#FF5C00' : '#888'} /></span>
           <span className="pos-cat-label">All</span>
           <span className="pos-cat-count">{filteredBags.length + filteredFoods.length} Items</span>
         </button>
         <button className={`pos-cat-chip ${menuFilter === 'bags' ? 'active' : ''}`} onClick={() => setMenuFilter('bags')}>
-          <span className="pos-cat-icon"><BagIcon size={20} color={menuFilter === 'bags' ? '#FF5A00' : '#888'} /></span>
+          <span className="pos-cat-icon"><BagIcon size={20} color={menuFilter === 'bags' ? '#FF5C00' : '#888'} /></span>
           <span className="pos-cat-label">Surprise Bags</span>
           <span className="pos-cat-count">{filteredBags.length} Items</span>
         </button>
         <button className={`pos-cat-chip ${menuFilter === 'foods' ? 'active' : ''}`} onClick={() => setMenuFilter('foods')}>
-          <span className="pos-cat-icon"><FoodIcon size={20} color={menuFilter === 'foods' ? '#FF5A00' : '#888'} /></span>
+          <span className="pos-cat-icon"><FoodIcon size={20} color={menuFilter === 'foods' ? '#FF5C00' : '#888'} /></span>
           <span className="pos-cat-label">Products</span>
           <span className="pos-cat-count">{filteredFoods.length} Items</span>
         </button>
@@ -681,11 +681,11 @@ export default function CustomerPage({
             <div className="pos-panel-header">
               <div className="pos-panel-tabs">
                 <button className={`pos-ptab ${panelTab === 'cart' ? 'active' : ''}`} onClick={() => setPanelTab('cart')}>
-                  <CartIcon size={14} color={panelTab === 'cart' ? '#FF5A00' : '#888'} />
+                  <CartIcon size={14} color={panelTab === 'cart' ? '#FF5C00' : '#888'} />
                   Cart {cartCount > 0 && <span className="pos-ptab-badge">{cartCount}</span>}
                 </button>
                 <button className={`pos-ptab ${panelTab === 'orders' ? 'active' : ''}`} onClick={() => setPanelTab('orders')}>
-                  <ClipboardIcon size={14} color={panelTab === 'orders' ? '#FF5A00' : '#888'} />
+                  <ClipboardIcon size={14} color={panelTab === 'orders' ? '#FF5C00' : '#888'} />
                   My Orders
                 </button>
               </div>
@@ -712,7 +712,7 @@ export default function CustomerPage({
                           <div className="pos-cart-row-thumb">
                             {src
                               ? <img src={src} alt="" onError={e => e.target.style.display = 'none'} />
-                              : (entry.type === 'bag' ? <BagIcon size={20} color="#FF5A00" /> : <FoodIcon size={20} color="#3b82f6" />)
+                              : (entry.type === 'bag' ? <BagIcon size={20} color="#FF5C00" /> : <FoodIcon size={20} color="#3b82f6" />)
                             }
                           </div>
                           <div className="pos-cart-row-info">
@@ -812,7 +812,7 @@ export default function CustomerPage({
                       <div key={o.id || i} className="pos-order-entry">
                         <div className="pos-order-entry-top">
                           <span className="pos-order-entry-icon">
-                            {o.type === 'bag' ? <BagIcon size={18} color="#FF5A00" /> : <FoodIcon size={18} color="#3b82f6" />}
+                            {o.type === 'bag' ? <BagIcon size={18} color="#FF5C00" /> : <FoodIcon size={18} color="#3b82f6" />}
                           </span>
                           <div style={{ flex: 1 }}>
                             <p className="pos-order-entry-name">{o.item_name || 'Item'}</p>

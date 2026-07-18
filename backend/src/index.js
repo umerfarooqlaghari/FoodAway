@@ -257,10 +257,10 @@ app.get('/delete-account', (req, res) => {
 <title>Delete Your Account — ${brandName}</title>
 <style>
   body { font-family: -apple-system, Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 32px 24px 80px; color: #1f2937; line-height: 1.65; }
-  h1 { color: #E27A53; }
+  h1 { color: #FF5C00; }
   h2 { color: #111827; margin-top: 32px; }
-  a { color: #E27A53; }
-  .steps { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; padding: 16px 20px; }
+  a { color: #FF5C00; }
+  .steps { background: #FFFFFF; border: 1px solid rgba(255, 92, 0, 0.15); border-radius: 12px; padding: 16px 20px; }
 </style>
 </head>
 <body>
@@ -302,9 +302,9 @@ app.get('/privacy', (req, res) => {
 <title>Privacy Policy — ${brandName}</title>
 <style>
   body { font-family: -apple-system, Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 32px 24px 80px; color: #1f2937; line-height: 1.65; }
-  h1 { color: #E27A53; }
+  h1 { color: #FF5C00; }
   h2 { color: #111827; margin-top: 32px; }
-  a { color: #E27A53; }
+  a { color: #FF5C00; }
   ul { padding-left: 20px; }
 </style>
 </head>
@@ -633,7 +633,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         bodyHtml: `
           <p>Hi ${user.name || 'User'},</p>
           <p>You requested a password reset. Your OTP verification code is:</p>
-          <h2 style="font-size: 24px; letter-spacing: 2px; color: #EA580C; font-family: monospace;">${otp}</h2>
+          <h2 style="font-size: 24px; letter-spacing: 2px; color: #FF5C00; font-family: monospace;">${otp}</h2>
           <p>This code is valid for <strong>2 minutes</strong>. If you did not request this reset, please ignore this email.</p>`,
       }),
       text: `Hi, your ${brandName} password reset OTP is ${otp}. Valid for 2 minutes.`
@@ -808,6 +808,52 @@ app.post('/api/users/push-token', verifyToken, async (req, res) => {
     await db.prepare('UPDATE users SET push_token = ? WHERE id = ?').run(pushToken, req.user.id);
     res.json({ message: 'Push token updated successfully' });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Permanent account deletion (Apple Guideline 5.1.1(v))
+app.delete('/api/users/me', verifyToken, async (req, res) => {
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: 'Password is required to delete your account.' });
+
+  if (req.user.role !== 'Customers') {
+    return res.status(403).json({
+      error: 'Business accounts must be deleted through support. Email support@grabengo.store with your store details.',
+    });
+  }
+
+  try {
+    const user = await db.prepare('SELECT id, password FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) return res.status(401).json({ error: 'Incorrect password.' });
+
+    const userId = req.user.id;
+    await db.prepare('DELETE FROM favorites WHERE user_id = ?').run(userId);
+    await db.prepare('DELETE FROM app_reviews WHERE customer_id = ?').run(userId);
+    await db.prepare('DELETE FROM reviews WHERE customer_id = ?').run(userId);
+    await db.prepare('DELETE FROM chat_messages WHERE customer_id = ?').run(userId);
+
+    const anonEmail = `deleted-${userId}-${Date.now()}@grabengo.invalid`;
+    const deadPassword = await bcrypt.hash(`${Date.now()}-${Math.random()}`, 10);
+    await db.prepare(`
+      UPDATE users
+      SET name = 'Deleted User',
+          email = ?,
+          password = ?,
+          phone = NULL,
+          logo = NULL,
+          push_token = NULL,
+          refresh_token = NULL,
+          delivery_address = NULL
+      WHERE id = ?
+    `).run(anonEmail, deadPassword, userId);
+
+    res.json({ message: 'Your account has been permanently deleted.' });
+  } catch (err) {
+    console.error('DELETE /api/users/me error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1274,6 +1320,42 @@ app.get('/api/stores/:storeId/menu', verifyToken, async (req, res) => {
   }
 });
 
+// Public menu browse — no account required (Apple Guideline 5.1.1)
+app.get('/api/public/stores/:storeId/menu', async (req, res) => {
+  const { storeId } = req.params;
+  try {
+    const store = await db.prepare('SELECT * FROM stores WHERE id = ? AND is_active = TRUE').get(storeId);
+    if (!store) return res.status(404).json({ error: 'Store not found' });
+    const menuItems = await db.prepare(
+      `SELECT id, name, description, category, price, image, created_at
+       FROM menu_items WHERE store_id = ? AND is_hidden = FALSE ORDER BY category, name`
+    ).all(storeId);
+    const deals = await db.prepare(
+      `SELECT id, menu_item_id, name, description, category, price, original_price, images, quantity, starts_at, sale_ends_at
+       FROM food_items
+       WHERE store_id = ? AND is_available = TRUE AND quantity > 0 AND original_price IS NOT NULL
+         AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+         AND (sale_ends_at IS NULL OR sale_ends_at > CURRENT_TIMESTAMP)
+       ORDER BY sale_ends_at ASC NULLS LAST`
+    ).all(storeId);
+    const storeContext = {
+      store_name: store.name,
+      store_id: store.id,
+      tenant_id: store.tenant_id,
+      delivery_enabled: !!store.delivery_enabled,
+      delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+      delivery_fee_note: store.delivery_fee_note,
+      store_lat: store.lat,
+      store_lng: store.lng,
+    };
+    const signedMenu = await Promise.all(menuItems.map(async m => ({ ...m, type: 'menu', image: await getPresignedUrl(m.image), ...storeContext })));
+    const signedDeals = await Promise.all(deals.map(async d => ({ ...d, type: 'food', images: await presignImages(d.images), ...storeContext })));
+    res.json({ menuItems: signedMenu, deals: signedDeals });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ──────────────────────────────────────────────────────────────────────────
 
 // Create an order (checkout cart)
@@ -1472,13 +1554,13 @@ app.post('/api/orders', verifyToken, async (req, res) => {
             <div style="background:#fff;padding:24px 32px;border:1px solid #eee;border-top:none;">
               <p style="color:#333;">Hi <strong>${customer.name}</strong>,</p>
               <p style="color:#555;">Thank you for rescuing food! Your order has been confirmed. Your receipt${attachments.length > 1 ? 's are' : ' is'} attached to this email.</p>
-              <h3 style="color:#FF5A00;border-bottom:2px solid #FF5A00;padding-bottom:6px;">Order Summary</h3>
+              <h3 style="color:#FF5C00;border-bottom:2px solid #FF5C00;padding-bottom:6px;">Order Summary</h3>
               <ul style="color:#333;line-height:1.8;">${itemsList}</ul>
               <p style="font-size:18px;font-weight:bold;color:#1a1a1a;border-top:1px solid #eee;padding-top:12px;">
-                Total: <span style="color:#FF5A00;">£${total.toFixed(2)}</span>
+                Total: <span style="color:#FF5C00;">£${total.toFixed(2)}</span>
               </p>
               <div style="background:#fff8f5;border:1px solid #ffe0cc;border-radius:6px;padding:14px;margin-top:16px;">
-                <p style="margin:0;color:#FF5A00;font-weight:bold;">Payment: Cash at Pickup</p>
+                <p style="margin:0;color:#FF5C00;font-weight:bold;">Payment: Cash at Pickup</p>
                 <p style="margin:6px 0 0;color:#555;font-size:13px;">Present your receipt at the store when collecting your order.</p>
               </div>
               ${deliveryNoteHtml}
@@ -1688,6 +1770,16 @@ const ORDER_ACTION_MESSAGES = {
     title: 'Order Cancelled',
     body: (order) => `${order.store_name} cancelled your order (Ref #${order.id}).`,
   },
+  picked_up: {
+    title: 'Order Complete',
+    body: (order) => order.fulfillment_type === 'delivery'
+      ? `${order.store_name} marked your order as delivered. Enjoy!`
+      : `${order.store_name} confirmed your pickup. Enjoy your order!`,
+  },
+  paid: {
+    title: 'Order Complete',
+    body: (order) => `${order.store_name} marked your order as complete (Ref #${order.id}).`,
+  },
 };
 
 async function notifyCustomerOfOrderUpdate(order, messageKey) {
@@ -1716,7 +1808,7 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
   const { action } = req.body;
-  const validActions = ['confirm', 'reject', 'convert_to_pickup', 'mark_paid', 'cancel'];
+  const validActions = ['confirm', 'reject', 'convert_to_pickup', 'mark_paid', 'mark_picked_up', 'cancel'];
   if (!validActions.includes(action)) {
     return res.status(400).json({ error: 'Invalid action' });
   }
@@ -1771,11 +1863,12 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
       newStatus = 'confirmed';
       newFulfillment = 'pickup';
       notifyKey = 'converted_pickup';
-    } else if (action === 'mark_paid') {
+    } else if (action === 'mark_paid' || action === 'mark_picked_up') {
       if (isSettled) {
         return res.status(400).json({ error: 'This order has already been settled.' });
       }
       newStatus = 'paid';
+      notifyKey = action === 'mark_picked_up' ? 'picked_up' : 'paid';
     } else if (action === 'cancel') {
       if (isSettled) {
         return res.status(400).json({ error: 'This order has already been settled.' });
@@ -2690,7 +2783,7 @@ app.post('/api/contact', async (req, res) => {
 
         <!-- Header -->
         <tr>
-          <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:36px 40px;text-align:center;">
+          <td style="background:linear-gradient(135deg,#FF5C00 0%,#E55200 100%);padding:36px 40px;text-align:center;">
             ${emailLogoBlock({ height: 44, centered: true })}
             <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">New Support Enquiry</h1>
             <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Received via ${brandName} Contact Form</p>
@@ -2703,8 +2796,8 @@ app.post('/api/contact', async (req, res) => {
             <!-- Alert badge -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
               <tr>
-                <td style="background:rgba(255,90,0,0.1);border:1px solid rgba(255,90,0,0.25);border-radius:10px;padding:14px 18px;">
-                  <p style="margin:0;color:#FF5A00;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Action Required</p>
+                <td style="background:rgba(255, 92, 0,0.1);border:1px solid rgba(255, 92, 0,0.25);border-radius:10px;padding:14px 18px;">
+                  <p style="margin:0;color:#FF5C00;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Action Required</p>
                   <p style="margin:4px 0 0;color:#e5e7eb;font-size:14px;">A customer has submitted a support request. Please respond within 24–48 hours.</p>
                 </td>
               </tr>
@@ -2722,7 +2815,7 @@ app.post('/api/contact', async (req, res) => {
 
             <!-- Message -->
             <h2 style="margin:0 0 12px;color:#ffffff;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Message</h2>
-            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid #FF5A00;border-radius:8px;padding:20px 20px 20px 22px;">
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid #FF5C00;border-radius:8px;padding:20px 20px 20px 22px;">
               <p style="margin:0;color:#d1d5db;font-size:15px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
             </div>
 
@@ -2730,7 +2823,7 @@ app.post('/api/contact', async (req, res) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
               <tr>
                 <td align="center">
-                  <a href="mailto:${email}?subject=Re: ${encodeURIComponent(subject)}" style="display:inline-block;background:linear-gradient(135deg,#FF5A00,#FF8A00);color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 32px;border-radius:10px;">Reply to ${name} →</a>
+                  <a href="mailto:${email}?subject=Re: ${encodeURIComponent(subject)}" style="display:inline-block;background:linear-gradient(135deg,#FF5C00,#E55200);color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 32px;border-radius:10px;">Reply to ${name} →</a>
                 </td>
               </tr>
             </table>
@@ -2766,7 +2859,7 @@ app.post('/api/contact', async (req, res) => {
 
         <!-- Orange header with logo -->
         <tr>
-          <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:44px 40px;text-align:center;">
+          <td style="background:linear-gradient(135deg,#FF5C00 0%,#E55200 100%);padding:44px 40px;text-align:center;">
             ${emailLogoBlock({ height: 56, centered: true })}
             <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">We've Got Your Message!</h1>
             <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px;">Thank you for reaching out to ${brandName}.</p>
@@ -2789,7 +2882,7 @@ app.post('/api/contact', async (req, res) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;">
               <tr>
                 <td style="padding:20px 24px;border-bottom:1px solid #e5e7eb;">
-                  <p style="margin:0;color:#FF5A00;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Your Submission</p>
+                  <p style="margin:0;color:#FF5C00;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Your Submission</p>
                 </td>
               </tr>
               ${[['Name', name], ['Email', email], ['Subject', subject], ['Submitted', submittedAt]].map(([k, v]) => `
@@ -2813,7 +2906,7 @@ app.post('/api/contact', async (req, res) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
               <tr>
                 <td valign="top" style="width:40px;padding-right:14px;">
-                  <div style="width:36px;height:36px;background:${done ? 'linear-gradient(135deg,#FF5A00,#FF8A00)' : '#f3f4f6'};border-radius:50%;text-align:center;line-height:36px;font-size:16px;">${icon}</div>
+                  <div style="width:36px;height:36px;background:${done ? 'linear-gradient(135deg,#FF5C00,#E55200)' : '#f3f4f6'};border-radius:50%;text-align:center;line-height:36px;font-size:16px;">${icon}</div>
                 </td>
                 <td valign="top">
                   <p style="margin:0;color:#111827;font-size:14px;font-weight:700;">${title}</p>
@@ -2828,7 +2921,7 @@ app.post('/api/contact', async (req, res) => {
         <tr>
           <td style="padding:28px 40px 0;">
             <p style="margin:0 0 10px;color:#6b7280;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Your message</p>
-            <div style="background:#f9fafb;border-left:3px solid #FF5A00;border-radius:4px;padding:16px 18px;">
+            <div style="background:#f9fafb;border-left:3px solid #FF5C00;border-radius:4px;padding:16px 18px;">
               <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
             </div>
           </td>
@@ -2837,11 +2930,11 @@ app.post('/api/contact', async (req, res) => {
         <!-- Need urgent help -->
         <tr>
           <td style="padding:28px 40px 0;">
-            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,90,0,0.05);border:1px solid rgba(255,90,0,0.2);border-radius:10px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255, 92, 0,0.05);border:1px solid rgba(255, 92, 0,0.2);border-radius:10px;">
               <tr>
                 <td style="padding:16px 20px;">
-                  <p style="margin:0;color:#FF5A00;font-size:13px;font-weight:700;">Need urgent help?</p>
-                  <p style="margin:4px 0 0;color:#374151;font-size:13px;">Email us directly at <a href="mailto:${supportEmail}" style="color:#FF5A00;text-decoration:none;font-weight:600;">${supportEmail}</a></p>
+                  <p style="margin:0;color:#FF5C00;font-size:13px;font-weight:700;">Need urgent help?</p>
+                  <p style="margin:4px 0 0;color:#374151;font-size:13px;">Email us directly at <a href="mailto:${supportEmail}" style="color:#FF5C00;text-decoration:none;font-weight:600;">${supportEmail}</a></p>
                 </td>
               </tr>
             </table>
@@ -2906,7 +2999,8 @@ app.get('/api/public/stores', async (req, res) => {
     const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
 
     let query = `
-      SELECT s.id, s.name, s.address, s.lat, s.lng, s.image, s.tenant_id,
+      SELECT s.id, s.name, s.address, s.lat, s.lng, s.image, s.tenant_id, s.category,
+             s.delivery_enabled, s.delivery_mode, s.delivery_fee_note,
              t.name AS tenant_name, t.subdomain AS tenant_subdomain
       FROM stores s
       JOIN tenants t ON t.id = s.tenant_id
@@ -3371,7 +3465,7 @@ async function sendCheckoutOtpEmail({ to, name, otp }) {
       bodyHtml: `
         <p>Hi ${name || 'there'},</p>
         <p>Enter this verification code to confirm your order:</p>
-        <h2 style="font-size: 28px; letter-spacing: 4px; color: #EA580C; font-family: monospace;">${otp}</h2>
+        <h2 style="font-size: 28px; letter-spacing: 4px; color: #FF5C00; font-family: monospace;">${otp}</h2>
         <p>This code expires in <strong>5 minutes</strong>. If you did not start a checkout, you can ignore this email.</p>`,
     }),
     text: `Your ${brandName} order verification code is ${otp}. Valid for 5 minutes.`
@@ -3411,7 +3505,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
           <tr><td align="center">
             <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
               <tr>
-                <td style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);padding:40px 40px 30px;text-align:center;">
+                <td style="background:linear-gradient(135deg,#ff6b35 0%,#FF5C00 100%);padding:40px 40px 30px;text-align:center;">
                   ${emailLogoBlock({ height: 52, centered: true })}
                   <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:15px;">Order Confirmed ✓</p>
                 </td>

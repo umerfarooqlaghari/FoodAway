@@ -5,12 +5,12 @@ function emailLogoBlock({ height = 44, centered = false } = {}) {
   if (logoUrl) {
     return `<img src="${logoUrl}" alt="${brandName}" height="${height}" style="display:block;${centerStyle}margin-bottom:12px;" onerror="this.style.display='none'" />`;
   }
-  return `<h1 style="color:#FF5A00;margin:0 0 12px;font-size:26px;font-weight:700;${centered ? 'text-align:center;' : ''}">${brandName}</h1>`;
+  return `<h1 style="color:#FF5C00;margin:0 0 12px;font-size:26px;font-weight:700;${centered ? 'text-align:center;' : ''}">${brandName}</h1>`;
 }
 
 function emailOrangeHeader(subtitle = '') {
   return `
-    <div style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:28px 32px;border-radius:8px 8px 0 0;text-align:center;">
+    <div style="background:linear-gradient(135deg,#FF5C00 0%,#E55200 100%);padding:28px 32px;border-radius:8px 8px 0 0;text-align:center;">
       ${emailLogoBlock({ height: 48, centered: true })}
       ${subtitle ? `<p style="color:#ffe0cc;margin:4px 0 0;font-size:13px;">${subtitle}</p>` : ''}
     </div>`;
@@ -41,7 +41,7 @@ function emailSellerWelcomeLayout({ brandName: storeName }) {
     bodyHtml: `
       <p>Hi <strong>${storeName}</strong>,</p>
       <p>Your store has been onboarded onto ${brandName}. You can now log in with the ${brandName} mobile app to manage your stores, orders, and inventory.</p>
-      <p style="font-size:14px;color:#666;">Need help? Contact us at <a href="mailto:${supportEmail}" style="color:#FF5A00;">${supportEmail}</a>.</p>`,
+      <p style="font-size:14px;color:#666;">Need help? Contact us at <a href="mailto:${supportEmail}" style="color:#FF5C00;">${supportEmail}</a>.</p>`,
   });
 }
 

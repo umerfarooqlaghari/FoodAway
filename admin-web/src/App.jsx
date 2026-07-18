@@ -237,6 +237,7 @@ function App() {
   const [orders, setOrders] = useState([]);
   const [orderStoreFilter, setOrderStoreFilter] = useState('');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('active');
 
   // Chat States & References
   const [chatsList, setChatsList] = useState([]);
@@ -696,6 +697,37 @@ function App() {
       const res = await axios.get(`${API_URL}/seller/orders${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       setOrders(res.data);
     } catch (err) { }
+  };
+
+  const runSellerOrderAction = async (orderId, action) => {
+    const confirmMessages = {
+      reject: 'Reject this delivery? The customer will be notified and stock restored.',
+      convert_to_pickup: 'Convert this order to pickup? The customer will be notified.',
+      cancel: 'Cancel this order? The customer will be notified and stock restored.',
+      mark_picked_up: 'Mark this order as complete? The customer will be notified.',
+    };
+    if (confirmMessages[action] && !window.confirm(confirmMessages[action])) return;
+    try {
+      await axios.patch(`${API_URL}/seller/orders/${orderId}/status`, { action }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchOrders();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not update this order.');
+    }
+  };
+
+  const getOrderStatusBadge = (order) => {
+    const isDelivery = order.fulfillment_type === 'delivery';
+    const status = order.status || 'pending';
+    const map = {
+      pending: { label: isDelivery ? 'Awaiting confirmation' : 'Awaiting pickup', bg: '#FEF3C7', color: '#92400E' },
+      confirmed: { label: 'Confirmed', bg: '#DBEAFE', color: '#1D4ED8' },
+      paid: { label: isDelivery ? 'Delivered' : 'Picked up', bg: '#DCFCE7', color: '#15803D' },
+      rejected: { label: 'Rejected', bg: '#FEE2E2', color: '#DC2626' },
+      cancelled: { label: 'Cancelled', bg: '#F3F4F6', color: '#6B7280' },
+    };
+    return map[status] || { label: status, bg: '#F3F4F6', color: '#374151' };
   };
 
   const markWebChatAsRead = async (storeId, customerId) => {
@@ -1185,7 +1217,7 @@ function App() {
           {/* Mobile hamburger */}
           <button className="landing-hamburger" onClick={() => setMobileNavOpen(v => !v)} aria-label="Menu">
             <svg width="17" height="13" viewBox="0 0 17 13" fill="none" aria-hidden="true">
-              <path d="M1 1h15M1 6.5h15M1 12h15" stroke="#1A1208" strokeWidth="1.7" strokeLinecap="round" />
+              <path d="M1 1h15M1 6.5h15M1 12h15" stroke="#111827" strokeWidth="1.7" strokeLinecap="round" />
             </svg>
           </button>
         </header>
@@ -1337,16 +1369,16 @@ function App() {
                         <svg width="160" height="130" viewBox="0 0 160 130" fill="none" aria-hidden="true">
                           <rect x="10" y="50" width="140" height="7" rx="3.5" fill="white" opacity="0.08" />
                           <rect x="10" y="95" width="140" height="7" rx="3.5" fill="white" opacity="0.08" />
-                          <rect x="18" y="24" width="20" height="26" rx="5" fill="#D4651A" opacity="0.6" />
+                          <rect x="18" y="24" width="20" height="26" rx="5" fill="#FF5C00" opacity="0.6" />
                           <rect x="46" y="20" width="18" height="30" rx="5" fill="#7A9E6E" opacity="0.5" />
                           <rect x="72" y="26" width="20" height="24" rx="5" fill="white" opacity="0.15" />
-                          <rect x="100" y="22" width="22" height="28" rx="5" fill="#D4651A" opacity="0.5" />
+                          <rect x="100" y="22" width="22" height="28" rx="5" fill="#FF5C00" opacity="0.5" />
                           <rect x="130" y="25" width="18" height="25" rx="5" fill="#7A9E6E" opacity="0.45" />
                           <rect x="16" y="62" width="24" height="23" rx="5" fill="#7A9E6E" opacity="0.5" />
-                          <rect x="48" y="60" width="18" height="25" rx="5" fill="#D4651A" opacity="0.6" />
+                          <rect x="48" y="60" width="18" height="25" rx="5" fill="#FF5C00" opacity="0.6" />
                           <rect x="74" y="63" width="22" height="22" rx="5" fill="white" opacity="0.12" />
                           <rect x="104" y="62" width="18" height="23" rx="5" fill="#7A9E6E" opacity="0.55" />
-                          <rect x="130" y="60" width="18" height="25" rx="5" fill="#D4651A" opacity="0.5" />
+                          <rect x="130" y="60" width="18" height="25" rx="5" fill="#FF5C00" opacity="0.5" />
                         </svg>
                         <div className="hero-announcement-visual-caption">
                           <span className="hero-announcement-visual-title">Coming to Grabengo</span>
@@ -1440,9 +1472,9 @@ function App() {
               <div className="solution-item">
                 <div className="solution-item-icon solution-item-icon--orange">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="#D4651A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    <line x1="3" y1="6" x2="21" y2="6" stroke="#D4651A" strokeWidth="1.8" />
-                    <path d="M16 10a4 4 0 01-8 0" stroke="#D4651A" strokeWidth="1.8" strokeLinecap="round" />
+                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="#FF5C00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    <line x1="3" y1="6" x2="21" y2="6" stroke="#FF5C00" strokeWidth="1.8" />
+                    <path d="M16 10a4 4 0 01-8 0" stroke="#FF5C00" strokeWidth="1.8" strokeLinecap="round" />
                   </svg>
                 </div>
                 <div>
@@ -1454,10 +1486,10 @@ function App() {
               <div className="solution-item solution-item--dark">
                 <div className="solution-item-icon solution-item-icon--amber-dark">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="#D4651A" strokeWidth="1.8" />
-                    <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="#D4651A" strokeWidth="1.8" />
-                    <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="#D4651A" strokeWidth="1.8" />
-                    <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="#D4651A" strokeWidth="1.8" />
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="#FF5C00" strokeWidth="1.8" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="#FF5C00" strokeWidth="1.8" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="#FF5C00" strokeWidth="1.8" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="#FF5C00" strokeWidth="1.8" />
                   </svg>
                 </div>
                 <div>
@@ -2033,7 +2065,7 @@ function App() {
                   <XAxis dataKey="date" />
                   <YAxis />
                   <Tooltip />
-                  <Line type="monotone" dataKey="revenue" stroke="#EA580C" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
+                  <Line type="monotone" dataKey="revenue" stroke="#FF5C00" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
                 </LineChart>
               </ResponsiveContainer>
               )}
@@ -2302,7 +2334,7 @@ function App() {
                                   latitude={pickerLat}
                                   draggable
                                   onDragEnd={(e) => setStoreMapCoords(e.lngLat.lat, e.lngLat.lng)}
-                                  color="#FF5A00"
+                                  color="#FF5C00"
                                 />
                               </Map>
                             </div>
@@ -2313,8 +2345,8 @@ function App() {
                               style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
                                 width: '100%', marginTop: '0.6rem', padding: '0.6rem',
-                                background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '8px',
-                                color: '#FF5A00', fontWeight: '700', fontSize: '0.85rem', cursor: storeSaving ? 'not-allowed' : 'pointer',
+                                background: '#FFFFFF', border: '1px solid rgba(255, 92, 0, 0.15)', borderRadius: '8px',
+                                color: '#FF5C00', fontWeight: '700', fontSize: '0.85rem', cursor: storeSaving ? 'not-allowed' : 'pointer',
                                 opacity: storeSaving ? 0.6 : 1,
                               }}
                             >
@@ -2821,7 +2853,7 @@ function App() {
                           {parsedTags && parsedTags.length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                               {parsedTags.map(tag => (
-                                <span key={tag} style={{ background: '#FFF7ED', color: '#C2410C', border: '1px solid #FFEDD5', borderRadius: '12px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                                <span key={tag} style={{ background: '#FFFFFF', color: '#CC4A00', border: '1px solid rgba(255, 92, 0, 0.1)', borderRadius: '12px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 'bold' }}>
                                   {tag}
                                 </span>
                               ))}
@@ -2868,6 +2900,18 @@ function App() {
                     <option value="Cash at Pickup">Cash at Pickup</option>
                   </select>
                 </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Filter by Status</label>
+                  <select
+                    value={orderStatusFilter}
+                    onChange={e => setOrderStatusFilter(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'white' }}
+                  >
+                    <option value="active">Active orders</option>
+                    <option value="completed">Completed / cancelled</option>
+                    <option value="all">All orders</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -2877,15 +2921,35 @@ function App() {
               ) : orders
                 .filter(o => !orderStoreFilter || o.store_name === orderStoreFilter)
                 .filter(o => !orderPaymentFilter || o.payment_method.toLowerCase() === orderPaymentFilter.toLowerCase())
+                .filter(o => {
+                  const settled = ['paid', 'rejected', 'cancelled'].includes(o.status || 'pending');
+                  if (orderStatusFilter === 'active') return !settled;
+                  if (orderStatusFilter === 'completed') return settled;
+                  return true;
+                })
                 .length === 0 ? (
                 <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  No active bookings found matching the filters.
+                  No bookings found matching the filters.
                 </div>
               ) : (
                 orders
                   .filter(o => !orderStoreFilter || o.store_name === orderStoreFilter)
                   .filter(o => !orderPaymentFilter || o.payment_method.toLowerCase() === orderPaymentFilter.toLowerCase())
-                  .map(o => (
+                  .filter(o => {
+                    const settled = ['paid', 'rejected', 'cancelled'].includes(o.status || 'pending');
+                    if (orderStatusFilter === 'active') return !settled;
+                    if (orderStatusFilter === 'completed') return settled;
+                    return true;
+                  })
+                  .map(o => {
+                    const isDelivery = o.fulfillment_type === 'delivery';
+                    const status = o.status || 'pending';
+                    const isSettled = ['paid', 'rejected', 'cancelled'].includes(status);
+                    const showTriad = isDelivery && status === 'pending';
+                    const showCompleteActions = !isSettled && !showTriad;
+                    const statusBadge = getOrderStatusBadge(o);
+                    const completeLabel = isDelivery ? 'Mark Delivered' : 'Mark Picked Up';
+                    return (
                     <div key={o.id} className="glass-card" style={{ padding: '1.5rem' }}>
                       <div className="portal-order-card">
                       <div style={{ width: '48px', height: '48px', borderRadius: '24px', backgroundColor: '#EFF6FF', color: '#1D4ED8', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '1.1rem', flexShrink: 0 }}>
@@ -2894,6 +2958,28 @@ function App() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="portal-order-header">
                           <div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.35rem' }}>
+                              <span style={{
+                                padding: '0.2rem 0.6rem',
+                                borderRadius: '20px',
+                                fontSize: '0.75rem',
+                                fontWeight: 'bold',
+                                background: isDelivery ? '#DBEAFE' : '#F3F4F6',
+                                color: isDelivery ? '#1D4ED8' : '#374151',
+                              }}>
+                                {isDelivery ? 'DELIVERY' : 'PICKUP'}
+                              </span>
+                              <span style={{
+                                padding: '0.2rem 0.6rem',
+                                borderRadius: '20px',
+                                fontSize: '0.75rem',
+                                fontWeight: 'bold',
+                                background: statusBadge.bg,
+                                color: statusBadge.color,
+                              }}>
+                                {statusBadge.label.toUpperCase()}
+                              </span>
+                            </div>
                             <strong style={{ fontSize: '1.15rem', display: 'block', color: 'var(--text-primary)' }}>{o.store_name}</strong>
                             <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                               Customer: <strong>{o.customer_name}</strong> ({o.customer_email})
@@ -2930,14 +3016,29 @@ function App() {
                               {currencySymbol}{(o.price * o.quantity).toFixed(2)}
                             </span>
                             <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                              Pickup: {o.pickup_time}
+                              {isDelivery ? (o.delivery_address || 'Delivery address') : `Pickup: ${o.pickup_time}`}
                             </span>
                           </div>
                         </div>
+
+                        {showTriad && (
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                            <button type="button" className="btn btn-success" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'confirm')}>Confirm</button>
+                            <button type="button" className="btn btn-secondary" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'convert_to_pickup')}>To Pickup</button>
+                            <button type="button" className="btn btn-danger" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'reject')}>Reject</button>
+                          </div>
+                        )}
+
+                        {showCompleteActions && (
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                            <button type="button" className="btn btn-primary" style={{ flex: 1, minWidth: '140px' }} onClick={() => runSellerOrderAction(o.id, 'mark_picked_up')}>{completeLabel}</button>
+                            <button type="button" className="btn btn-danger" style={{ minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'cancel')}>Cancel</button>
+                          </div>
+                        )}
                       </div>
                       </div>
                     </div>
-                  ))
+                  );})
               )}
             </div>
           </div>
@@ -2974,11 +3075,11 @@ function App() {
                             padding: '1rem',
                             borderRadius: 'var(--radius-md)',
                             border: hasUnread ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
-                            backgroundColor: isSelected ? 'rgba(234, 88, 12, 0.08)' : hasUnread ? 'rgba(255, 90, 0, 0.03)' : 'var(--bg-secondary)',
+                            backgroundColor: isSelected ? 'rgba(255, 92, 0, 0.08)' : hasUnread ? 'rgba(255, 92, 0, 0.03)' : 'var(--bg-secondary)',
                             borderColor: isSelected ? 'var(--accent-primary)' : hasUnread ? 'var(--accent-primary)' : 'var(--border-color)',
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
-                            boxShadow: hasUnread ? '0 4px 12px rgba(255, 90, 0, 0.08)' : 'none'
+                            boxShadow: hasUnread ? '0 4px 12px rgba(255, 92, 0, 0.08)' : 'none'
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.3rem' }}>
@@ -3153,9 +3254,9 @@ function App() {
           background: 'rgba(255, 255, 255, 0.85)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          boxShadow: '0 12px 40px rgba(234, 88, 12, 0.15), 0 4px 12px rgba(0,0,0,0.08)',
+          boxShadow: '0 12px 40px rgba(255, 92, 0, 0.15), 0 4px 12px rgba(0,0,0,0.08)',
           borderRadius: '20px',
-          borderLeft: toastNotification.type === 'order' ? '6px solid #EAB308' : '6px solid #EA580C',
+          borderLeft: toastNotification.type === 'order' ? '6px solid #EAB308' : '6px solid #FF5C00',
           padding: '1.4rem',
           display: 'flex',
           flexDirection: 'column',
@@ -3178,7 +3279,7 @@ function App() {
               width: '40px',
               height: '40px',
               borderRadius: '50%',
-              backgroundColor: toastNotification.type === 'order' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(234, 88, 12, 0.15)',
+              backgroundColor: toastNotification.type === 'order' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(255, 92, 0, 0.15)',
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
@@ -3201,7 +3302,7 @@ function App() {
             {toastNotification.message}
           </p>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-            <span style={{ fontSize: '0.75rem', color: toastNotification.type === 'order' ? '#B45309' : '#C2410C', fontWeight: '700' }}>
+            <span style={{ fontSize: '0.75rem', color: toastNotification.type === 'order' ? '#B45309' : '#CC4A00', fontWeight: '700' }}>
               {toastNotification.type === 'order' ? 'Click to view Orders' : 'Click to reply'}
             </span>
             <button

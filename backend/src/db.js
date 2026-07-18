@@ -281,6 +281,13 @@ const initDB = async () => {
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_enabled BOOLEAN DEFAULT FALSE"); } catch (e) {}
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_fee_note TEXT"); } catch (e) {}
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS category TEXT"); } catch (e) {}
+  try {
+    await db.exec("UPDATE stores SET category = 'Bakeries' WHERE category IS NULL AND (LOWER(name) LIKE '%bakery%' OR LOWER(name) LIKE '%bake%')");
+    await db.exec("UPDATE stores SET category = 'Cafes' WHERE category IS NULL AND (LOWER(name) LIKE '%cafe%' OR LOWER(name) LIKE '%coffee%')");
+    await db.exec("UPDATE stores SET category = 'Grocery Store' WHERE category IS NULL AND (LOWER(name) LIKE '%grocery%' OR LOWER(name) LIKE '%mart%' OR LOWER(name) LIKE '%supermarket%')");
+    await db.exec("UPDATE stores SET category = 'Restaurants' WHERE category IS NULL AND (LOWER(name) LIKE '%kfc%' OR LOWER(name) LIKE '%restaurant%' OR LOWER(name) LIKE '%kitchen%' OR LOWER(name) LIKE '%grabengo%' OR LOWER(name) LIKE '%delivery%' OR LOWER(name) LIKE '%senzo%')");
+    await db.exec("UPDATE stores SET category = 'Restaurants' WHERE category IS NULL");
+  } catch (e) {}
   try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS delivery_address TEXT"); } catch (e) {}
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_type TEXT DEFAULT 'pickup'"); } catch (e) {}
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT"); } catch (e) {}

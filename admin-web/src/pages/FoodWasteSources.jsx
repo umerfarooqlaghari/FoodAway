@@ -26,8 +26,8 @@ export default function FoodWasteSources({ onBack }) {
       <Section title="The Scale of the Problem">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '0.5rem' }}>
           {stats.map(({ figure, label, source }) => (
-            <div key={figure} style={{ background: 'rgba(255,90,0,0.07)', border: '1px solid rgba(255,90,0,0.18)', borderRadius: '12px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <span style={{ fontSize: '2rem', fontWeight: '800', color: '#FF5A00' }}>{figure}</span>
+            <div key={figure} style={{ background: 'rgba(255, 92, 0,0.07)', border: '1px solid rgba(255, 92, 0,0.18)', borderRadius: '12px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <span style={{ fontSize: '2rem', fontWeight: '800', color: '#FF5C00' }}>{figure}</span>
               <p style={{ color: '#d1d5db', fontSize: '0.88rem', lineHeight: 1.5 }}>{label}</p>
               <span style={{ color: '#6b7280', fontSize: '0.78rem', marginTop: 'auto' }}>{source}</span>
             </div>
@@ -47,7 +47,7 @@ export default function FoodWasteSources({ onBack }) {
         <p>
           We are committed to accuracy and transparency. If you believe any statistic is outdated or
           inaccurate, please contact us at{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
         </p>
       </Section>
 
@@ -56,8 +56,8 @@ export default function FoodWasteSources({ onBack }) {
       <Section title="Primary Data Sources">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
           {sources.map(({ org, url, desc }) => (
-            <div key={org} style={{ borderLeft: '3px solid rgba(255,90,0,0.4)', paddingLeft: '1.25rem' }}>
-              <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#FF5A00', textDecoration: 'none', fontWeight: '600', fontSize: '0.95rem' }}>
+            <div key={org} style={{ borderLeft: '3px solid rgba(255, 92, 0,0.4)', paddingLeft: '1.25rem' }}>
+              <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#FF5C00', textDecoration: 'none', fontWeight: '600', fontSize: '0.95rem' }}>
                 {org} ↗
               </a>
               <p style={{ color: '#9ca3af', fontSize: '0.88rem', marginTop: '0.25rem' }}>{desc}</p>
