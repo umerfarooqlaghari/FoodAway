@@ -13,9 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 const { PRODUCT_CATEGORIES } = require('./shared/productCategories');
 
-const ORANGE = '#FF5A00';
-const ORANGE_DARK = '#EA580C';
-const ORANGE_LIGHT = '#FFF7ED';
+const ORANGE = '#FF5C00';
+const ORANGE_DARK = '#E55200';
+const ORANGE_LIGHT = '#FFFFFF';
 
 const NAV_ITEMS = [
   { key: 'stores', label: 'Stores', icon: 'storefront-outline' },
@@ -937,7 +937,7 @@ const s = StyleSheet.create({
   logoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
   logoutText: { color: '#DC2626', fontWeight: '700', fontSize: 15 },
   kpiRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  kpiCard: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#FFE4CC' },
+  kpiCard: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.12)' },
   kpiValue: { fontSize: 17, fontWeight: '800', color: ORANGE },
   kpiLabel: { fontSize: 11, color: '#9CA3AF', marginTop: 4, fontWeight: '600' },
   navScroll: { maxHeight: 52, marginBottom: 4 },

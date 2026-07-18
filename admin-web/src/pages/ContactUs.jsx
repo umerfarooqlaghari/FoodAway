@@ -79,7 +79,7 @@ export default function ContactUs({ onBack }) {
               </p>
               <button
                 onClick={() => { setStatus('idle'); setForm({ name: '', email: '', subject: '', message: '' }); }}
-                style={{ marginTop: '1.5rem', padding: '0.7rem 1.5rem', borderRadius: '8px', border: 'none', background: 'rgba(255,90,0,0.15)', color: '#FF5A00', fontFamily: 'inherit', fontWeight: '700', cursor: 'pointer', fontSize: '0.9rem' }}
+                style={{ marginTop: '1.5rem', padding: '0.7rem 1.5rem', borderRadius: '8px', border: 'none', background: 'rgba(255, 92, 0,0.15)', color: '#FF5C00', fontFamily: 'inherit', fontWeight: '700', cursor: 'pointer', fontSize: '0.9rem' }}
               >
                 Send Another Message
               </button>
@@ -91,7 +91,7 @@ export default function ContactUs({ onBack }) {
                   <label style={labelStyle}>Full Name *</label>
                   <input type="text" required value={form.name} onChange={set('name')}
                     placeholder="John Smith" style={inputStyle}
-                    onFocus={e => e.target.style.borderColor = '#FF5A00'}
+                    onFocus={e => e.target.style.borderColor = '#FF5C00'}
                     onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
                   />
                 </div>
@@ -99,7 +99,7 @@ export default function ContactUs({ onBack }) {
                   <label style={labelStyle}>Email Address *</label>
                   <input type="email" required value={form.email} onChange={set('email')}
                     placeholder="you@example.com" style={inputStyle}
-                    onFocus={e => e.target.style.borderColor = '#FF5A00'}
+                    onFocus={e => e.target.style.borderColor = '#FF5C00'}
                     onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
                   />
                 </div>
@@ -109,7 +109,7 @@ export default function ContactUs({ onBack }) {
                 <label style={labelStyle}>Subject *</label>
                 <select required value={form.subject} onChange={set('subject')}
                   style={{ ...inputStyle, cursor: 'pointer' }}
-                  onFocus={e => e.target.style.borderColor = '#FF5A00'}
+                  onFocus={e => e.target.style.borderColor = '#FF5C00'}
                   onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
                 >
                   <option value="" disabled style={{ background: '#1a1a1a' }}>Select a subject…</option>
@@ -122,7 +122,7 @@ export default function ContactUs({ onBack }) {
                 <textarea required rows={6} value={form.message} onChange={set('message')}
                   placeholder="Describe your query in detail…"
                   style={{ ...inputStyle, resize: 'vertical', minHeight: '140px' }}
-                  onFocus={e => e.target.style.borderColor = '#FF5A00'}
+                  onFocus={e => e.target.style.borderColor = '#FF5C00'}
                   onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
                 />
               </div>
@@ -137,7 +137,7 @@ export default function ContactUs({ onBack }) {
                 type="submit" disabled={status === 'loading'}
                 style={{
                   padding: '0.95rem', borderRadius: '12px', border: 'none',
-                  background: status === 'loading' ? 'rgba(255,90,0,0.5)' : 'linear-gradient(135deg, #FF5A00, #FF8A00)',
+                  background: status === 'loading' ? 'rgba(255, 92, 0,0.5)' : 'linear-gradient(135deg, #FF5C00, #E55200)',
                   color: '#fff', fontFamily: 'inherit', fontWeight: '700', fontSize: '1rem',
                   cursor: status === 'loading' ? 'not-allowed' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
@@ -156,7 +156,7 @@ export default function ContactUs({ onBack }) {
 
               <p style={{ color: '#6b7280', fontSize: '0.8rem', textAlign: 'center' }}>
                 By submitting this form, you agree to our{' '}
-                <span style={{ color: '#FF5A00' }}>Privacy Policy</span>.
+                <span style={{ color: '#FF5C00' }}>Privacy Policy</span>.
                 We'll only use your details to respond to your enquiry.
               </p>
             </form>
@@ -175,7 +175,7 @@ export default function ContactUs({ onBack }) {
               <div>
                 <p style={{ fontWeight: '700', color: '#fff', fontSize: '0.9rem', marginBottom: '0.2rem' }}>{title}</p>
                 {link ? (
-                  <a href={link} style={{ color: '#FF5A00', textDecoration: 'none', fontSize: '0.88rem' }}>{detail}</a>
+                  <a href={link} style={{ color: '#FF5C00', textDecoration: 'none', fontSize: '0.88rem' }}>{detail}</a>
                 ) : (
                   <p style={{ color: '#9ca3af', fontSize: '0.88rem' }}>{detail}</p>
                 )}
@@ -183,8 +183,8 @@ export default function ContactUs({ onBack }) {
             </div>
           ))}
 
-          <div style={{ background: 'rgba(255,90,0,0.07)', border: '1px solid rgba(255,90,0,0.2)', borderRadius: '12px', padding: '1.25rem' }}>
-            <p style={{ fontWeight: '700', color: '#FF5A00', fontSize: '0.88rem', marginBottom: '0.5rem' }}>🍃 Fighting Food Waste Together</p>
+          <div style={{ background: 'rgba(255, 92, 0,0.07)', border: '1px solid rgba(255, 92, 0,0.2)', borderRadius: '12px', padding: '1.25rem' }}>
+            <p style={{ fontWeight: '700', color: '#FF5C00', fontSize: '0.88rem', marginBottom: '0.5rem' }}>🍃 Fighting Food Waste Together</p>
             <p style={{ color: '#9ca3af', fontSize: '0.82rem', lineHeight: 1.6 }}>
               Every question helps us improve Grabengo. We read every message personally and take your feedback seriously.
             </p>

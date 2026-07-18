@@ -81,7 +81,7 @@ export default function DoNotSell({ onBack }) {
             </div>
             <button
               type="submit" disabled={loading}
-              style={{ padding: '0.8rem 1.5rem', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #FF5A00, #FF8A00)', color: '#fff', fontFamily: 'inherit', fontWeight: '700', fontSize: '0.95rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
+              style={{ padding: '0.8rem 1.5rem', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #FF5C00, #E55200)', color: '#fff', fontFamily: 'inherit', fontWeight: '700', fontSize: '0.95rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
             >
               {loading ? 'Submitting…' : 'Submit Opt-Out Request'}
             </button>
@@ -94,7 +94,7 @@ export default function DoNotSell({ onBack }) {
       <Section title="Additional Options">
         <p>
           You may also submit your request by emailing{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>{' '}
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>{' '}
           with the subject line "Do Not Sell My Data". We will respond within 15 business days.
         </p>
         <br />

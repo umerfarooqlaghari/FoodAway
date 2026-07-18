@@ -36,7 +36,7 @@ export default function DsaDisclosure({ onBack }) {
         <br />
         <p>
           To report illegal or harmful content, please contact:{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>
         </p>
       </Section>
 
@@ -90,7 +90,7 @@ export default function DsaDisclosure({ onBack }) {
         </p>
         <br />
         <p><strong style={{ color: '#fff' }}>Email:</strong>{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>
         </p>
         <p><strong style={{ color: '#fff' }}>Languages supported:</strong> English</p>
       </Section>

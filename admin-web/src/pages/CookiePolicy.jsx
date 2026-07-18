@@ -57,7 +57,7 @@ export default function CookiePolicy({ onBack }) {
               {cookieTable.map((row, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
                   <td style={{ padding: '0.75rem 1rem', color: '#fff', fontFamily: 'monospace', fontSize: '0.83rem' }}>{row.name}</td>
-                  <td style={{ padding: '0.75rem 1rem', color: '#FF5A00' }}>{row.type}</td>
+                  <td style={{ padding: '0.75rem 1rem', color: '#FF5C00' }}>{row.type}</td>
                   <td style={{ padding: '0.75rem 1rem', color: '#9ca3af' }}>{row.duration}</td>
                   <td style={{ padding: '0.75rem 1rem', color: '#d1d5db' }}>{row.purpose}</td>
                 </tr>
@@ -96,7 +96,7 @@ export default function CookiePolicy({ onBack }) {
       <Section title="Contact Us">
         <p>
           Questions about our cookie use? Email us at{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
         </p>
       </Section>
 

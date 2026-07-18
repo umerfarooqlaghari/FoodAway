@@ -215,7 +215,7 @@ export default function TenantExplorePage({ onBack }) {
               onClick={() => setCategory(cat.id)}
             >
               <span className="explore-cat-icon">
-                <Icon size={18} color={active ? '#fff' : '#FF5A00'} />
+                <Icon size={18} color={active ? '#fff' : '#FF5C00'} />
               </span>
               <span>{cat.label}</span>
             </button>

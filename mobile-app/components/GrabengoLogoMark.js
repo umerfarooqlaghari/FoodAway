@@ -11,7 +11,7 @@ export default function GrabengoLogoMark({ size = 24, onDarkBg = false }) {
         cx="13"
         cy="13"
         r={innerR}
-        fill="#D4651A"
+        fill="#FF5C00"
         stroke={onDarkBg ? '#FFFFFF' : 'none'}
         strokeWidth={onDarkBg ? 1.5 : 0}
       />

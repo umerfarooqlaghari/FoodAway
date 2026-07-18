@@ -4,22 +4,26 @@
       "stores": ["read", "write", "delete"],
       "bags": ["read", "write", "delete"],
       "food_items": ["read", "write", "delete"],
+      "menu_items": ["read", "write", "delete"],
       "users": ["read", "write", "delete"]
     },
     "SellersAdmin": {
       "stores": ["read", "write"],
       "bags": ["read", "write", "delete"],
-      "food_items": ["read", "write", "delete"]
+      "food_items": ["read", "write", "delete"],
+      "menu_items": ["read", "write", "delete"]
     },
     "SellersStaff": {
       "stores": ["read", "write"],
       "bags": ["read", "write", "delete"],
-      "food_items": ["read", "write", "delete"]
+      "food_items": ["read", "write", "delete"],
+      "menu_items": ["read", "write", "delete"]
     },
     "Customers": {
       "stores": ["read"],
       "bags": ["read"],
-      "food_items": ["read"]
+      "food_items": ["read"],
+      "menu_items": ["read"]
     }
   }
 }

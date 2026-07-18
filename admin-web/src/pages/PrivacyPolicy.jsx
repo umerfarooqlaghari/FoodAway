@@ -95,7 +95,7 @@ export default function PrivacyPolicy({ onBack }) {
         </ul>
         <p style={{ marginTop: '0.75rem' }}>
           To exercise any of these rights, contact us at{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
         </p>
       </Section>
 
@@ -104,7 +104,7 @@ export default function PrivacyPolicy({ onBack }) {
       <Section title="Cookies">
         <p>
           We use cookies and similar technologies to enhance your experience. See our{' '}
-          <span style={{ color: '#FF5A00', cursor: 'pointer' }}>Cookie Policy</span> for full details.
+          <span style={{ color: '#FF5C00', cursor: 'pointer' }}>Cookie Policy</span> for full details.
         </p>
       </Section>
 
@@ -113,7 +113,7 @@ export default function PrivacyPolicy({ onBack }) {
       <Section title="Contact & Complaints">
         <p>
           If you have concerns about how we handle your data, please contact our Data Protection team at{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>.
           You also have the right to lodge a complaint with your local data protection authority.
         </p>
       </Section>

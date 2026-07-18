@@ -24,6 +24,12 @@ const pgPool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Idle clients can drop their TLS connection (remote DB restarts, network blips).
+// Without this handler the 'error' event is unhandled and crashes the process.
+pgPool.on('error', (err) => {
+  console.error('Postgres pool idle-client error (recovered):', err.message);
+});
+
 class AsyncPostgresDB {
   constructor(pool) {
     this.pool = pool;
@@ -275,6 +281,13 @@ const initDB = async () => {
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_enabled BOOLEAN DEFAULT FALSE"); } catch (e) {}
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_fee_note TEXT"); } catch (e) {}
   try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS category TEXT"); } catch (e) {}
+  try {
+    await db.exec("UPDATE stores SET category = 'Bakeries' WHERE category IS NULL AND (LOWER(name) LIKE '%bakery%' OR LOWER(name) LIKE '%bake%')");
+    await db.exec("UPDATE stores SET category = 'Cafes' WHERE category IS NULL AND (LOWER(name) LIKE '%cafe%' OR LOWER(name) LIKE '%coffee%')");
+    await db.exec("UPDATE stores SET category = 'Grocery Store' WHERE category IS NULL AND (LOWER(name) LIKE '%grocery%' OR LOWER(name) LIKE '%mart%' OR LOWER(name) LIKE '%supermarket%')");
+    await db.exec("UPDATE stores SET category = 'Restaurants' WHERE category IS NULL AND (LOWER(name) LIKE '%kfc%' OR LOWER(name) LIKE '%restaurant%' OR LOWER(name) LIKE '%kitchen%' OR LOWER(name) LIKE '%grabengo%' OR LOWER(name) LIKE '%delivery%' OR LOWER(name) LIKE '%senzo%')");
+    await db.exec("UPDATE stores SET category = 'Restaurants' WHERE category IS NULL");
+  } catch (e) {}
   try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS delivery_address TEXT"); } catch (e) {}
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_type TEXT DEFAULT 'pickup'"); } catch (e) {}
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT"); } catch (e) {}
@@ -297,6 +310,86 @@ const initDB = async () => {
   try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Card'"); } catch (e) {}
   try { await db.exec("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT '[]'"); } catch (e) {}
   try { await db.exec("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE"); } catch (e) {}
+
+  // ── Partner delivery system ──
+  // delivery_mode: 'self' (store delivers, current flow) | 'partner' (Grabengo partner fleet).
+  // Backfilled from delivery_enabled so existing delivery stores keep working as self-delivery.
+  try { await db.exec("ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_mode TEXT"); } catch (e) {}
+  try { await db.exec("UPDATE stores SET delivery_mode = 'self' WHERE delivery_mode IS NULL AND delivery_enabled = TRUE"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lat REAL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lng REAL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_id INTEGER"); } catch (e) {}
+  // Rider duty state lives on the user row (role = 'Partner')
+  try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_on_duty BOOLEAN DEFAULT FALSE"); } catch (e) {}
+  try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS duty_lat REAL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS duty_lng REAL"); } catch (e) {}
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS deliveries (
+        id SERIAL PRIMARY KEY,
+        store_id INTEGER,
+        customer_id INTEGER,
+        partner_id INTEGER,
+        status TEXT DEFAULT 'awaiting_confirmation',
+        fail_reason TEXT,
+        address TEXT,
+        lat REAL,
+        lng REAL,
+        distance_km REAL,
+        fee REAL,
+        cod_amount REAL,
+        pin TEXT,
+        prep_minutes INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        dispatched_at TIMESTAMP,
+        assigned_at TIMESTAMP,
+        picked_up_at TIMESTAMP,
+        delivered_at TIMESTAMP
+      );
+    `);
+  } catch (e) {}
+
+  // ── Grabengo Deals: persistent vendor menu + time-boxed discounts ──
+  // menu_items = always-orderable catalog (no stock cap, no expiry).
+  // food_items continues to be the "deal" engine (price/original_price/quantity/expiry) —
+  // a deal is a food_items row denormalized from a menu_item at creation time.
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS menu_items (
+        id SERIAL PRIMARY KEY,
+        store_id INTEGER,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT DEFAULT 'Other',
+        price REAL NOT NULL,
+        image TEXT,
+        is_hidden BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (store_id) REFERENCES stores (id)
+      );
+    `);
+  } catch (e) {}
+  try { await db.exec("ALTER TABLE food_items ADD COLUMN IF NOT EXISTS menu_item_id INTEGER REFERENCES menu_items(id) ON DELETE SET NULL"); } catch (e) {}
+  try { await db.exec("ALTER TABLE food_items ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ"); } catch (e) {}
+
+  // One-time backfill: give every pre-existing food_items row a menu_items twin so it's
+  // browsable in the always-on menu, not just while its (possibly expired) sale lasts.
+  try {
+    const orphans = await db.prepare('SELECT * FROM food_items WHERE menu_item_id IS NULL').all();
+    for (const item of orphans) {
+      const normalPrice = item.original_price || item.price;
+      let firstImage = null;
+      try {
+        const parsed = item.images ? JSON.parse(item.images) : null;
+        if (Array.isArray(parsed) && parsed.length) firstImage = parsed[0];
+      } catch (e) {}
+      const menuInfo = await db.prepare(
+        'INSERT INTO menu_items (store_id, name, description, category, price, image, is_hidden) VALUES (?, ?, ?, ?, ?, ?, FALSE)'
+      ).run(item.store_id, item.name, item.description, item.category, normalPrice, firstImage);
+      await db.prepare('UPDATE food_items SET menu_item_id = ? WHERE id = ?').run(menuInfo.lastInsertRowid, item.id);
+    }
+    if (orphans.length) console.log(`Backfilled ${orphans.length} legacy food_items into menu_items`);
+  } catch (e) { console.error('menu_items backfill failed:', e.message); }
 
   await migrateToTenantsTable(db);
 

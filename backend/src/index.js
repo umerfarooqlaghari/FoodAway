@@ -7,7 +7,7 @@ const STORE_CATEGORIES = ['Restaurants', 'Bakeries', 'Cafes', 'Grocery Store'];
 const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
-const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl } = require('./config');
+const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl, delivery: DELIVERY_CFG } = require('./config');
 const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout, emailSellerWelcomeLayout } = require('./emailTemplates');
 const {
   validateSubdomain,
@@ -28,15 +28,21 @@ const {
   ensureTenantSubdomain,
   listTenantsForSuperAdmin,
 } = require('./tenants');
-const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess, assertOrderAccess } = require('./tenant');
+const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess, assertMenuItemAccess, assertOrderAccess } = require('./tenant');
 const { registerSellerAdmin, mapRegistrationError, deleteOrphanTenants } = require('./sellerRegistration');
 const { formatStoreReview, formatAppReview, stripStoreTenantId } = require('./serializers');
 const { normalizePhone, phoneDigits, phoneLookupVariants, phonesMatch } = require('./phone');
 const {
   PRODUCT_CATEGORY_GROUPS,
   PRODUCT_CATEGORIES,
-  normalizeProductCategory,
 } = require('./productCategories');
+
+// Vendor menu categories are suggestions, not an enforced enum — a vendor picking
+// "add a custom one" must have that name stick, not get silently coerced to "Other".
+function resolveVendorCategory(input) {
+  const trimmed = String(input || '').trim();
+  return trimmed || 'Other';
+}
 
 async function findUserForOrderLookup({ email, phone }) {
   const trimmedEmail = email?.trim().toLowerCase();
@@ -95,6 +101,38 @@ function resolveRequestSubdomain(req) {
 
 function isMobileAppClient(req) {
   return req.headers['x-grabengo-client'] === 'mobile';
+}
+
+// ── Partner delivery helpers ──
+// Straight-line -> estimated road km, then base fee covers the first baseKm, perKm beyond.
+// Rounded to the nearest 10 so fees read as intentional prices.
+function computeDeliveryFee(straightKm) {
+  const roadKm = straightKm * DELIVERY_CFG.roadFactor;
+  const raw = roadKm <= DELIVERY_CFG.baseKm
+    ? DELIVERY_CFG.baseFee
+    : DELIVERY_CFG.baseFee + (roadKm - DELIVERY_CFG.baseKm) * DELIVERY_CFG.perKm;
+  return { fee: Math.max(DELIVERY_CFG.baseFee, Math.round(raw / 10) * 10), roadKm };
+}
+
+function generateDeliveryPin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+async function notifyOnDutyPartners(deliveryRow, storeName) {
+  const partners = await db.prepare(
+    "SELECT id, push_token, duty_lat, duty_lng FROM users WHERE role = 'Partner' AND is_on_duty = TRUE"
+  ).all();
+  for (const p of partners) {
+    if (p.duty_lat != null && p.duty_lng != null && deliveryRow.store_lat != null) {
+      const dist = haversineKm(p.duty_lat, p.duty_lng, deliveryRow.store_lat, deliveryRow.store_lng);
+      if (dist > DELIVERY_CFG.dispatchRadiusKm) continue;
+    }
+    sendToUser(p.id, { type: 'new_delivery_job', delivery_id: deliveryRow.id, store_name: storeName });
+    if (p.push_token) {
+      sendPushNotification(p.push_token, 'New delivery job', `Pickup from ${storeName} — Rs${deliveryRow.fee} fee`, { type: 'delivery_job', deliveryId: deliveryRow.id })
+        .catch(() => {});
+    }
+  }
 }
 
 async function fetchOrderForNotification(orderId) {
@@ -219,10 +257,10 @@ app.get('/delete-account', (req, res) => {
 <title>Delete Your Account — ${brandName}</title>
 <style>
   body { font-family: -apple-system, Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 32px 24px 80px; color: #1f2937; line-height: 1.65; }
-  h1 { color: #E27A53; }
+  h1 { color: #FF5C00; }
   h2 { color: #111827; margin-top: 32px; }
-  a { color: #E27A53; }
-  .steps { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; padding: 16px 20px; }
+  a { color: #FF5C00; }
+  .steps { background: #FFFFFF; border: 1px solid rgba(255, 92, 0, 0.15); border-radius: 12px; padding: 16px 20px; }
 </style>
 </head>
 <body>
@@ -264,9 +302,9 @@ app.get('/privacy', (req, res) => {
 <title>Privacy Policy — ${brandName}</title>
 <style>
   body { font-family: -apple-system, Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 32px 24px 80px; color: #1f2937; line-height: 1.65; }
-  h1 { color: #E27A53; }
+  h1 { color: #FF5C00; }
   h2 { color: #111827; margin-top: 32px; }
-  a { color: #E27A53; }
+  a { color: #FF5C00; }
   ul { padding-left: 20px; }
 </style>
 </head>
@@ -595,7 +633,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         bodyHtml: `
           <p>Hi ${user.name || 'User'},</p>
           <p>You requested a password reset. Your OTP verification code is:</p>
-          <h2 style="font-size: 24px; letter-spacing: 2px; color: #EA580C; font-family: monospace;">${otp}</h2>
+          <h2 style="font-size: 24px; letter-spacing: 2px; color: #FF5C00; font-family: monospace;">${otp}</h2>
           <p>This code is valid for <strong>2 minutes</strong>. If you did not request this reset, please ignore this email.</p>`,
       }),
       text: `Hi, your ${brandName} password reset OTP is ${otp}. Valid for 2 minutes.`
@@ -646,7 +684,7 @@ app.get('/api/bags', verifyToken, requireRole('bags', 'read'), async (req, res) 
   const { all, tenant_id } = req.query;
   try {
     let query = `
-      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note,
+      SELECT b.id, b.price, b.original_price, b.description, b.images, b.quantity, b.pickup_time, b.store_id, s.name as store_name, s.address, s.lat, s.lng, s.is_active, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note, s.delivery_mode,
              CASE WHEN f.user_id IS NOT NULL THEN 1 ELSE 0 END as is_favorited
       FROM surprise_bags b
       JOIN stores s ON b.store_id = s.id
@@ -774,8 +812,54 @@ app.post('/api/users/push-token', verifyToken, async (req, res) => {
   }
 });
 
+// Permanent account deletion (Apple Guideline 5.1.1(v))
+app.delete('/api/users/me', verifyToken, async (req, res) => {
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: 'Password is required to delete your account.' });
+
+  if (req.user.role !== 'Customers') {
+    return res.status(403).json({
+      error: 'Business accounts must be deleted through support. Email support@grabengo.store with your store details.',
+    });
+  }
+
+  try {
+    const user = await db.prepare('SELECT id, password FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) return res.status(401).json({ error: 'Incorrect password.' });
+
+    const userId = req.user.id;
+    await db.prepare('DELETE FROM favorites WHERE user_id = ?').run(userId);
+    await db.prepare('DELETE FROM app_reviews WHERE customer_id = ?').run(userId);
+    await db.prepare('DELETE FROM reviews WHERE customer_id = ?').run(userId);
+    await db.prepare('DELETE FROM chat_messages WHERE customer_id = ?').run(userId);
+
+    const anonEmail = `deleted-${userId}-${Date.now()}@grabengo.invalid`;
+    const deadPassword = await bcrypt.hash(`${Date.now()}-${Math.random()}`, 10);
+    await db.prepare(`
+      UPDATE users
+      SET name = 'Deleted User',
+          email = ?,
+          password = ?,
+          phone = NULL,
+          logo = NULL,
+          push_token = NULL,
+          refresh_token = NULL,
+          delivery_address = NULL
+      WHERE id = ?
+    `).run(anonEmail, deadPassword, userId);
+
+    res.json({ message: 'Your account has been permanently deleted.' });
+  } catch (err) {
+    console.error('DELETE /api/users/me error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req, res) => {
-  const { name, address, lat, lng, image, delivery_enabled, delivery_fee_note, category } = req.body;
+  const { name, address, lat, lng, image, delivery_enabled, delivery_fee_note, category, delivery_mode } = req.body;
 
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({ error: 'Latitude and Longitude are required' });
@@ -788,8 +872,9 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
     const targetTenantId = requireTenantId(req.user);
     const imageUrl = image ? await uploadImageToS3(image) : null;
     const deliveryEnabledBool = Boolean(delivery_enabled);
-    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category);
-    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category });
+    const deliveryMode = deliveryEnabledBool ? (delivery_mode === 'partner' ? 'partner' : 'self') : null;
+    const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category, delivery_mode) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category, deliveryMode);
+    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category, delivery_mode: deliveryMode });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -797,7 +882,7 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
 
 app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (req, res) => {
   const { id } = req.params;
-  const { lat, lng, is_active, name, address, image, delivery_enabled, delivery_fee_note, category } = req.body;
+  const { lat, lng, is_active, name, address, image, delivery_enabled, delivery_fee_note, category, delivery_mode } = req.body;
   if (category !== undefined && category !== null && !STORE_CATEGORIES.includes(category)) {
     return res.status(400).json({ error: `category must be one of: ${STORE_CATEGORIES.join(', ')}` });
   }
@@ -820,10 +905,12 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
         image = COALESCE(?, image),
         delivery_enabled = COALESCE(?, delivery_enabled),
         delivery_fee_note = CASE WHEN ?::boolean THEN ?::text ELSE delivery_fee_note END,
-        category = COALESCE(?, category)
+        category = COALESCE(?, category),
+        delivery_mode = CASE WHEN ?::boolean THEN ?::text ELSE delivery_mode END
        WHERE id = ?`
     ).run(lat, lng, isActiveBool, name, address, imageUrl, deliveryEnabledBool,
-      delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category, id);
+      delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category,
+      delivery_mode !== undefined, delivery_mode !== undefined ? (delivery_mode === 'partner' ? 'partner' : (delivery_mode === 'self' ? 'self' : null)) : null, id);
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -937,7 +1024,7 @@ app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async
     let query = `
       SELECT f.id, f.name, f.description, f.price, f.original_price, f.images,
              f.quantity, f.category, f.is_available, f.store_id, f.created_at, f.sale_ends_at,
-             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note,
+             s.name as store_name, s.address, s.lat, s.lng, s.image as store_image, s.tenant_id, s.delivery_enabled, s.delivery_fee_note, s.delivery_mode,
              CASE WHEN fav.user_id IS NOT NULL THEN 1 ELSE 0 END as is_favorited
       FROM food_items f
       JOIN stores s ON f.store_id = s.id
@@ -976,40 +1063,63 @@ app.get('/api/food-items', verifyToken, requireRole('food_items', 'read'), async
 });
 
 app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
-  const { store_id, name, description, price, original_price, images, quantity, category, sale_ends_at } = req.body;
-  if (!store_id || !name || !price) return res.status(400).json({ error: 'store_id, name, and price are required.' });
+  const { store_id, menu_item_id, name, description, price, original_price, images, quantity, category, sale_ends_at, starts_at } = req.body;
+  if (starts_at && Number.isNaN(Date.parse(starts_at))) {
+    return res.status(400).json({ error: 'starts_at must be a valid date-time.' });
+  }
   if (sale_ends_at && Number.isNaN(Date.parse(sale_ends_at))) {
     return res.status(400).json({ error: 'sale_ends_at must be a valid date-time.' });
   }
   try {
-    await assertStoreAccess(db, store_id, req.user);
+    // Deals are created against a dropdown-selected menu item — its name/description/
+    // category/image are authoritative so the deal stays consistent with the catalog.
+    let resolvedStoreId = store_id;
+    let resolvedName = name, resolvedDescription = description, resolvedCategory = category, resolvedImages = images;
+    let resolvedOriginalPrice = original_price;
+    if (menu_item_id) {
+      const menuItem = await assertMenuItemAccess(db, menu_item_id, req.user);
+      resolvedStoreId = menuItem.store_id;
+      resolvedName = menuItem.name;
+      resolvedDescription = menuItem.description;
+      resolvedCategory = menuItem.category;
+      resolvedImages = menuItem.image ? [menuItem.image] : null;
+      // The menu item's own listed price is the "before discount" price unless the
+      // seller explicitly overrides it — a deal without this is invisible to customers,
+      // since the deals feed only shows rows that actually have a discount to display.
+      if (resolvedOriginalPrice == null) resolvedOriginalPrice = menuItem.price;
+    }
+    if (!resolvedStoreId || !resolvedName || !price) return res.status(400).json({ error: 'store_id (or menu_item_id), name, and price are required.' });
+    await assertStoreAccess(db, resolvedStoreId, req.user);
     let s3Images = null;
-    if (images) {
-      const parsedImages = typeof images === 'string' ? JSON.parse(images) : images;
+    if (resolvedImages) {
+      const parsedImages = typeof resolvedImages === 'string' ? JSON.parse(resolvedImages) : resolvedImages;
       if (Array.isArray(parsedImages)) {
         const uploaded = await Promise.all(parsedImages.map(img => uploadImageToS3(img)));
         s3Images = JSON.stringify(uploaded);
       }
     }
-    const normalizedCategory = normalizeProductCategory(category);
+    const normalizedCategory = resolveVendorCategory(resolvedCategory);
     const info = await db.prepare(
-      'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category, sale_ends_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(store_id, name, description, price, original_price || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null);
-    res.json({ id: info.lastInsertRowid, store_id, name, price, quantity, category: normalizedCategory });
+      'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category, sale_ends_at, starts_at, menu_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(resolvedStoreId, resolvedName, resolvedDescription, price, resolvedOriginalPrice || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null, starts_at || null, menu_item_id || null);
+    res.json({ id: info.lastInsertRowid, store_id: resolvedStoreId, name: resolvedName, price, quantity, category: normalizedCategory });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
   const { id } = req.params;
-  const { name, description, price, original_price, images, quantity, category, is_available, sale_ends_at } = req.body;
+  const { name, description, price, original_price, images, quantity, category, is_available, sale_ends_at, starts_at } = req.body;
   if (sale_ends_at && Number.isNaN(Date.parse(sale_ends_at))) {
     return res.status(400).json({ error: 'sale_ends_at must be a valid date-time.' });
   }
+  if (starts_at && Number.isNaN(Date.parse(starts_at))) {
+    return res.status(400).json({ error: 'starts_at must be a valid date-time.' });
+  }
   try {
     const item = await assertFoodItemAccess(db, id, req.user);
-    
+
     let s3Images = undefined;
     if (images !== undefined) {
       if (images) {
@@ -1025,7 +1135,7 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
 
     const isAvailableBool = is_available !== undefined && is_available !== null ? Boolean(is_available) : null;
     const normalizedCategory =
-      category !== undefined && category !== null ? normalizeProductCategory(category) : null;
+      category !== undefined && category !== null ? resolveVendorCategory(category) : null;
     await db.prepare(
       `UPDATE food_items SET
         name = COALESCE(?, name),
@@ -1036,11 +1146,26 @@ app.put('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'), 
         quantity = COALESCE(?, quantity),
         category = COALESCE(?, category),
         is_available = COALESCE(?, is_available),
-        sale_ends_at = CASE WHEN ?::boolean THEN ?::timestamptz ELSE sale_ends_at END
+        sale_ends_at = CASE WHEN ?::boolean THEN ?::timestamptz ELSE sale_ends_at END,
+        starts_at = CASE WHEN ?::boolean THEN ?::timestamptz ELSE starts_at END
        WHERE id = ?`
     ).run(name, description, price, original_price, s3Images, quantity, normalizedCategory, isAvailableBool,
-      sale_ends_at !== undefined, sale_ends_at !== undefined ? (sale_ends_at || null) : null, id);
+      sale_ends_at !== undefined, sale_ends_at !== undefined ? (sale_ends_at || null) : null,
+      starts_at !== undefined, starts_at !== undefined ? (starts_at || null) : null, id);
     res.json({ message: 'Food item updated successfully' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// End a deal early: fold sale_ends_at to now so it drops out of the customer-facing
+// Grabengo Deals feed immediately, without losing the row's history/quantity data.
+app.patch('/api/food-items/:id/end-sale', verifyToken, requireRole('food_items', 'write'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    await assertFoodItemAccess(db, id, req.user);
+    await db.prepare("UPDATE food_items SET sale_ends_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    res.json({ message: 'Sale ended' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -1058,6 +1183,179 @@ app.delete('/api/food-items/:id', verifyToken, requireRole('food_items', 'write'
   }
 });
 
+// ─── Menu Items (persistent vendor catalog, unlimited stock) ──────────────
+
+// Seller: list all items for a store, including hidden ones (for the Menu management screen)
+app.get('/api/seller/menu-items', verifyToken, requireRole('menu_items', 'read'), async (req, res) => {
+  const { store_id } = req.query;
+  try {
+    let rows;
+    if (store_id) {
+      await assertStoreAccess(db, store_id, req.user);
+      rows = await db.prepare('SELECT * FROM menu_items WHERE store_id = ? ORDER BY category, name').all(store_id);
+    } else if (req.user.role === 'SuperAdmin') {
+      rows = await db.prepare('SELECT * FROM menu_items ORDER BY category, name').all();
+    } else {
+      const tenantId = requireTenantId(req.user);
+      rows = await db.prepare(
+        `SELECT m.* FROM menu_items m JOIN stores s ON m.store_id = s.id WHERE s.tenant_id = ? ORDER BY m.category, m.name`
+      ).all(tenantId);
+    }
+    const signed = await Promise.all(rows.map(async r => ({ ...r, image: await getPresignedUrl(r.image) })));
+    res.json(signed);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.post('/api/seller/menu-items', verifyToken, requireRole('menu_items', 'write'), async (req, res) => {
+  const { store_id, name, description, category, price, image } = req.body;
+  if (!store_id || !name || !price) return res.status(400).json({ error: 'store_id, name, and price are required.' });
+  try {
+    await assertStoreAccess(db, store_id, req.user);
+    const s3Image = image ? await uploadImageToS3(image) : null;
+    const normalizedCategory = resolveVendorCategory(category);
+    const info = await db.prepare(
+      'INSERT INTO menu_items (store_id, name, description, category, price, image) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(store_id, name, description || null, normalizedCategory, price, s3Image);
+    res.json({ id: info.lastInsertRowid, store_id, name, price, category: normalizedCategory });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.put('/api/seller/menu-items/:id', verifyToken, requireRole('menu_items', 'write'), async (req, res) => {
+  const { id } = req.params;
+  const { name, description, category, price, image } = req.body;
+  try {
+    const item = await assertMenuItemAccess(db, id, req.user);
+    let s3Image = item.image;
+    if (image !== undefined) {
+      s3Image = image ? await uploadImageToS3(image) : null;
+    }
+    await db.prepare(
+      `UPDATE menu_items SET
+        name = COALESCE(?, name),
+        description = ?,
+        category = COALESCE(?, category),
+        price = COALESCE(?, price),
+        image = ?
+       WHERE id = ?`
+    ).run(
+      name || null,
+      description !== undefined ? description : item.description,
+      category ? resolveVendorCategory(category) : null,
+      price || null,
+      s3Image,
+      id
+    );
+    res.json({ message: 'Menu item updated' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/seller/menu-items/:id/hide', verifyToken, requireRole('menu_items', 'write'), async (req, res) => {
+  const { id } = req.params;
+  const { hidden } = req.body;
+  try {
+    await assertMenuItemAccess(db, id, req.user);
+    await db.prepare('UPDATE menu_items SET is_hidden = ? WHERE id = ?').run(!!hidden, id);
+    res.json({ message: hidden ? 'Item hidden from menu' : 'Item now visible on menu' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/seller/menu-items/:id', verifyToken, requireRole('menu_items', 'delete'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    await assertMenuItemAccess(db, id, req.user);
+    await db.prepare('DELETE FROM menu_items WHERE id = ?').run(id);
+    res.json({ message: 'Menu item deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// Customer-facing: full menu + active Grabengo Deals for a store.
+// Hidden menu items are excluded from `menuItems`, but a hidden item that's on an
+// active deal still surfaces via `deals` — deals are self-contained (denormalized)
+// food_items rows, independent of the underlying menu item's hidden flag.
+app.get('/api/stores/:storeId/menu', verifyToken, async (req, res) => {
+  const { storeId } = req.params;
+  try {
+    const store = await db.prepare('SELECT * FROM stores WHERE id = ? AND is_active = TRUE').get(storeId);
+    if (!store) return res.status(404).json({ error: 'Store not found' });
+    const menuItems = await db.prepare(
+      `SELECT id, name, description, category, price, image, created_at
+       FROM menu_items WHERE store_id = ? AND is_hidden = FALSE ORDER BY category, name`
+    ).all(storeId);
+    const deals = await db.prepare(
+      `SELECT id, menu_item_id, name, description, category, price, original_price, images, quantity, starts_at, sale_ends_at
+       FROM food_items
+       WHERE store_id = ? AND is_available = TRUE AND quantity > 0 AND original_price IS NOT NULL
+         AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+         AND (sale_ends_at IS NULL OR sale_ends_at > CURRENT_TIMESTAMP)
+       ORDER BY sale_ends_at ASC NULLS LAST`
+    ).all(storeId);
+    // Cart/checkout reads store context straight off each item (tenant_id is stripped
+    // from the store object itself for non-SuperAdmin roles), so stamp it on here —
+    // same convention /api/food-items already uses.
+    const storeContext = {
+      store_name: store.name,
+      store_id: store.id,
+      tenant_id: store.tenant_id,
+      delivery_enabled: !!store.delivery_enabled,
+      delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+      delivery_fee_note: store.delivery_fee_note,
+      store_lat: store.lat,
+      store_lng: store.lng,
+    };
+    const signedMenu = await Promise.all(menuItems.map(async m => ({ ...m, type: 'menu', image: await getPresignedUrl(m.image), ...storeContext })));
+    const signedDeals = await Promise.all(deals.map(async d => ({ ...d, type: 'food', images: await presignImages(d.images), ...storeContext })));
+    res.json({ menuItems: signedMenu, deals: signedDeals });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Public menu browse — no account required (Apple Guideline 5.1.1)
+app.get('/api/public/stores/:storeId/menu', async (req, res) => {
+  const { storeId } = req.params;
+  try {
+    const store = await db.prepare('SELECT * FROM stores WHERE id = ? AND is_active = TRUE').get(storeId);
+    if (!store) return res.status(404).json({ error: 'Store not found' });
+    const menuItems = await db.prepare(
+      `SELECT id, name, description, category, price, image, created_at
+       FROM menu_items WHERE store_id = ? AND is_hidden = FALSE ORDER BY category, name`
+    ).all(storeId);
+    const deals = await db.prepare(
+      `SELECT id, menu_item_id, name, description, category, price, original_price, images, quantity, starts_at, sale_ends_at
+       FROM food_items
+       WHERE store_id = ? AND is_available = TRUE AND quantity > 0 AND original_price IS NOT NULL
+         AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+         AND (sale_ends_at IS NULL OR sale_ends_at > CURRENT_TIMESTAMP)
+       ORDER BY sale_ends_at ASC NULLS LAST`
+    ).all(storeId);
+    const storeContext = {
+      store_name: store.name,
+      store_id: store.id,
+      tenant_id: store.tenant_id,
+      delivery_enabled: !!store.delivery_enabled,
+      delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+      delivery_fee_note: store.delivery_fee_note,
+      store_lat: store.lat,
+      store_lng: store.lng,
+    };
+    const signedMenu = await Promise.all(menuItems.map(async m => ({ ...m, type: 'menu', image: await getPresignedUrl(m.image), ...storeContext })));
+    const signedDeals = await Promise.all(deals.map(async d => ({ ...d, type: 'food', images: await presignImages(d.images), ...storeContext })));
+    res.json({ menuItems: signedMenu, deals: signedDeals });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ──────────────────────────────────────────────────────────────────────────
 
 // Create an order (checkout cart)
@@ -1065,7 +1363,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
   if (req.user.role !== 'Customers') {
     return res.status(403).json({ error: 'Only customers can place orders' });
   }
-  const { items, paymentMethod, fulfillmentType, deliveryAddress, deliveryPhone } = req.body;
+  const { items, paymentMethod, fulfillmentType, deliveryAddress, deliveryPhone, deliveryLat, deliveryLng } = req.body;
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Cart is empty' });
   const method = paymentMethod || 'Card';
   const isDelivery = fulfillmentType === 'delivery';
@@ -1086,6 +1384,36 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'One or more stores in your cart do not offer delivery. Please switch to pickup or remove those items.' });
     }
 
+    // Delivery orders need a pinned location so riders (store or partner) can navigate,
+    // and so the 12 km delivery radius can be enforced per store.
+    const custLat = deliveryLat != null ? Number(deliveryLat) : null;
+    const custLng = deliveryLng != null ? Number(deliveryLng) : null;
+    const deliveryFees = {}; // store_id -> { fee, distance_km, mode }
+    if (isDelivery) {
+      if (custLat == null || custLng == null || isNaN(custLat) || isNaN(custLng)) {
+        return res.status(400).json({ error: 'Please pin your delivery location so the rider can find you.' });
+      }
+      const storeGroups = {};
+      for (const p of preview) {
+        if (!storeGroups[p.store_id]) storeGroups[p.store_id] = p;
+      }
+      for (const p of Object.values(storeGroups)) {
+        if (p.store_lat == null || p.store_lng == null) continue;
+        const straightKm = haversineKm(custLat, custLng, p.store_lat, p.store_lng);
+        if (straightKm > DELIVERY_CFG.maxRadiusKm) {
+          return res.status(400).json({ error: `${p.store_name} only delivers within ${DELIVERY_CFG.maxRadiusKm} km. Your pinned location is too far — switch to pickup instead.` });
+        }
+        const { fee, roadKm } = computeDeliveryFee(straightKm);
+        deliveryFees[p.store_id] = {
+          fee,
+          distance_km: Math.round(roadKm * 10) / 10,
+          mode: p.delivery_mode || 'self',
+          store_lat: p.store_lat,
+          store_lng: p.store_lng,
+        };
+      }
+    }
+
     const orderIds = [];
     const fulfillment = isDelivery ? 'delivery' : 'pickup';
     const orderDeliveryAddress = isDelivery ? deliveryAddress.trim() : null;
@@ -1101,14 +1429,21 @@ app.post('/api/orders', verifyToken, async (req, res) => {
           if (!bag || bag.quantity < quantity) throw new Error(`Bag ${id} not available in requested quantity`);
 
           await db.prepare('UPDATE surprise_bags SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
-          const info = await db.prepare('INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, bag.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone);
+          const info = await db.prepare('INSERT INTO orders (bag_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone, delivery_lat, delivery_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, bag.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone, isDelivery ? custLat : null, isDelivery ? custLng : null);
           orderIds.push(info.lastInsertRowid);
         } else if (type === 'food') {
           const food = await db.prepare('SELECT * FROM food_items WHERE id = ?').get(id);
           if (!food || food.quantity < quantity || !food.is_available) throw new Error(`Food item ${id} not available in requested quantity`);
 
           await db.prepare('UPDATE food_items SET quantity = quantity - ? WHERE id = ?').run(quantity, id);
-          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone);
+          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone, delivery_lat, delivery_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, quantity, food.store_id, userId, price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone, isDelivery ? custLat : null, isDelivery ? custLng : null);
+          orderIds.push(info.lastInsertRowid);
+        } else if (type === 'menu') {
+          const menuItem = await db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
+          if (!menuItem || menuItem.is_hidden) throw new Error(`Menu item ${id} is no longer available`);
+
+          const snapshotId = await snapshotMenuItemForOrder(menuItem);
+          const info = await db.prepare('INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method, fulfillment_type, delivery_address, delivery_phone, delivery_lat, delivery_lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(snapshotId, 'food', quantity, menuItem.store_id, userId, menuItem.price, method, fulfillment, orderDeliveryAddress, orderDeliveryPhone, isDelivery ? custLat : null, isDelivery ? custLng : null);
           orderIds.push(info.lastInsertRowid);
         } else {
           throw new Error(`Invalid item type: ${type}`);
@@ -1117,6 +1452,30 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     });
 
     await processOrder(items, req.user.id);
+
+    // One delivery record per partner-mode store group; dispatched when the seller confirms.
+    const createdDeliveries = [];
+    if (isDelivery) {
+      for (const [storeId, info] of Object.entries(deliveryFees)) {
+        if (info.mode !== 'partner') continue;
+        const storeOrderIds = [];
+        for (const oid of orderIds) {
+          const o = await db.prepare('SELECT id, store_id, price, quantity FROM orders WHERE id = ?').get(oid);
+          if (o && Number(o.store_id) === Number(storeId)) storeOrderIds.push(o);
+        }
+        if (storeOrderIds.length === 0) continue;
+        const cod = storeOrderIds.reduce((sum, o) => sum + Number(o.price) * (o.quantity || 1), 0) + info.fee;
+        const dInfo = await db.prepare(
+          `INSERT INTO deliveries (store_id, customer_id, status, address, lat, lng, distance_km, fee, cod_amount, pin)
+           VALUES (?, ?, 'awaiting_confirmation', ?, ?, ?, ?, ?, ?, ?)`
+        ).run(storeId, req.user.id, orderDeliveryAddress, custLat, custLng, info.distance_km, info.fee, cod, generateDeliveryPin());
+        const deliveryId = dInfo.lastInsertRowid;
+        for (const o of storeOrderIds) {
+          await db.prepare('UPDATE orders SET delivery_id = ? WHERE id = ?').run(deliveryId, o.id);
+        }
+        createdDeliveries.push({ delivery_id: deliveryId, store_id: Number(storeId), fee: info.fee });
+      }
+    }
 
     // Retrieve order details to trigger notifications
     const placedOrders = [];
@@ -1173,10 +1532,13 @@ app.post('/api/orders', verifyToken, async (req, res) => {
         `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — £${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
       ).join('');
       const anyDelivery = placedOrders.some(o => o.fulfillment_type === 'delivery');
+      const isPartnerDelivery = createdDeliveries.length > 0;
       const deliveryNoteHtml = anyDelivery ? `
               <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:14px;margin-top:16px;">
                 <p style="margin:0;color:#1d4ed8;font-weight:bold;">🛵 Delivery order</p>
-                <p style="margin:6px 0 0;color:#555;font-size:13px;">The store will deliver this order directly (not Grabengo) and may call you to confirm. Delivery charges, if any, are set by the store and are not included in the total below — pay them directly to the store.</p>
+                <p style="margin:6px 0 0;color:#555;font-size:13px;">${isPartnerDelivery
+                  ? `A Grabengo delivery partner will bring your order once the store confirms it. Your 4-digit delivery PIN is shown in the app under Bookings — give it to the rider on arrival and pay the order total plus the delivery fee (Rs${createdDeliveries.reduce((t, d) => t + Number(d.fee), 0)}) in cash.`
+                  : 'The store will deliver this order directly (not Grabengo) and may call you to confirm. Delivery charges, if any, are set by the store and are not included in the total below — pay them directly to the store.'}</p>
               </div>` : '';
 
       buildReceiptAttachments(receiptGroups, {
@@ -1192,13 +1554,13 @@ app.post('/api/orders', verifyToken, async (req, res) => {
             <div style="background:#fff;padding:24px 32px;border:1px solid #eee;border-top:none;">
               <p style="color:#333;">Hi <strong>${customer.name}</strong>,</p>
               <p style="color:#555;">Thank you for rescuing food! Your order has been confirmed. Your receipt${attachments.length > 1 ? 's are' : ' is'} attached to this email.</p>
-              <h3 style="color:#FF5A00;border-bottom:2px solid #FF5A00;padding-bottom:6px;">Order Summary</h3>
+              <h3 style="color:#FF5C00;border-bottom:2px solid #FF5C00;padding-bottom:6px;">Order Summary</h3>
               <ul style="color:#333;line-height:1.8;">${itemsList}</ul>
               <p style="font-size:18px;font-weight:bold;color:#1a1a1a;border-top:1px solid #eee;padding-top:12px;">
-                Total: <span style="color:#FF5A00;">£${total.toFixed(2)}</span>
+                Total: <span style="color:#FF5C00;">£${total.toFixed(2)}</span>
               </p>
               <div style="background:#fff8f5;border:1px solid #ffe0cc;border-radius:6px;padding:14px;margin-top:16px;">
-                <p style="margin:0;color:#FF5A00;font-weight:bold;">Payment: Cash at Pickup</p>
+                <p style="margin:0;color:#FF5C00;font-weight:bold;">Payment: Cash at Pickup</p>
                 <p style="margin:6px 0 0;color:#555;font-size:13px;">Present your receipt at the store when collecting your order.</p>
               </div>
               ${deliveryNoteHtml}
@@ -1217,6 +1579,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
       order_ids: orderIds,
       orders: placedOrders,
       receipt_groups: receiptGroups,
+      deliveries: createdDeliveries,
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -1312,9 +1675,14 @@ app.get('/api/orders/me', verifyToken, async (req, res) => {
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
              o.fulfillment_type, o.delivery_address, o.delivery_phone, o.status,
              s.name as store_name, s.address, s.image as store_image, s.delivery_fee_note,
-             COALESCE(b.description, f.name) as item_name
+             s.delivery_mode,
+             COALESCE(b.description, f.name) as item_name,
+             d.status AS delivery_status, d.fee AS delivery_fee, d.pin AS delivery_pin,
+             d.cod_amount AS delivery_cod, p.name AS partner_name, p.phone AS partner_phone
       FROM orders o
       JOIN stores s ON o.store_id = s.id
+      LEFT JOIN deliveries d ON o.delivery_id = d.id
+      LEFT JOIN users p ON d.partner_id = p.id
       LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
       LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
       WHERE o.customer_id = ?
@@ -1357,14 +1725,19 @@ app.get('/api/seller/orders', verifyToken, async (req, res) => {
     const orders = await db.prepare(`
       SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
              o.fulfillment_type, o.delivery_address, o.status,
+             o.delivery_lat, o.delivery_lng, o.delivery_id,
              COALESCE(o.delivery_phone, u.phone) as customer_phone,
              u.name as customer_name, u.email as customer_email,
-             s.name as store_name,
+             s.name as store_name, s.delivery_mode,
              COALESCE(b.pickup_time, 'N/A') as pickup_time,
-             COALESCE(b.description, f.name) as item_name
+             COALESCE(b.description, f.name) as item_name,
+             d.status AS delivery_status, d.fee AS delivery_fee, d.cod_amount AS delivery_cod,
+             p.name AS partner_name, p.phone AS partner_phone
       FROM orders o
       JOIN users u ON o.customer_id = u.id
       JOIN stores s ON o.store_id = s.id
+      LEFT JOIN deliveries d ON o.delivery_id = d.id
+      LEFT JOIN users p ON d.partner_id = p.id
       LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
       LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
       ${queryFilter}
@@ -1385,6 +1758,10 @@ const ORDER_ACTION_MESSAGES = {
     title: 'Delivery Declined',
     body: (order) => `${order.store_name} can't deliver your order. It's been cancelled and any charge will not be collected.`,
   },
+  confirmed_partner: {
+    title: 'Order Confirmed',
+    body: (order) => `${order.store_name} confirmed your order. A Grabengo delivery partner will pick it up and bring it to you.`,
+  },
   converted_pickup: {
     title: 'Switched to Pickup',
     body: (order) => `${order.store_name} switched your order to pickup instead of delivery. No delivery charge will apply.`,
@@ -1392,6 +1769,16 @@ const ORDER_ACTION_MESSAGES = {
   cancelled: {
     title: 'Order Cancelled',
     body: (order) => `${order.store_name} cancelled your order (Ref #${order.id}).`,
+  },
+  picked_up: {
+    title: 'Order Complete',
+    body: (order) => order.fulfillment_type === 'delivery'
+      ? `${order.store_name} marked your order as delivered. Enjoy!`
+      : `${order.store_name} confirmed your pickup. Enjoy your order!`,
+  },
+  paid: {
+    title: 'Order Complete',
+    body: (order) => `${order.store_name} marked your order as complete (Ref #${order.id}).`,
   },
 };
 
@@ -1421,7 +1808,7 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
   const { action } = req.body;
-  const validActions = ['confirm', 'reject', 'convert_to_pickup', 'mark_paid', 'cancel'];
+  const validActions = ['confirm', 'reject', 'convert_to_pickup', 'mark_paid', 'mark_picked_up', 'cancel'];
   if (!validActions.includes(action)) {
     return res.status(400).json({ error: 'Invalid action' });
   }
@@ -1448,6 +1835,20 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
       }
       newStatus = 'confirmed';
       notifyKey = 'confirmed';
+      // Partner-mode orders: first confirmation dispatches the delivery to on-duty riders.
+      if (order.delivery_id) {
+        const prepMinutes = Number(req.body.prep_minutes) || null;
+        const dispatched = await db.prepare(
+          `UPDATE deliveries SET status = 'pending', dispatched_at = CURRENT_TIMESTAMP, prep_minutes = COALESCE(?, prep_minutes)
+           WHERE id = ? AND status = 'awaiting_confirmation' RETURNING *`
+        ).get(prepMinutes, order.delivery_id);
+        if (dispatched) {
+          const store = await db.prepare('SELECT name, lat, lng FROM stores WHERE id = ?').get(dispatched.store_id);
+          notifyOnDutyPartners({ ...dispatched, store_lat: store?.lat, store_lng: store?.lng }, store?.name || order.store_name)
+            .catch(err => console.error('Partner dispatch notify failed:', err.message));
+        }
+        notifyKey = 'confirmed_partner';
+      }
     } else if (action === 'reject') {
       if (order.fulfillment_type !== 'delivery' || order.status !== 'pending') {
         return res.status(400).json({ error: 'This order cannot be rejected right now.' });
@@ -1462,11 +1863,12 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
       newStatus = 'confirmed';
       newFulfillment = 'pickup';
       notifyKey = 'converted_pickup';
-    } else if (action === 'mark_paid') {
+    } else if (action === 'mark_paid' || action === 'mark_picked_up') {
       if (isSettled) {
         return res.status(400).json({ error: 'This order has already been settled.' });
       }
       newStatus = 'paid';
+      notifyKey = action === 'mark_picked_up' ? 'picked_up' : 'paid';
     } else if (action === 'cancel') {
       if (isSettled) {
         return res.status(400).json({ error: 'This order has already been settled.' });
@@ -1477,6 +1879,18 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
     }
 
     await db.prepare('UPDATE orders SET status = ?, fulfillment_type = ? WHERE id = ?').run(newStatus, newFulfillment, order.id);
+
+    // If a partner delivery loses all its orders (rejected/cancelled), cancel it before pickup.
+    if (order.delivery_id && ['rejected', 'cancelled'].includes(newStatus)) {
+      const remaining = await db.prepare(
+        "SELECT COUNT(*) AS cnt FROM orders WHERE delivery_id = ? AND status NOT IN ('rejected', 'cancelled')"
+      ).get(order.delivery_id);
+      if (Number(remaining.cnt) === 0) {
+        await db.prepare(
+          "UPDATE deliveries SET status = 'cancelled' WHERE id = ? AND status IN ('awaiting_confirmation', 'pending', 'assigned')"
+        ).run(order.delivery_id);
+      }
+    }
 
     const updatedOrder = { ...order, status: newStatus, fulfillment_type: newFulfillment };
     if (notifyKey) {
@@ -1489,7 +1903,234 @@ app.patch('/api/seller/orders/:id/status', verifyToken, async (req, res) => {
   }
 });
 
+// ── Partner (rider) endpoints ──
+function requirePartner(req, res) {
+  if (req.user.role !== 'Partner') {
+    res.status(403).json({ error: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
+
+const ACTIVE_DELIVERY_STATUSES = ['assigned', 'picked_up'];
+
+// Go on/off duty; duty location anchors which jobs the rider sees.
+app.patch('/api/partner/duty', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  const { on_duty, lat, lng } = req.body;
+  try {
+    await db.prepare('UPDATE users SET is_on_duty = ?, duty_lat = COALESCE(?, duty_lat), duty_lng = COALESCE(?, duty_lng) WHERE id = ?')
+      .run(Boolean(on_duty), lat != null ? Number(lat) : null, lng != null ? Number(lng) : null, req.user.id);
+    res.json({ on_duty: Boolean(on_duty) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dispatch feed: pending jobs from stores near the rider's duty location.
+// Falls back to all pending jobs when the rider has no location on file, and
+// always includes jobs that have waited 10+ minutes so nothing starves.
+app.get('/api/partner/deliveries/available', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  try {
+    const me = await db.prepare('SELECT duty_lat, duty_lng FROM users WHERE id = ?').get(req.user.id);
+    const rows = await db.prepare(`
+      SELECT d.*, s.name AS store_name, s.address AS store_address, s.lat AS store_lat, s.lng AS store_lng,
+             u.name AS customer_name,
+             EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - d.dispatched_at)) AS waited_sec
+      FROM deliveries d
+      JOIN stores s ON d.store_id = s.id
+      JOIN users u ON d.customer_id = u.id
+      WHERE d.status = 'pending'
+      ORDER BY d.dispatched_at ASC
+    `).all();
+    const visible = rows.filter((d) => {
+      if (me?.duty_lat == null || d.store_lat == null) return true;
+      const dist = haversineKm(me.duty_lat, me.duty_lng, d.store_lat, d.store_lng);
+      if (dist <= DELIVERY_CFG.dispatchRadiusKm) return true;
+      return Number(d.waited_sec) >= 600; // 10 min starvation fallback (DB clock, tz-safe)
+    }).map((d) => ({ ...d, pin: undefined }));
+    res.json(visible);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// First accept wins — atomic claim; one active delivery per rider.
+app.post('/api/partner/deliveries/:id/accept', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  try {
+    const active = await db.prepare(
+      `SELECT COUNT(*) AS cnt FROM deliveries WHERE partner_id = ? AND status = ANY(?)`
+    ).get(req.user.id, ACTIVE_DELIVERY_STATUSES);
+    if (Number(active.cnt) > 0) {
+      return res.status(400).json({ error: 'Finish your current delivery before accepting another one.' });
+    }
+    const claimed = await db.prepare(
+      `UPDATE deliveries SET partner_id = ?, status = 'assigned', assigned_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'pending' AND partner_id IS NULL RETURNING *`
+    ).get(req.user.id, req.params.id);
+    if (!claimed) {
+      return res.status(409).json({ error: 'This delivery was already taken by another partner.' });
+    }
+    await notifyDeliveryParties(claimed.id, 'assigned');
+    res.json({ message: 'Delivery accepted', delivery: claimed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rider status transitions: picked_up -> delivered (PIN required) or failed (reason).
+app.patch('/api/partner/deliveries/:id/status', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  const { action, pin, reason } = req.body;
+  try {
+    const d = await db.prepare('SELECT * FROM deliveries WHERE id = ? AND partner_id = ?').get(req.params.id, req.user.id);
+    if (!d) return res.status(404).json({ error: 'Delivery not found' });
+
+    if (action === 'picked_up') {
+      if (d.status !== 'assigned') return res.status(400).json({ error: 'This delivery is not awaiting pickup.' });
+      await db.prepare("UPDATE deliveries SET status = 'picked_up', picked_up_at = CURRENT_TIMESTAMP WHERE id = ?").run(d.id);
+      await notifyDeliveryParties(d.id, 'picked_up');
+      return res.json({ message: 'Marked as picked up' });
+    }
+    if (action === 'delivered') {
+      if (d.status !== 'picked_up') return res.status(400).json({ error: 'Mark the order as picked up first.' });
+      if (!pin || String(pin).trim() !== String(d.pin)) {
+        return res.status(400).json({ error: 'Wrong PIN. Ask the customer for the 4-digit code in their booking.' });
+      }
+      await db.prepare("UPDATE deliveries SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?").run(d.id);
+      await db.prepare("UPDATE orders SET status = 'paid' WHERE delivery_id = ? AND status NOT IN ('rejected', 'cancelled')").run(d.id);
+      await notifyDeliveryParties(d.id, 'delivered');
+      return res.json({ message: 'Delivery completed' });
+    }
+    if (action === 'failed') {
+      if (!ACTIVE_DELIVERY_STATUSES.includes(d.status)) return res.status(400).json({ error: 'This delivery is not active.' });
+      await db.prepare("UPDATE deliveries SET status = 'failed', fail_reason = ? WHERE id = ?").run(reason || 'Unspecified', d.id);
+      await notifyDeliveryParties(d.id, 'failed');
+      return res.json({ message: 'Delivery marked as failed' });
+    }
+    res.status(400).json({ error: 'Invalid action' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rider's own deliveries: active job + history + earnings.
+app.get('/api/partner/deliveries/mine', verifyToken, async (req, res) => {
+  if (!requirePartner(req, res)) return;
+  try {
+    const rows = await db.prepare(`
+      SELECT d.*, s.name AS store_name, s.address AS store_address, s.lat AS store_lat, s.lng AS store_lng,
+             u.name AS customer_name, COALESCE(o.delivery_phone, u.phone) AS customer_phone
+      FROM deliveries d
+      JOIN stores s ON d.store_id = s.id
+      JOIN users u ON d.customer_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT delivery_phone FROM orders WHERE delivery_id = d.id LIMIT 1
+      ) o ON TRUE
+      WHERE d.partner_id = ?
+      ORDER BY d.created_at DESC
+    `).all(req.user.id);
+    const items = [];
+    for (const d of rows) {
+      const orderItems = await db.prepare(`
+        SELECT o.quantity, COALESCE(b.description, f.name) AS item_name
+        FROM orders o
+        LEFT JOIN surprise_bags b ON o.bag_id = b.id AND o.type = 'bag'
+        LEFT JOIN food_items f ON o.food_item_id = f.id AND o.type = 'food'
+        WHERE o.delivery_id = ? AND o.status NOT IN ('rejected', 'cancelled')
+      `).all(d.id);
+      items.push({ ...d, pin: undefined, items: orderItems });
+    }
+    const earnings = rows.filter(d => d.status === 'delivered').reduce((sum, d) => sum + Number(d.fee || 0), 0);
+    res.json({ deliveries: items, earnings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Notify customer + store sellers when a delivery changes state.
+async function notifyDeliveryParties(deliveryId, event) {
+  const d = await db.prepare(`
+    SELECT d.*, s.name AS store_name, s.tenant_id, p.name AS partner_name, p.phone AS partner_phone
+    FROM deliveries d
+    JOIN stores s ON d.store_id = s.id
+    LEFT JOIN users p ON d.partner_id = p.id
+    WHERE d.id = ?
+  `).get(deliveryId);
+  if (!d) return;
+  const messages = {
+    assigned: { title: 'Rider assigned', body: `${d.partner_name || 'A Grabengo partner'} will deliver your order from ${d.store_name}.` },
+    picked_up: { title: 'Order picked up', body: `Your order from ${d.store_name} is on its way. Have your PIN and Rs${Number(d.cod_amount).toFixed(0)} cash ready.` },
+    delivered: { title: 'Order delivered', body: `Your order from ${d.store_name} was delivered. Enjoy!` },
+    failed: { title: 'Delivery problem', body: `We couldn't complete your delivery from ${d.store_name}. The store will contact you.` },
+  };
+  const msg = messages[event];
+  if (msg) {
+    sendToUser(d.customer_id, { type: 'delivery_update', delivery_id: d.id, event, title: msg.title, message: msg.body });
+    const customer = await db.prepare('SELECT push_token FROM users WHERE id = ?').get(d.customer_id);
+    if (customer?.push_token) {
+      sendPushNotification(customer.push_token, msg.title, msg.body, { type: 'delivery_update', deliveryId: d.id }).catch(() => {});
+    }
+  }
+  if (d.tenant_id) sendToTenantSellers(d.tenant_id, { type: 'delivery_update', delivery_id: d.id, event });
+}
+
 // New Management Endpoints (Tenants, Staff, App Reviews)
+// Partners are provisioned by the platform (no self-signup).
+app.post('/api/superadmin/partners', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  const { name, email, password, phone } = req.body;
+  if (!name || !email || !password || !phone) {
+    return res.status(400).json({ error: 'name, email, password and phone are required' });
+  }
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const info = await db.prepare(
+      "INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, 'Partner', ?)"
+    ).run(name, email, hashedPassword, phone);
+    res.status(201).json({ id: info.lastInsertRowid, name, email, phone, role: 'Partner' });
+  } catch (err) {
+    const mapped = mapRegistrationError(err);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/superadmin/partners', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const partners = await db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.is_on_duty,
+             (SELECT COUNT(*) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS delivered_count,
+             (SELECT COALESCE(SUM(d.fee), 0) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS total_earnings,
+             (SELECT COALESCE(SUM(d.cod_amount), 0) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS total_cod_collected
+      FROM users u WHERE u.role = 'Partner' ORDER BY u.created_at DESC
+    `).all();
+    res.json(partners);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/superadmin/deliveries', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const rows = await db.prepare(`
+      SELECT d.*, s.name AS store_name, c.name AS customer_name, p.name AS partner_name
+      FROM deliveries d
+      JOIN stores s ON d.store_id = s.id
+      JOIN users c ON d.customer_id = c.id
+      LEFT JOIN users p ON d.partner_id = p.id
+      ORDER BY d.created_at DESC LIMIT 200
+    `).all();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   const { name, email, password, brand_name, logo } = req.body;
@@ -2142,7 +2783,7 @@ app.post('/api/contact', async (req, res) => {
 
         <!-- Header -->
         <tr>
-          <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:36px 40px;text-align:center;">
+          <td style="background:linear-gradient(135deg,#FF5C00 0%,#E55200 100%);padding:36px 40px;text-align:center;">
             ${emailLogoBlock({ height: 44, centered: true })}
             <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">New Support Enquiry</h1>
             <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Received via ${brandName} Contact Form</p>
@@ -2155,8 +2796,8 @@ app.post('/api/contact', async (req, res) => {
             <!-- Alert badge -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
               <tr>
-                <td style="background:rgba(255,90,0,0.1);border:1px solid rgba(255,90,0,0.25);border-radius:10px;padding:14px 18px;">
-                  <p style="margin:0;color:#FF5A00;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Action Required</p>
+                <td style="background:rgba(255, 92, 0,0.1);border:1px solid rgba(255, 92, 0,0.25);border-radius:10px;padding:14px 18px;">
+                  <p style="margin:0;color:#FF5C00;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Action Required</p>
                   <p style="margin:4px 0 0;color:#e5e7eb;font-size:14px;">A customer has submitted a support request. Please respond within 24–48 hours.</p>
                 </td>
               </tr>
@@ -2174,7 +2815,7 @@ app.post('/api/contact', async (req, res) => {
 
             <!-- Message -->
             <h2 style="margin:0 0 12px;color:#ffffff;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Message</h2>
-            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid #FF5A00;border-radius:8px;padding:20px 20px 20px 22px;">
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid #FF5C00;border-radius:8px;padding:20px 20px 20px 22px;">
               <p style="margin:0;color:#d1d5db;font-size:15px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
             </div>
 
@@ -2182,7 +2823,7 @@ app.post('/api/contact', async (req, res) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
               <tr>
                 <td align="center">
-                  <a href="mailto:${email}?subject=Re: ${encodeURIComponent(subject)}" style="display:inline-block;background:linear-gradient(135deg,#FF5A00,#FF8A00);color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 32px;border-radius:10px;">Reply to ${name} →</a>
+                  <a href="mailto:${email}?subject=Re: ${encodeURIComponent(subject)}" style="display:inline-block;background:linear-gradient(135deg,#FF5C00,#E55200);color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 32px;border-radius:10px;">Reply to ${name} →</a>
                 </td>
               </tr>
             </table>
@@ -2218,7 +2859,7 @@ app.post('/api/contact', async (req, res) => {
 
         <!-- Orange header with logo -->
         <tr>
-          <td style="background:linear-gradient(135deg,#FF5A00 0%,#FF8A00 100%);padding:44px 40px;text-align:center;">
+          <td style="background:linear-gradient(135deg,#FF5C00 0%,#E55200 100%);padding:44px 40px;text-align:center;">
             ${emailLogoBlock({ height: 56, centered: true })}
             <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">We've Got Your Message!</h1>
             <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px;">Thank you for reaching out to ${brandName}.</p>
@@ -2241,7 +2882,7 @@ app.post('/api/contact', async (req, res) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;">
               <tr>
                 <td style="padding:20px 24px;border-bottom:1px solid #e5e7eb;">
-                  <p style="margin:0;color:#FF5A00;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Your Submission</p>
+                  <p style="margin:0;color:#FF5C00;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Your Submission</p>
                 </td>
               </tr>
               ${[['Name', name], ['Email', email], ['Subject', subject], ['Submitted', submittedAt]].map(([k, v]) => `
@@ -2265,7 +2906,7 @@ app.post('/api/contact', async (req, res) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
               <tr>
                 <td valign="top" style="width:40px;padding-right:14px;">
-                  <div style="width:36px;height:36px;background:${done ? 'linear-gradient(135deg,#FF5A00,#FF8A00)' : '#f3f4f6'};border-radius:50%;text-align:center;line-height:36px;font-size:16px;">${icon}</div>
+                  <div style="width:36px;height:36px;background:${done ? 'linear-gradient(135deg,#FF5C00,#E55200)' : '#f3f4f6'};border-radius:50%;text-align:center;line-height:36px;font-size:16px;">${icon}</div>
                 </td>
                 <td valign="top">
                   <p style="margin:0;color:#111827;font-size:14px;font-weight:700;">${title}</p>
@@ -2280,7 +2921,7 @@ app.post('/api/contact', async (req, res) => {
         <tr>
           <td style="padding:28px 40px 0;">
             <p style="margin:0 0 10px;color:#6b7280;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Your message</p>
-            <div style="background:#f9fafb;border-left:3px solid #FF5A00;border-radius:4px;padding:16px 18px;">
+            <div style="background:#f9fafb;border-left:3px solid #FF5C00;border-radius:4px;padding:16px 18px;">
               <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
             </div>
           </td>
@@ -2289,11 +2930,11 @@ app.post('/api/contact', async (req, res) => {
         <!-- Need urgent help -->
         <tr>
           <td style="padding:28px 40px 0;">
-            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,90,0,0.05);border:1px solid rgba(255,90,0,0.2);border-radius:10px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255, 92, 0,0.05);border:1px solid rgba(255, 92, 0,0.2);border-radius:10px;">
               <tr>
                 <td style="padding:16px 20px;">
-                  <p style="margin:0;color:#FF5A00;font-size:13px;font-weight:700;">Need urgent help?</p>
-                  <p style="margin:4px 0 0;color:#374151;font-size:13px;">Email us directly at <a href="mailto:${supportEmail}" style="color:#FF5A00;text-decoration:none;font-weight:600;">${supportEmail}</a></p>
+                  <p style="margin:0;color:#FF5C00;font-size:13px;font-weight:700;">Need urgent help?</p>
+                  <p style="margin:4px 0 0;color:#374151;font-size:13px;">Email us directly at <a href="mailto:${supportEmail}" style="color:#FF5C00;text-decoration:none;font-weight:600;">${supportEmail}</a></p>
                 </td>
               </tr>
             </table>
@@ -2358,7 +2999,8 @@ app.get('/api/public/stores', async (req, res) => {
     const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
 
     let query = `
-      SELECT s.id, s.name, s.address, s.lat, s.lng, s.image, s.tenant_id,
+      SELECT s.id, s.name, s.address, s.lat, s.lng, s.image, s.tenant_id, s.category,
+             s.delivery_enabled, s.delivery_mode, s.delivery_fee_note,
              t.name AS tenant_name, t.subdomain AS tenant_subdomain
       FROM stores s
       JOIN tenants t ON t.id = s.tenant_id
@@ -2527,6 +3169,8 @@ async function previewCheckoutItems(items) {
         store_name: store.name,
         store_id: store.id,
         delivery_enabled: !!store.delivery_enabled,
+        delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+        store_lat: store.lat, store_lng: store.lng,
         price: bag.price,
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
@@ -2543,7 +3187,27 @@ async function previewCheckoutItems(items) {
         store_name: store.name,
         store_id: store.id,
         delivery_enabled: !!store.delivery_enabled,
+        delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+        store_lat: store.lat, store_lng: store.lng,
         price: food.price,
+        tenant_id: store.tenant_id,
+        tenant_name: tenant?.name || store.name,
+      });
+    } else if (type === 'menu') {
+      const menuItem = await db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
+      if (!menuItem || menuItem.is_hidden) continue;
+      const store = await db.prepare('SELECT * FROM stores WHERE id = ?').get(menuItem.store_id);
+      if (!store?.is_active) continue;
+      const tenant = store.tenant_id ? await getTenantById(db, store.tenant_id) : null;
+      preview.push({
+        id, type, quantity,
+        item_name: menuItem.name,
+        store_name: store.name,
+        store_id: store.id,
+        delivery_enabled: !!store.delivery_enabled,
+        delivery_mode: store.delivery_mode || (store.delivery_enabled ? 'self' : null),
+        store_lat: store.lat, store_lng: store.lng,
+        price: menuItem.price,
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
       });
@@ -2551,6 +3215,17 @@ async function previewCheckoutItems(items) {
   }
   assertSingleTenantCart(preview);
   return preview;
+}
+
+// Full-price menu items have no stock cap — ordering one snapshots it into a
+// single-use food_items row (quantity 0, never independently browsable) so the
+// order flows through the existing food-item order/receipt/delivery pipeline unchanged.
+async function snapshotMenuItemForOrder(menuItem) {
+  const images = menuItem.image ? JSON.stringify([menuItem.image]) : null;
+  const info = await db.prepare(
+    'INSERT INTO food_items (store_id, name, description, price, images, quantity, category, menu_item_id, is_available) VALUES (?, ?, ?, ?, ?, 0, ?, ?, TRUE)'
+  ).run(menuItem.store_id, menuItem.name, menuItem.description, menuItem.price, images, menuItem.category, menuItem.id);
+  return info.lastInsertRowid;
 }
 
 async function resolveCheckoutCustomer({ name, email, phone }) {
@@ -2631,6 +3306,32 @@ async function placeCheckoutOrders(user, items) {
         quantity,
         price: food.price,
         pickup_time: food.pickup_time || 'During opening hours',
+        tenant_id: store.tenant_id,
+        tenant_name: tenant?.name || store.name,
+      });
+    } else if (type === 'menu') {
+      const menuItem = await db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
+      if (!menuItem || menuItem.is_hidden) {
+        throw new Error(`Menu item #${id} is no longer available`);
+      }
+      const store = await db.prepare('SELECT * FROM stores WHERE id = ? AND is_active = TRUE').get(menuItem.store_id);
+      if (!store) {
+        throw new Error(`Store for menu item #${id} is unavailable`);
+      }
+      const tenant = store.tenant_id ? await getTenantById(db, store.tenant_id) : null;
+      const snapshotId = await snapshotMenuItemForOrder(menuItem);
+      const orderInfo = await db.prepare(
+        'INSERT INTO orders (food_item_id, type, quantity, store_id, customer_id, price, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(snapshotId, 'food', quantity, menuItem.store_id, user.id, menuItem.price, 'Cash at Pickup');
+      placedOrders.push({
+        id: orderInfo.lastInsertRowid,
+        type: 'food',
+        store_name: store.name,
+        store_address: store.address || '',
+        item_name: menuItem.name,
+        quantity,
+        price: menuItem.price,
+        pickup_time: 'During opening hours',
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
       });
@@ -2764,7 +3465,7 @@ async function sendCheckoutOtpEmail({ to, name, otp }) {
       bodyHtml: `
         <p>Hi ${name || 'there'},</p>
         <p>Enter this verification code to confirm your order:</p>
-        <h2 style="font-size: 28px; letter-spacing: 4px; color: #EA580C; font-family: monospace;">${otp}</h2>
+        <h2 style="font-size: 28px; letter-spacing: 4px; color: #FF5C00; font-family: monospace;">${otp}</h2>
         <p>This code expires in <strong>5 minutes</strong>. If you did not start a checkout, you can ignore this email.</p>`,
     }),
     text: `Your ${brandName} order verification code is ${otp}. Valid for 5 minutes.`
@@ -2804,7 +3505,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
           <tr><td align="center">
             <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
               <tr>
-                <td style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);padding:40px 40px 30px;text-align:center;">
+                <td style="background:linear-gradient(135deg,#ff6b35 0%,#FF5C00 100%);padding:40px 40px 30px;text-align:center;">
                   ${emailLogoBlock({ height: 52, centered: true })}
                   <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:15px;">Order Confirmed ✓</p>
                 </td>

@@ -1,7 +1,7 @@
 const PDFDocument = require('pdfkit');
 const { brandName, tagline } = require('./config');
 
-const ORANGE = '#FF5A00';
+const ORANGE = '#FF5C00';
 const DARK   = '#1a1a1a';
 const GREY   = '#555555';
 const LIGHT  = '#f5f5f5';

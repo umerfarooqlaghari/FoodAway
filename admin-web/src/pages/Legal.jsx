@@ -13,7 +13,7 @@ export default function Legal({ onBack }) {
         <p><strong style={{ color: '#fff' }}>Business Registration:</strong> Registered under applicable local law</p>
         <p><strong style={{ color: '#fff' }}>VAT Number:</strong> Available upon request</p>
         <p><strong style={{ color: '#fff' }}>Contact:</strong>{' '}
-          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5A00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>
+          <a href="mailto:info@alpha-devs.cloud" style={{ color: '#FF5C00', textDecoration: 'none' }}>info@alpha-devs.cloud</a>
         </p>
       </Section>
 
