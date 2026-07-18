@@ -13,6 +13,13 @@ case "$PROFILE" in
 esac
 
 export EAS_SKIP_AUTO_FINGERPRINT=1
+export EXPO_ASC_API_KEY_PATH="/Users/macbookpro/Desktop/projects/GoodtoGo/AuthKey.p8"
+export EXPO_ASC_ISSUER_ID="138bd8ae-ea40-4c7b-a543-2964deb4a55b"
+export EXPO_ASC_KEY_ID="VTVNRS996B"
+export EXPO_APPLE_TEAM_ID="2WQ7LU7T5X"
+export EXPO_APPLE_TEAM_TYPE="COMPANY_OR_ORGANIZATION"
+unset EXPO_APPLE_ID
+unset EXPO_APPLE_PASSWORD
 
 echo "🚀 EAS iOS Build — profile: $PROFILE"
 cd mobile-app

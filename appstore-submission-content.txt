@@ -1,0 +1,96 @@
+===============================================
+GRABENGO - iOS APP STORE SUBMISSION CONTENT
+===============================================
+
+1. PROMOTIONAL TEXT (170 characters max)
+───────────────────────────────────────────
+
+Rescue surplus food at ½ price and help reduce food waste. Join 2M+ users fighting climate change, one meal at a time.
+
+
+2. DESCRIPTION (4,000 characters max)
+───────────────────────────────────────────
+
+Rescue good food. Save the planet.
+
+Grabengo connects you with local restaurants, bakeries, cafés, and supermarkets offering surplus food at unbeatable prices. Every surprise bag you rescue prevents ~2.5 kg of CO₂ emissions — equivalent to charging a smartphone 300+ times.
+
+HOW IT WORKS
+• Browse nearby stores and discover surprise bags from local favorites
+• Reserve fresh food, bakery items, meals, and more at ½ price or less
+• Pick up at your chosen time slot
+• Enjoy premium quality food while fighting food waste
+
+WHY GRABENGO?
+✓ Save money — Get fresh, high-quality food at a fraction of retail price
+✓ Save the planet — 1 in 3 meals globally are wasted. You can change that.
+✓ Support local — Discover independent bakeries, cafés, restaurants, and businesses near you
+✓ Surprise included — Unpack mystery bags from places you've never tried
+✓ 4.9★ rating — Trusted by 2 million+ users worldwide
+
+WHAT YOU CAN RESCUE
+Fresh prepared meals, bakery items, sushi, salads, sandwiches, pizza, desserts, groceries, beverages, and much more — directly from your favorite local businesses.
+
+THE IMPACT
+• 2 million+ bags rescued
+• £4.2 million saved by our community
+• Prevents thousands of tonnes of food waste annually
+• Supported by UNEP (UN Environment Programme) and FAO
+
+Every rescue bag is a small act that creates global impact. Join the movement today.
+
+
+3. KEYWORDS (100 characters max, comma-separated)
+───────────────────────────────────────────
+
+food delivery, restaurants, bakery, sustainable, food waste, discounts, surplus food, local food, grocery deals, eco-friendly
+
+
+4. SUPPORT URL
+───────────────────────────────────────
+
+https://grabengo.store/contact
+
+
+5. MARKETING URL
+───────────────────────────────────────
+
+https://grabengo.store
+
+
+6. COPYRIGHT
+───────────────────────────────────────
+
+© 2024 Grabengo Ltd. Reducing food waste, one meal at a time.
+
+
+7. VERSION
+───────────────────────────────────────
+
+1.0
+
+
+===============================================
+ADDITIONAL GUIDANCE FOR SUBMISSION
+===============================================
+
+CATEGORY: Food & Drink
+AGE RATING: 4+
+BUNDLE ID: com.alphadevs.mobileapp
+PRIVACY POLICY: https://grabengo.store/privacy
+
+KEY FEATURES TO HIGHLIGHT (IF ASKED):
+✓ Location-based store discovery
+✓ Real-time order tracking
+✓ Secure in-app payment
+✓ Mystery surprise bags
+✓ Multiple food categories
+✓ User ratings & reviews (4.9★)
+✓ Push notifications for deals
+✓ Receipt generation
+
+PERMISSIONS EXPLAINED IN APP:
+✓ Camera — Upload store and food images
+✓ Photo Library — Select images from gallery
+✓ Location — Show nearby stores
+✓ Notifications — Order updates and alerts
