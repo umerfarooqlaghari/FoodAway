@@ -1,55 +1,145 @@
+import 'react-native-gesture-handler';
+import { enableScreens } from 'react-native-screens';
+enableScreens(false);
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Pressable, ActivityIndicator, TextInput, Alert, ScrollView, Image, Modal, Platform, Linking, Animated, TouchableWithoutFeedback, Switch, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Pressable, ActivityIndicator, TextInput, Alert, ScrollView, Image, Modal, Platform, Linking, Animated, TouchableWithoutFeedback, Switch, useWindowDimensions, InteractionManager, Easing } from 'react-native';
 import { SafeAreaView, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureHandlerRootView, TouchableOpacity as GHTouchableOpacity, Pressable as GHPressable, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import axios from 'axios';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
-import { createAudioPlayer } from 'expo-audio';
-import * as Haptics from 'expo-haptics';
-import DateTimePicker from '@react-native-community/datetimepicker';
 
-// Configure notification behavior for foreground notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-let MapView, Marker, Callout;
-if (Platform.OS !== 'web') {
+let imagePickerModule = null;
+let locationModule = null;
+let hapticsModule = null;
+let printModule = null;
+let sharingModule = null;
+
+function getImagePickerModule() {
+  if (!imagePickerModule) imagePickerModule = require('expo-image-picker');
+  return imagePickerModule;
+}
+
+function getLocationModule() {
+  if (!locationModule) locationModule = require('expo-location');
+  return locationModule;
+}
+
+function getHapticsModule() {
+  if (!hapticsModule) hapticsModule = require('expo-haptics');
+  return hapticsModule;
+}
+
+function getPrintModule() {
+  if (!printModule) printModule = require('expo-print');
+  return printModule;
+}
+
+function getSharingModule() {
+  if (!sharingModule) sharingModule = require('expo-sharing');
+  return sharingModule;
+}
+
+function LazyDateTimePicker(props) {
+  const Picker = require('@react-native-community/datetimepicker').default;
+  return <Picker {...props} />;
+}
+
+let notificationsModule = null;
+let notificationHandlerConfigured = false;
+
+function getNotificationsModule() {
+  if (notificationsModule === false) return null;
+  if (!notificationsModule) {
+    try {
+      notificationsModule = require('expo-notifications');
+    } catch (e) {
+      notificationsModule = false;
+      return null;
+    }
+  }
+  return notificationsModule;
+}
+
+function ensureNotificationHandler() {
+  if (notificationHandlerConfigured || Platform.OS === 'web') return;
   try {
-    // Standalone Android builds crash natively if the Google Maps SDK initializes
-    // without an API key in the manifest — only mount the real map when it's safe.
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+    notificationHandlerConfigured = true;
+  } catch (e) {
+    console.warn('Failed to configure notification handler:', e.message);
+  }
+}
+
+let nativeMapsModule = null;
+
+function getNativeMapsModule() {
+  if (nativeMapsModule !== null) return nativeMapsModule;
+  if (Platform.OS === 'web') {
+    nativeMapsModule = false;
+    return nativeMapsModule;
+  }
+  try {
     const Constants = require('expo-constants').default;
     const isExpoGo = Constants.executionEnvironment === 'storeClient';
     const hasMapsKey = !!Constants.expoConfig?.android?.config?.googleMaps?.apiKey;
     if (Platform.OS === 'ios' || isExpoGo || hasMapsKey) {
       const Maps = require('react-native-maps');
-      MapView = Maps.default || Maps;
-      Marker = Maps.Marker;
-      Callout = Maps.Callout;
+      nativeMapsModule = {
+        MapView: Maps.default || Maps,
+        Marker: Maps.Marker,
+        Callout: Maps.Callout,
+      };
+      return nativeMapsModule;
     }
   } catch (e) {
-    console.warn("Could not require react-native-maps:", e);
+    console.warn('Could not load react-native-maps:', e.message);
   }
+  nativeMapsModule = false;
+  return nativeMapsModule;
 }
 
-if (!MapView) {
-  MapView = ({ children, style, initialRegion }) => {
-    return (
-      <View style={[{ backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }, style]}>
-        <Ionicons name="map-outline" size={24} color="#64748B" style={{ marginBottom: 4 }} />
-        <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700' }}>Interactive Map Preview</Text>
-        <Text style={{ color: '#94A3B8', fontSize: 10, marginTop: 2 }}>Lat: {initialRegion?.latitude?.toFixed(4)}, Lng: {initialRegion?.longitude?.toFixed(4)}</Text>
-        {children}
-      </View>
-    );
-  };
-  Marker = ({ children }) => children || null;
-  Callout = ({ children }) => children || null;
+function MapView(props) {
+  const maps = getNativeMapsModule();
+  if (maps && maps.MapView) {
+    const RealMapView = maps.MapView;
+    return <RealMapView {...props} />;
+  }
+  const { children, style, initialRegion } = props;
+  return (
+    <View style={[{ backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }, style]}>
+      <Ionicons name="map-outline" size={24} color="#64748B" style={{ marginBottom: 4 }} />
+      <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700' }}>Interactive Map Preview</Text>
+      <Text style={{ color: '#94A3B8', fontSize: 10, marginTop: 2 }}>Lat: {initialRegion?.latitude?.toFixed(4)}, Lng: {initialRegion?.longitude?.toFixed(4)}</Text>
+      {children}
+    </View>
+  );
+}
+
+function Marker(props) {
+  const maps = getNativeMapsModule();
+  if (maps && maps.Marker) {
+    const RealMarker = maps.Marker;
+    return <RealMarker {...props} />;
+  }
+  return props.children || null;
+}
+
+function Callout(props) {
+  const maps = getNativeMapsModule();
+  if (maps && maps.Callout) {
+    const RealCallout = maps.Callout;
+    return <RealCallout {...props} />;
+  }
+  return props.children || null;
 }
 import { getDistance } from 'geolib';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -66,11 +156,9 @@ const customTheme = {
     background: '#0f172a'
   }
 };
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 
 // --- Subdomain Helpers ---
 const slugifySubdomain = (input) => {
@@ -245,18 +333,11 @@ const {
   categoriesMatch,
 } = require('./shared/productCategories');
 
-// Play satisfying coin sound and trigger vibration feedback
+// Sound + haptic feedback — haptics only on iOS release builds (expo-audio crashes on iOS 26).
 const playSoundAndHaptic = async (type) => {
   try {
-    const player = createAudioPlayer(require('./assets/sounds/coin.mp3'));
-    player.play();
-    player.addListener('playbackStatusUpdate', (status) => {
-      if (status.didJustFinish) {
-        player.release();
-      }
-    });
-
     if (Platform.OS !== 'web') {
+      const Haptics = getHapticsModule();
       if (type === 'light') {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } else if (type === 'medium') {
@@ -266,7 +347,7 @@ const playSoundAndHaptic = async (type) => {
       }
     }
   } catch (e) {
-    console.log("Audio/Haptic error:", e.message);
+    console.log("Haptic error:", e.message);
   }
 };
 
@@ -274,13 +355,11 @@ const playSoundAndHaptic = async (type) => {
 const triggerLocalPushNotification = async (title, body, data = {}) => {
   try {
     if (Platform.OS === 'web') return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
+    ensureNotificationHandler();
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') return;
+    if (existingStatus !== 'granted') return;
 
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -301,7 +380,9 @@ const triggerLocalPushNotification = async (title, body, data = {}) => {
 const schedulePickupReminder = async (storeName, pickupTimeStr) => {
   try {
     if (Platform.OS === 'web') return;
-    
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
+    ensureNotificationHandler();
     // Parse time like "18:00" from strings like "Today, 18:00 - 19:30"
     const match = pickupTimeStr?.match(/(\d{1,2}):(\d{2})/);
     if (!match) return;
@@ -344,37 +425,34 @@ const schedulePickupReminder = async (storeName, pickupTimeStr) => {
 
 const registerForPushNotificationsAsync = async () => {
   if (Platform.OS === 'web') return null;
-  let token;
-  
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
-    });
-  }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-  if (finalStatus !== 'granted') {
-    console.log('Failed to get push token for push notification!');
+  try {
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return null;
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    if (existingStatus !== 'granted') {
+      // Never prompt for permissions during startup — iOS 26 release builds can
+      // crash in ObjCTurboModule::performVoidMethodInvocation when this throws.
+      return null;
+    }
+
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    console.log('Expo Push Token:', token);
+    return token;
+  } catch (e) {
+    console.log('Error registering for push notifications:', e.message);
     return null;
   }
-  
-  try {
-    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
-    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    console.log('Expo Push Token:', token);
-  } catch (e) {
-    console.log('Error getting expo push token:', e.message);
-  }
-
-  return token;
 };
 
 // Create Contexts
@@ -672,26 +750,11 @@ function ChatProvider({ children }) {
 
 
   useEffect(() => {
-    if (token && user?.role === 'Customers') {
-      connectWebSocket();
-      
-      // Request local push notification permissions
-      if (Platform.OS !== 'web') {
-        Notifications.getPermissionsAsync().then(({ status: existingStatus }) => {
-          let finalStatus = existingStatus;
-          if (existingStatus !== 'granted') {
-            Notifications.requestPermissionsAsync().then(({ status }) => {
-              finalStatus = status;
-            });
-          }
-        }).catch(err => console.log("Permission request error:", err.message));
-      }
-    }
     return () => {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [token, user]);
+  }, []);
 
   return (
     <ChatContext.Provider value={{
@@ -758,6 +821,7 @@ function GlobalToast() {
   const handlePress = () => {
     try {
       if (Platform.OS !== 'web') {
+        const Haptics = getHapticsModule();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch (e) {}
@@ -1016,6 +1080,8 @@ function GlobalReceiptModal() {
     setGenerating(true);
     try {
       const html = generateReceiptHTML(receiptModalData, currencySymbol);
+      const Print = getPrintModule();
+      const Sharing = getSharingModule();
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save Grabengo Receipt', UTI: 'com.adobe.pdf' });
@@ -1214,7 +1280,7 @@ function GlobalReceiptModal() {
   );
 }
 
-const Stack = createNativeStackNavigator();
+const Stack = createStackNavigator();
 
 // --- Landing Screen ---
 const LANDING_ORANGE = '#FF5C00';
@@ -1309,10 +1375,11 @@ function LandingScreen({ navigation }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [carouselTenants, setCarouselTenants] = useState([]);
-  const scrollRef = React.useRef(null);
+  const carouselAnim = useRef(new Animated.Value(0)).current;
   const screenWidth = Dimensions.get('window').width;
   const illustrationWidth = screenWidth - 48;
   const illustrationHeight = illustrationWidth * (360 / 480);
+  const CARD_STEP = 156;
 
   // Fetch active tenants for the brand carousel
   useEffect(() => {
@@ -1325,21 +1392,22 @@ function LandingScreen({ navigation }) {
       .catch(() => {}); // silently ignore — static fallback stays visible
   }, []);
 
-  // Auto-scroll the brands carousel
+  // Smooth carousel loop — Animated avoids ScrollView scrollTo stealing touches on device.
   useEffect(() => {
-    const CARD_STEP = 156; // 140px card + 16px margin
-    const singleSetWidth = Math.max(carouselTenants.length, 4) * CARD_STEP;
-    let scrollPos = 0;
-    const interval = setInterval(() => {
-      if (scrollRef.current) {
-        scrollPos += 2;
-        scrollRef.current.scrollTo({ x: scrollPos, animated: false });
-        // Reset when we've scrolled one full copy of the list (seamless loop)
-        if (scrollPos >= singleSetWidth) scrollPos = 0;
-      }
-    }, 50);
-    return () => clearInterval(interval);
-  }, [carouselTenants]);
+    if (carouselTenants.length === 0) return undefined;
+    const loopWidth = carouselTenants.length * CARD_STEP;
+    carouselAnim.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(carouselAnim, {
+        toValue: -loopWidth,
+        duration: loopWidth * 25,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [carouselTenants, carouselAnim]);
 
   const renderHeader = () => (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 10, alignItems: 'center' }}>
@@ -1408,16 +1476,16 @@ function LandingScreen({ navigation }) {
       <SafeAreaView style={{ flex: 1 }}>
         {renderHeader()}
 
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 60 }}>
+        <GHScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 60 }}>
           {/* Hero Section */}
-          <View style={{ paddingHorizontal: 24, marginTop: 20, minHeight: 320 }}>
+          <View style={{ paddingHorizontal: 24, marginTop: 20, minHeight: 320 }} pointerEvents="box-none">
             <View style={{ position: 'absolute', right: -120, top: -20, zIndex: 0, pointerEvents: 'none' }}>
               <Image
                 source={require('./assets/images/grabengo_landing.png')}
                 style={{ width: 400, height: 500, resizeMode: 'contain', backgroundColor: 'transparent' }}
               />
             </View>
-            <View style={{ paddingTop: 40, zIndex: 1 }}>
+            <View style={{ paddingTop: 40, zIndex: 2, elevation: 4 }} pointerEvents="box-none">
               <Text style={{ fontSize: 42, fontWeight: '800', color: '#FFFFFF', lineHeight: 50, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
                 Delicious Treats
               </Text>
@@ -1428,13 +1496,15 @@ function LandingScreen({ navigation }) {
                 Rescue surplus pastries, donuts, and meals from top local spots before they go to waste.
               </Text>
               <View style={{ flexDirection: 'row', marginTop: 30, gap: 12, zIndex: 10 }}>
-                <Pressable
+                <GHPressable
                   onPress={() => navigation.navigate('Intro')}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
                   style={({ pressed }) => ({
                     backgroundColor: '#FFFFFF',
-                    paddingHorizontal: 24,
-                    paddingVertical: 14,
+                    paddingHorizontal: 28,
+                    paddingVertical: 16,
+                    minHeight: 48,
+                    justifyContent: 'center',
                     borderRadius: 30,
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 4 },
@@ -1445,69 +1515,74 @@ function LandingScreen({ navigation }) {
                   })}
                 >
                   <Text style={{ color: '#FF5C00', fontWeight: '800', fontSize: 16 }}>Explore</Text>
-                </Pressable>
+                </GHPressable>
               </View>
             </View>
           </View>
 
-          {/* Brands Carousel — live from active tenants */}
-          <View style={{ marginTop: 40 }}>
+          {/* Brands Carousel — live from active tenants (display only, no touch capture) */}
+          <View style={{ marginTop: 40 }} pointerEvents="none">
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 16, paddingLeft: 24 }}>Top Brands</Text>
-            <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 24 }} scrollEnabled={false}>
-              {/* Render list twice for seamless looping */}
-              {(carouselTenants.length > 0 ? [...carouselTenants, ...carouselTenants] : []).map((tenant, idx) => (
-                <View key={`${tenant.id}-${idx}`} style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111827', marginRight: 16, justifyContent: 'center', alignItems: 'center' }}>
-                  {tenant.logo ? (
-                    <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                  ) : (
-                    <View style={{ width: '100%', height: '100%', backgroundColor: '#2D1F0E', justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ color: LANDING_ORANGE, fontSize: 38, fontWeight: '900', letterSpacing: -1 }}>
-                        {tenantInitials(tenant.name)}
+            <View style={{ overflow: 'hidden' }}>
+              <Animated.View
+                style={{
+                  flexDirection: 'row',
+                  paddingLeft: 24,
+                  transform: [{ translateX: carouselAnim }],
+                }}
+              >
+                {(carouselTenants.length > 0 ? [...carouselTenants, ...carouselTenants] : []).map((tenant, idx) => (
+                  <View key={`${tenant.id}-${idx}`} style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111827', marginRight: 16, justifyContent: 'center', alignItems: 'center' }}>
+                    {tenant.logo ? (
+                      <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                    ) : (
+                      <View style={{ width: '100%', height: '100%', backgroundColor: '#2D1F0E', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: LANDING_ORANGE, fontSize: 38, fontWeight: '900', letterSpacing: -1 }}>
+                          {tenantInitials(tenant.name)}
+                        </Text>
+                      </View>
+                    )}
+                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '55%', justifyContent: 'flex-end', padding: 12 }}>
+                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 }} numberOfLines={1}>{tenant.name}</Text>
+                      <Text style={{ color: '#D1D5DB', fontSize: 11 }}>
+                        {tenant.store_count > 1 ? `${tenant.store_count} locations` : '1 location'}
                       </Text>
-                    </View>
-                  )}
-                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '55%', justifyContent: 'flex-end', padding: 12 }}>
-                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 }} numberOfLines={1}>{tenant.name}</Text>
-                    <Text style={{ color: '#D1D5DB', fontSize: 11 }}>
-                      {tenant.store_count > 1 ? `${tenant.store_count} locations` : '1 location'}
-                    </Text>
-                  </LinearGradient>
-                </View>
-              ))}
-            </ScrollView>
+                    </LinearGradient>
+                  </View>
+                ))}
+              </Animated.View>
+            </View>
           </View>
 
-          {/* What's coming teaser — peeks from right edge */}
-          <View style={{ marginTop: 20, width: screenWidth, overflow: 'hidden' }}>
-            <TouchableOpacity
+          {/* What's coming teaser */}
+          <View style={{ marginTop: 20, paddingHorizontal: 24, alignItems: 'flex-end' }}>
+            <GHPressable
               onPress={() => setShowComingSoon(true)}
-              activeOpacity={0.85}
-              style={{
-                alignSelf: 'flex-end',
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 4,
-                marginRight: -32,
-                paddingVertical: 8,
-                paddingLeft: 12,
-                paddingRight: 36,
+                gap: 6,
+                paddingVertical: 12,
+                paddingHorizontal: 18,
+                minHeight: 44,
                 backgroundColor: 'rgba(255,255,255,0.96)',
-                borderTopLeftRadius: 18,
-                borderBottomLeftRadius: 18,
+                borderRadius: 22,
                 borderWidth: 1,
-                borderRightWidth: 0,
-                borderColor: 'rgba(255, 92, 0,0.25)',
+                borderColor: 'rgba(255, 92, 0, 0.25)',
                 shadowColor: '#000',
-                shadowOffset: { width: -2, height: 2 },
+                shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.1,
                 shadowRadius: 6,
                 elevation: 3,
-              }}>
-              <Text style={{ color: LANDING_ORANGE, fontWeight: '700', fontSize: 12 }}>What&apos;s coming</Text>
-              <Ionicons name="chevron-forward" size={13} color={LANDING_ORANGE} />
-            </TouchableOpacity>
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: LANDING_ORANGE, fontWeight: '700', fontSize: 13 }}>What&apos;s coming</Text>
+              <Ionicons name="chevron-forward" size={14} color={LANDING_ORANGE} />
+            </GHPressable>
           </View>
-        </ScrollView>
+        </GHScrollView>
       </SafeAreaView>
       {renderMenuOverlay()}
     </View>
@@ -1777,7 +1852,7 @@ function RegisterScreen({ navigation }) {
   const progress = step / totalSteps;
 
   const pickLogo = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await getImagePickerModule().launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.2,
       base64: true,
@@ -2357,7 +2432,7 @@ function ExploreTenantsScreen({ navigation }) {
   const [loadError, setLoadError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [coords, setCoords] = useState(null);
-  const [locationLabel, setLocationLabel] = useState('Using your location');
+  const [locationLabel, setLocationLabel] = useState('Tap to enable location');
   const [maxDistance, setMaxDistance] = useState(null);
   const [customDistanceMode, setCustomDistanceMode] = useState(false);
   const [customDistanceValue, setCustomDistanceValue] = useState('');
@@ -2367,13 +2442,29 @@ function ExploreTenantsScreen({ navigation }) {
   const fetchStores = async () => {
     setLoading(true);
     setLoadError(null);
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const storesUrl = token ? `${API_URL}/stores` : `${API_URL}/public/stores`;
+      const res = await axios.get(storesUrl, { headers: authHeaders(token) });
+      if (!Array.isArray(res.data)) throw new Error(`Unexpected response from ${API_URL}`);
+      setStores(res.data);
+    } catch (e) {
+      const message = e.response?.data?.error || e.message || 'Could not load stores. Check that the backend is running.';
+      setLoadError(message);
+      setStores([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const enableLocationForStores = async () => {
+    try {
+      const { status } = await getLocationModule().requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
+        const loc = await getLocationModule().getCurrentPositionAsync({});
         setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         try {
-          const [place] = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          const [place] = await getLocationModule().reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
           if (place) {
             setLocationLabel([place.city, place.region].filter(Boolean).join(', ') || 'Near you');
           }
@@ -2387,19 +2478,6 @@ function ExploreTenantsScreen({ navigation }) {
     } catch (_) {
       setCoords(null);
       setLocationLabel('Location unavailable');
-    }
-
-    try {
-      const storesUrl = token ? `${API_URL}/stores` : `${API_URL}/public/stores`;
-      const res = await axios.get(storesUrl, { headers: authHeaders(token) });
-      if (!Array.isArray(res.data)) throw new Error(`Unexpected response from ${API_URL}`);
-      setStores(res.data);
-    } catch (e) {
-      const message = e.response?.data?.error || e.message || 'Could not load stores. Check that the backend is running.';
-      setLoadError(message);
-      setStores([]);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -2479,7 +2557,7 @@ function ExploreTenantsScreen({ navigation }) {
           </View>
 
           {/* Location row */}
-          <TouchableOpacity onPress={fetchStores} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12 }}>
+          <TouchableOpacity onPress={enableLocationForStores} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12 }}>
             <Ionicons name="location" size={20} color="#FF5C00" />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={{ fontSize: 11, fontWeight: '700', color: '#FF5C00', textTransform: 'uppercase' }}>Your location</Text>
@@ -2945,7 +3023,7 @@ function DiscoverScreen({ navigation, route }) {
   };
 
   const pickAvatar = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
+    let result = await getImagePickerModule().launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.3,
       base64: true,
@@ -2967,15 +3045,15 @@ function DiscoverScreen({ navigation, route }) {
     fetchStores();
     fetchReviews();
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+      let { status } = await getLocationModule().requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setAddressName('Location Denied');
         return;
       }
-      let location = await Location.getCurrentPositionAsync({});
+      let location = await getLocationModule().getCurrentPositionAsync({});
       setUserLocation(location.coords);
       try {
-        let address = await Location.reverseGeocodeAsync(location.coords);
+        let address = await getLocationModule().reverseGeocodeAsync(location.coords);
         if (address && address.length > 0) {
           setAddressName(`${address[0].city || address[0].region || 'Current Area'}, ${address[0].country}`);
         } else {
@@ -3032,7 +3110,7 @@ function DiscoverScreen({ navigation, route }) {
     let distanceText = "Near you";
     if (userLocation && item.lat && item.lng) {
       const distMeters = getDistance(
-        { latitude: userLocation.latitude, longitude: userLocation.longitude },
+        { latitude: usergetLocationModule().latitude, longitude: usergetLocationModule().longitude },
         { latitude: item.lat, longitude: item.lng }
       );
       distanceText = `${(distMeters / 1000).toFixed(1)} km`;
@@ -3112,7 +3190,7 @@ function DiscoverScreen({ navigation, route }) {
     let distanceText = "Near you";
     if (userLocation && item.lat && item.lng) {
       const distMeters = getDistance(
-        { latitude: userLocation.latitude, longitude: userLocation.longitude },
+        { latitude: usergetLocationModule().latitude, longitude: usergetLocationModule().longitude },
         { latitude: item.lat, longitude: item.lng }
       );
       distanceText = `${(distMeters / 1000).toFixed(1)} km`;
@@ -3553,7 +3631,7 @@ function DiscoverScreen({ navigation, route }) {
             let nearestDist = Infinity;
             if (userLocation) {
               visibleStores.forEach(s => {
-                const d = Math.hypot(s.lat - userLocation.latitude, s.lng - userLocation.longitude);
+                const d = Math.hypot(s.lat - usergetLocationModule().latitude, s.lng - usergetLocationModule().longitude);
                 if (d < nearestDist) { nearestDist = d; nearestStore = s; }
               });
             }
@@ -3579,8 +3657,8 @@ function DiscoverScreen({ navigation, route }) {
                 <MapView
                   style={{ flex: 1 }}
                   initialRegion={userLocation ? {
-                    latitude: userLocation.latitude,
-                    longitude: userLocation.longitude,
+                    latitude: usergetLocationModule().latitude,
+                    longitude: usergetLocationModule().longitude,
                     latitudeDelta: 0.05,
                     longitudeDelta: 0.05,
                   } : { latitude: 51.5074, longitude: -0.1278, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
@@ -4103,7 +4181,7 @@ function StoreDetailsScreen({ navigation, route }) {
   let distanceText = "Near you";
   if (userLocation && store.lat && store.lng) {
     const distMeters = getDistance(
-      { latitude: userLocation.latitude, longitude: userLocation.longitude },
+      { latitude: usergetLocationModule().latitude, longitude: usergetLocationModule().longitude },
       { latitude: store.lat, longitude: store.lng }
     );
     distanceText = `${(distMeters / 1000).toFixed(1)} km`;
@@ -5220,12 +5298,12 @@ function DeliveryAddressScreen({ navigation, route }) {
   const captureLocation = async () => {
     setPinning(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await getLocationModule().requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Location needed', 'Allow location access so the rider can find your exact spot.');
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const loc = await getLocationModule().getCurrentPositionAsync({ accuracy: getLocationModule().Accuracy.High });
       setPin({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     } catch (_) {
       Alert.alert('Location unavailable', 'Could not get your location. Check GPS and try again.');
@@ -5977,9 +6055,9 @@ function PartnerDashboardScreen() {
     try {
       let lat = null, lng = null;
       if (next) {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const { status } = await getLocationModule().requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({});
+          const loc = await getLocationModule().getCurrentPositionAsync({});
           lat = loc.coords.latitude; lng = loc.coords.longitude;
         }
       }
@@ -6590,9 +6668,9 @@ function SellerDashboardScreen() {
 
   const useCurrentStoreLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await getLocationModule().requestForegroundPermissionsAsync();
       if (status !== 'granted') return Alert.alert('Permission needed', 'Location access is required to pin your store on the map.');
-      const loc = await Location.getCurrentPositionAsync({});
+      const loc = await getLocationModule().getCurrentPositionAsync({});
       setStoreMapLocation(loc.coords.latitude, loc.coords.longitude);
     } catch (e) {
       Alert.alert('Error', 'Could not get current location');
@@ -6625,7 +6703,7 @@ function SellerDashboardScreen() {
   }, [showSellerChatModal, activeSellerChat, token]);
 
   const pickImages = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
+    let result = await getImagePickerModule().launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 0.2,
@@ -6855,7 +6933,7 @@ function SellerDashboardScreen() {
   };
 
   const pickMenuItemImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
+    let result = await getImagePickerModule().launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.3,
       base64: true
@@ -7541,7 +7619,7 @@ function SellerDashboardScreen() {
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity onPress={async () => { let r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.2, base64: true }); if (!r.canceled) setStoreImage(`data:image/jpeg;base64,${r.assets[0].base64}`); }} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}>
+                <TouchableOpacity onPress={async () => { let r = await getImagePickerModule().launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.2, base64: true }); if (!r.canceled) setStoreImage(`data:image/jpeg;base64,${r.assets[0].base64}`); }} style={{ padding: 16, backgroundColor: '#F9FAFB', borderRadius: 12, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: '#9CA3AF' }}>
                   <Ionicons name="camera-outline" size={24} color="#6B7280" style={{ marginBottom: 4 }} />
                   <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 13 }}>Upload Store Image (Optional)</Text>
                 </TouchableOpacity>
@@ -7670,7 +7748,7 @@ function SellerDashboardScreen() {
               </View>
               {activeTimePicker && (
                 <View style={{ marginBottom: 6 }}>
-                  <DateTimePicker
+                  <LazyDateTimePicker
                     value={timeToDate(activeTimePicker === 'from' ? pickupFrom : pickupTo)}
                     mode="time"
                     is24Hour
@@ -7778,7 +7856,7 @@ function SellerDashboardScreen() {
               </View>
               {foodStartPicker && (
                 <View style={{ marginBottom: 14 }}>
-                  <DateTimePicker
+                  <LazyDateTimePicker
                     value={foodStartsAt || new Date()}
                     mode={Platform.OS === 'ios' ? 'datetime' : foodStartPicker}
                     is24Hour
@@ -7814,7 +7892,7 @@ function SellerDashboardScreen() {
               </View>
               {foodSalePicker && (
                 <View style={{ marginBottom: 14 }}>
-                  <DateTimePicker
+                  <LazyDateTimePicker
                     value={foodSaleEndsAt || defaultSaleEnd()}
                     mode={Platform.OS === 'ios' ? 'datetime' : foodSalePicker}
                     is24Hour
@@ -7980,6 +8058,7 @@ export default function App() {
     userToken: null,
     user: null,
   });
+  const [appReady, setAppReady] = useState(false);
 
   const [cartItems, setCartItems] = useState([]);
   const DEFAULT_DELIVERY_INFO = { fulfillmentType: 'pickup', address: '', phone: '', lat: null, lng: null };
@@ -7994,6 +8073,8 @@ export default function App() {
       if (val) setCurrencyCode(val);
     });
   }, []);
+
+  // Push registration disabled until iOS 26 TurboModule crash is resolved.
 
   const changeCurrency = async (code) => {
     setCurrencyCode(code);
@@ -8072,42 +8153,60 @@ export default function App() {
 
   useEffect(() => {
     const bootstrapAsync = async () => {
-      let userToken;
-      let user;
+      let userToken = null;
+      let user = null;
       try {
         userToken = await AsyncStorage.getItem('userToken');
-        user = JSON.parse(await AsyncStorage.getItem('user'));
-        if (userToken) {
-          try {
-            const res = await axios.get(`${API_URL}/auth/me`, {
-              headers: { Authorization: `Bearer ${userToken}` },
-            });
-            user = res.data;
-            await AsyncStorage.setItem('user', JSON.stringify(user));
-          } catch (_) {
-            // Keep cached user if refresh fails
-          }
-        }
+        const userRaw = await AsyncStorage.getItem('user');
+        user = userRaw ? JSON.parse(userRaw) : null;
       } catch (e) {
         // Restoring token failed
       }
-      setState({ ...state, isLoading: false, userToken, user });
+      setState(prev => ({ ...prev, isLoading: false, userToken, user }));
     };
 
     bootstrapAsync();
   }, []);
 
   useEffect(() => {
-    if (state.userToken) {
-      registerForPushNotificationsAsync().then(pushToken => {
-        if (pushToken) {
-          axios.post(`${API_URL}/users/push-token`, { pushToken }, {
-            headers: { Authorization: `Bearer ${state.userToken}` }
-          }).catch(err => console.log('Error registering push token on backend:', err.message));
-        }
-      });
+    if (state.isLoading) return undefined;
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => setAppReady(true));
+    });
+    return () => task.cancel();
+  }, [state.isLoading]);
+
+  useEffect(() => {
+    if (!appReady || !state.userToken) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${API_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${state.userToken}` },
+        });
+        if (cancelled) return;
+        await AsyncStorage.setItem('user', JSON.stringify(res.data));
+        setState(prev => ({ ...prev, user: res.data }));
+      } catch (_) {
+        // Keep cached user if refresh fails
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [appReady, state.userToken]);
+
+  const handleNavigationReady = () => {
+    if (state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff') {
+      navigationRef.reset({ index: 0, routes: [{ name: 'SellerDashboard' }] });
+      return;
     }
-  }, [state.userToken]);
+    if (state.user?.role === 'Partner') {
+      navigationRef.reset({ index: 0, routes: [{ name: 'PartnerDashboard' }] });
+      return;
+    }
+    if (state.userToken) {
+      navigationRef.navigate('ExploreTenants');
+    }
+  };
 
   const authContext = React.useMemo(
     () => ({
@@ -8143,19 +8242,31 @@ export default function App() {
     [state, currencyCode, currencySymbol, changeCurrency, profileModalVisible]
   );
 
-  if (state.isLoading) {
+  if (state.isLoading || !appReady) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#10b981" /></View>;
   }
 
+  const initialRouteName =
+    state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff'
+      ? 'SellerDashboard'
+      : state.user?.role === 'Partner'
+        ? 'PartnerDashboard'
+        : 'Landing';
+
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <AuthContext.Provider value={authContext}>
         <CartContext.Provider value={cartContext}>
           <ChatProvider>
-            <NavigationContainer ref={navigationRef}>
+            <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
               <Stack.Navigator
-                screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFFFFF' } }}
-                initialRouteName={state.userToken ? 'ExploreTenants' : 'Landing'}
+                screenOptions={{
+                  headerShown: false,
+                  cardStyle: { backgroundColor: '#FFFFFF' },
+                  cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+                }}
+                initialRouteName={initialRouteName}
               >
               {state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff' ? (
                 <Stack.Screen name="SellerDashboard" component={SellerDashboardScreen} />
@@ -8186,7 +8297,8 @@ export default function App() {
         </ChatProvider>
       </CartContext.Provider>
     </AuthContext.Provider>
-  </SafeAreaProvider>
+    </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
