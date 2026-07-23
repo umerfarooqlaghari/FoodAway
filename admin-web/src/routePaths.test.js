@@ -28,6 +28,8 @@ describe('routePaths', () => {
       ['/dashboard/chats', 'chats'],
       ['/dashboard/staff', 'staff'],
       ['/dashboard/users', 'superadmin'],
+      ['/dashboard/riders', 'partners'],
+      ['/dashboard/customers', 'customers'],
       ['/dashboard/app-reviews', 'appreviews'],
     ])('maps %s to %s', (path, tab) => {
       expect(activeTabFromPath(path)).toBe(tab);
@@ -49,6 +51,8 @@ describe('routePaths', () => {
       ['chats', ROUTES.dashboardChats],
       ['staff', ROUTES.dashboardStaff],
       ['superadmin', ROUTES.dashboardUsers],
+      ['partners', ROUTES.dashboardRiders],
+      ['customers', ROUTES.dashboardCustomers],
       ['appreviews', ROUTES.dashboardAppReviews],
     ])('maps tab %s to %s', (tab, path) => {
       expect(dashboardPathForTab(tab)).toBe(path);

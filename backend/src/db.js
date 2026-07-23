@@ -485,9 +485,8 @@ async function migrateToTenantsTable(db) {
 
   try { await db.exec('DROP INDEX IF EXISTS users_subdomain_unique'); } catch (e) {}
 
-  const { backfillTenantSubdomains, shortenTenantSubdomains } = require('./subdomain');
+  const { backfillTenantSubdomains } = require('./subdomain');
   await backfillTenantSubdomains(db);
-  await shortenTenantSubdomains(db);
 }
 
 module.exports = { db, initDB };

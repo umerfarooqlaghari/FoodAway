@@ -53,7 +53,10 @@ export function setupDefaultAxiosMocks(user = sellerUser) {
     if (url.includes('/seller/stats')) {
       return Promise.resolve(emptyStats);
     }
-    if (url.includes('/superadmin/tenants')) {
+    if (url.includes('/superadmin/tenants') || url.includes('/superadmin/partners') || url.includes('/superadmin/customers')) {
+      if (/\/superadmin\/(tenants|partners|customers)\/\d+/.test(url)) {
+        return Promise.resolve({ data: { id: 1, name: 'Sample', email: 'sample@test.com', phone: '123', store_count: 1 } });
+      }
       return Promise.resolve(emptyList);
     }
     if (url.includes('/public/bags') || url.includes('/public/food-items')) {

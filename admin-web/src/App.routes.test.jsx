@@ -23,7 +23,7 @@ describe('App routing', () => {
   describe('public routes (logged out)', () => {
     it.each([
       [ROUTES.home, /Save good food/i],
-      [ROUTES.login, /Platform Admin/i],
+      [ROUTES.login, /Grabengo Admin/i],
       [ROUTES.register, /Register as Seller/i],
       [ROUTES.explore, /Shop your favourite brands|Featured brands/i],
       [ROUTES.legal, /Legal Information/i],
@@ -50,10 +50,10 @@ describe('App routing', () => {
       expect(await screen.findByText(/Save good food/i)).toBeInTheDocument();
     });
 
-    it('redirects authenticated seller away from main-site dashboard to home', async () => {
+    it('allows authenticated seller on main-site dashboard', async () => {
       seedAuth(mockSeller);
       renderApp(ROUTES.dashboard, { tenantSubdomain: null });
-      expect(await screen.findByText(/Save good food/i)).toBeInTheDocument();
+      await expectHeading(/KFC Admin/i);
     });
 
     it('redirects authenticated seller on tenant site from home to dashboard', async () => {
@@ -108,7 +108,9 @@ describe('App routing', () => {
 
     it.each([
       [ROUTES.dashboard, /Overview \(Platform\)/i],
-      [ROUTES.dashboardUsers, /Platform Users/i],
+      [ROUTES.dashboardUsers, /Platform Management/i],
+      [ROUTES.dashboardRiders, /Platform Management/i],
+      [ROUTES.dashboardCustomers, /Platform Management/i],
       [ROUTES.dashboardAppReviews, /App Reviews/i],
     ])('super admin can open %s', async (path, matcher) => {
       renderApp(path);
@@ -131,7 +133,7 @@ describe('App routing', () => {
       await waitFor(() => {
         expect(screen.getByRole('heading', { name: /KFC Admin/i })).toBeInTheDocument();
       });
-      expect(screen.queryByRole('heading', { name: /Platform Users/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: /Platform Management/i })).not.toBeInTheDocument();
     });
 
     it('redirects seller staff away from staff management route', async () => {

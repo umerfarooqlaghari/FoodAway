@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Routes, Route, Navigate, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ProtectedRoute from './components/ProtectedRoute';
+import DashboardRoute, { canAccessWebDashboard } from './components/DashboardRoute';
 import { ROUTES, activeTabFromPath } from './routePaths';
 import Map, { Marker } from 'react-map-gl';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -24,6 +25,8 @@ import {
   normalizeProductCategory,
 } from '@shared/productCategories.js';
 import GrabengoLogoMark from './components/GrabengoLogoMark';
+import PlatformUsersPage from './pages/PlatformUsersPage';
+import LocationMapPicker from './components/LocationMapPicker';
 import {
   getSubdomain,
   isMainSite,
@@ -40,6 +43,9 @@ import {
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+axios.defaults.headers.common = axios.defaults.headers.common || {};
+axios.defaults.headers.common['X-Grabengo-Client'] = 'admin-web';
 
 const parsePickupTimeDetails = (pickupTimeStr) => {
   if (!pickupTimeStr) return { days: [], from: '18:00', to: '20:00' };
@@ -127,6 +133,10 @@ function App() {
       navigate(ROUTES.dashboard, { replace: true });
     } else if (tab === 'superadmin' && user?.role !== 'SuperAdmin') {
       navigate(ROUTES.dashboard, { replace: true });
+    } else if (tab === 'partners' && user?.role !== 'SuperAdmin') {
+      navigate(ROUTES.dashboard, { replace: true });
+    } else if (tab === 'customers' && user?.role !== 'SuperAdmin') {
+      navigate(ROUTES.dashboard, { replace: true });
     } else if (tab === 'appreviews' && user?.role !== 'SuperAdmin') {
       navigate(ROUTES.dashboard, { replace: true });
     } else if (tab === 'staff' && user?.role !== 'SellersAdmin') {
@@ -164,13 +174,6 @@ function App() {
       .catch(() => setTenantBranding({ error: true, name: tenantSubdomain }));
   }, [onTenantSite, tenantSubdomain]);
 
-  useEffect(() => {
-    if (!token || !user?.role || !onMainSite) return;
-    if ((user.role === 'SellersAdmin' || user.role === 'SellersStaff') && user.storeUrl) {
-      window.location.assign(`${user.storeUrl.replace(/\/$/, '')}/dashboard`);
-    }
-  }, [token, user, onMainSite]);
-
   // Password reset flow states
   const [showPassword, setShowPassword] = useState(false);
   const [forgotPasswordStep, setForgotPasswordStep] = useState('login'); // 'login', 'email', 'reset'
@@ -194,6 +197,10 @@ function App() {
   const [registerError, setRegisterError] = useState('');
   const [registerComplete, setRegisterComplete] = useState(null);
   const [registerSubdomainPreview, setRegisterSubdomainPreview] = useState('');
+  const [registerStoreName, setRegisterStoreName] = useState('');
+  const [registerStoreAddress, setRegisterStoreAddress] = useState('');
+  const [registerStoreLat, setRegisterStoreLat] = useState(51.5074);
+  const [registerStoreLng, setRegisterStoreLng] = useState(-0.1278);
   const [tenantBranding, setTenantBranding] = useState(null);
   const [storeLinkCopied, setStoreLinkCopied] = useState(false);
 
@@ -493,10 +500,6 @@ function App() {
         setAuthError('Access denied. Admin access only.');
         return;
       }
-      if (onMainSite && user.role !== 'SuperAdmin') {
-        setAuthError('Seller accounts must sign in on their store portal.');
-        return;
-      }
       setToken(token);
       setUser(user);
       localStorage.setItem('adminToken', token);
@@ -550,6 +553,10 @@ function App() {
         phone: registerPhone.trim(),
         role: 'SellersAdmin',
         logo: registerLogo || undefined,
+        store_name: registerStoreName.trim() || registerBrand.trim(),
+        store_address: registerStoreAddress.trim() || undefined,
+        store_lat: registerStoreAddress.trim() ? registerStoreLat : undefined,
+        store_lng: registerStoreAddress.trim() ? registerStoreLng : undefined,
       });
       setRegisterComplete({
         brandName: registerBrand.trim(),
@@ -1627,10 +1634,10 @@ function App() {
   const renderLoginPage = () => {
     const portalTitle = onTenantSite
       ? (tenantBranding?.name ? `${tenantBranding.name} Portal` : 'Store Portal')
-      : 'Platform Admin';
+      : 'Grabengo Admin';
     const portalSubtitle = onTenantSite
       ? 'Sign in to manage your stores, orders, and inventory'
-      : 'Super admin sign-in for the Grabengo platform';
+      : 'Super admin or seller sign-in — manage your brand from the web dashboard';
     const loginLogo = onTenantSite && tenantBranding?.logo ? tenantBranding.logo : null;
 
     return (
@@ -1907,6 +1914,25 @@ function App() {
                 </div>
               )}
 
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>First Store Name (optional)</label>
+              <input type="text" placeholder="Main branch" value={registerStoreName} onChange={e => setRegisterStoreName(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} />
+
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Store Address (recommended)</label>
+              <input type="text" placeholder="Street, city, postcode" value={registerStoreAddress} onChange={e => setRegisterStoreAddress(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} />
+
+              {registerStoreAddress.trim() && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Pin Store on Map</label>
+                  <LocationMapPicker
+                    lat={registerStoreLat}
+                    lng={registerStoreLng}
+                    addressHint={registerStoreAddress}
+                    onChange={(lat, lng) => { setRegisterStoreLat(lat); setRegisterStoreLng(lng); }}
+                    onAddressChange={(addr) => setRegisterStoreAddress(addr)}
+                  />
+                </div>
+              )}
+
               <button type="submit" className="btn-primary" disabled={registerLoading} style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: registerLoading ? 'not-allowed' : 'pointer', opacity: registerLoading ? 0.75 : 1 }}>
                 {registerLoading ? 'Creating account...' : 'Create Seller Account'}
               </button>
@@ -1965,7 +1991,9 @@ function App() {
           )}
           {user?.role === 'SuperAdmin' && (
             <>
-              <NavLink to={ROUTES.dashboardUsers} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Platform Users</NavLink>
+              <NavLink to={ROUTES.dashboardUsers} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Tenants</NavLink>
+              <NavLink to={ROUTES.dashboardRiders} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Delivery Riders</NavLink>
+              <NavLink to={ROUTES.dashboardCustomers} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Customers</NavLink>
               <NavLink to={ROUTES.dashboardAppReviews} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>App Reviews</NavLink>
             </>
           )}
@@ -2639,126 +2667,60 @@ function App() {
         )}
 
 
+        {(activeTab === 'superadmin' || activeTab === 'partners' || activeTab === 'customers') && user?.role === 'SuperAdmin' && (
+          <PlatformUsersPage
+            token={token}
+            apiUrl={API_URL}
+            section={activeTab === 'partners' ? 'partners' : activeTab === 'customers' ? 'customers' : 'tenants'}
+          />
+        )}
+
+        {/* Inactivity reminders — SuperAdmin only, tenants tab */}
         {activeTab === 'superadmin' && user?.role === 'SuperAdmin' && (
-          <div className="animate-fade-in">
-            <header className="header">
-              <h1 className="header-title">SuperAdmin Panel</h1>
-            </header>
-
-            <div className="portal-section-grid">
-              <div className="glass-card" style={{ padding: '1.5rem', height: 'fit-content' }}>
-                <h3 style={{ marginBottom: '1.5rem' }}>Register Seller Account</h3>
-                <form onSubmit={handleCreateUser}>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Brand Name</label>
-                    <input type="text" placeholder="e.g. KFC, Starbucks" value={newUserName} onChange={e => setNewUserName(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} required />
-                  </div>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Email Address</label>
-                    <input type="email" placeholder="e.g. admin@brand.com" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} required />
-                  </div>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Password</label>
-                    <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} required />
-                  </div>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Brand Logo / Image</label>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                      <input type="text" placeholder="Image URL or upload below..." value={newUserLogo} onChange={e => setNewUserLogo(e.target.value)} style={{ flex: 1, padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} />
-                      <label style={{ cursor: 'pointer', padding: '0.75rem 1rem', background: 'var(--border-color)', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}>
-                        Upload
-                        <input type="file" accept="image/*" onChange={e => handleSingleImageUpload(e, setNewUserLogo)} style={{ display: 'none' }} />
-                      </label>
-                    </div>
-                    {newUserLogo && (
-                      <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <img src={newUserLogo} alt="Logo Preview" style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Logo Preview</span>
-                      </div>
-                    )}
-                  </div>
-                  <button type="submit" className="btn-primary" style={{ width: '100%' }}>Create Account</button>
-                </form>
-              </div>
-
-              <div className="glass-card" style={{ padding: '1.5rem' }}>
-                <h3 style={{ marginBottom: '1.5rem' }}>Platform Users</h3>
-                {tabLoading.superadmin ? (
-                  <TabLoading label="Loading users..." />
-                ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {users.map(u => (
-                    <div key={u.id} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        {u.logo ? (
-                          <img src={u.logo} alt={u.name} style={{ width: '45px', height: '45px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
-                        ) : (
-                          <div style={{ width: '45px', height: '45px', borderRadius: '8px', background: 'var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
-                            {u.name ? u.name.charAt(0).toUpperCase() : '?'}
-                          </div>
-                        )}
-                        <div>
-                          <strong style={{ display: 'block', fontSize: '1.1rem' }}>{u.name}</strong>
-                          <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{u.email}</span>
-                        </div>
-                      </div>
-                      <span style={{ padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', background: u.role === 'SuperAdmin' ? '#FEE2E2' : '#E0E7FF', color: u.role === 'SuperAdmin' ? '#991B1B' : '#3730A3' }}>
-                        {u.role}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                )}
-              </div>
-            </div>
-
-            {/* Inactivity Reminders Panel */}
-            <div className="glass-card" style={{ padding: '1.5rem', marginTop: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>Engagement & Retention Alerts</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0, marginTop: '2px' }}>
-                    Find customers inactive for 3+ days and send a NayaPay-style re-engagement alert.
-                  </p>
-                </div>
-                <button
-                  onClick={handleTriggerInactivityReminders}
-                  disabled={scanningInactivity}
-                  className="btn-primary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.6rem 1.2rem' }}
-                >
-                  {scanningInactivity ? 'Scanning & Sending...' : '⚡ Scan & Send Reminders'}
-                </button>
-              </div>
-
-              {inactivityResult && (
-                <div style={{ padding: '1rem', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '1.5rem' }}>
-                  <strong style={{ color: 'var(--success)', fontSize: '0.95rem' }}>✓ {inactivityResult.message}</strong>
-                </div>
-              )}
-
-              {inactiveUsersList.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <h4 style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>Notified Customers:</h4>
-                  {inactiveUsersList.map(u => (
-                    <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: '#F9FAFB' }}>
-                      <div>
-                        <strong style={{ fontSize: '0.95rem', color: '#111827' }}>{u.name}</strong>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block' }}>{u.email}</span>
-                      </div>
-                      <span style={{ fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.08)', color: '#DC2626', padding: '4px 8px', borderRadius: '8px', fontWeight: 'bold' }}>
-                        Last Order: {u.last_order === 'Never Ordered' ? 'Never' : new Date(u.last_order).toLocaleDateString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : inactivityResult ? (
-                <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.9rem', textAlign: 'center', margin: '2rem 0' }}>
-                  No inactive users found. All registered customers have placed an order in the last 3 days!
+          <div className="glass-card" style={{ padding: '1.5rem', marginTop: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Engagement & Retention Alerts</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0, marginTop: '2px' }}>
+                  Find customers inactive for 3+ days and send a re-engagement alert.
                 </p>
-              ) : null}
+              </div>
+              <button
+                onClick={handleTriggerInactivityReminders}
+                disabled={scanningInactivity}
+                className="btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.6rem 1.2rem' }}
+              >
+                {scanningInactivity ? 'Scanning & Sending...' : 'Scan & Send Reminders'}
+              </button>
             </div>
 
+            {inactivityResult && (
+              <div style={{ padding: '1rem', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '1.5rem' }}>
+                <strong style={{ color: 'var(--success)', fontSize: '0.95rem' }}>✓ {inactivityResult.message}</strong>
+              </div>
+            )}
+
+            {inactiveUsersList.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <h4 style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>Notified Customers:</h4>
+                {inactiveUsersList.map(u => (
+                  <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: '#F9FAFB' }}>
+                    <div>
+                      <strong style={{ fontSize: '0.95rem', color: '#111827' }}>{u.name}</strong>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block' }}>{u.email}</span>
+                    </div>
+                    <span style={{ fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.08)', color: '#DC2626', padding: '4px 8px', borderRadius: '8px', fontWeight: 'bold' }}>
+                      Last Order: {u.last_order === 'Never Ordered' ? 'Never' : new Date(u.last_order).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : inactivityResult ? (
+              <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.9rem', textAlign: 'center', margin: '2rem 0' }}>
+                No inactive users found.
+              </p>
+            ) : null}
           </div>
         )}
 
@@ -3352,24 +3314,25 @@ function App() {
     </>
   );
 
+  const dashboardRouteElement = (
+    <DashboardRoute token={token} user={user}>
+      {renderDashboardPortal()}
+    </DashboardRoute>
+  );
+
+  const loggedInDashboardRedirect = token && canAccessWebDashboard(user)
+    ? <Navigate to={ROUTES.dashboard} replace />
+    : null;
+
   return (
     <Routes>
       {onMainSite ? (
         <>
           <Route path={ROUTES.home} element={token && user?.role === 'SuperAdmin' ? <Navigate to={ROUTES.dashboard} replace /> : renderLandingPage()} />
-          <Route path={ROUTES.login} element={token && user?.role === 'SuperAdmin' ? <Navigate to={ROUTES.dashboard} replace /> : renderLoginPage()} />
+          <Route path={ROUTES.login} element={loggedInDashboardRedirect || renderLoginPage()} />
           <Route path={ROUTES.register} element={token ? <Navigate to={ROUTES.home} replace /> : renderRegisterPage()} />
           {sharedPublicRoutes}
-          <Route
-            path="/dashboard/*"
-            element={
-              token && user?.role === 'SuperAdmin' ? (
-                <ProtectedRoute token={token}>{renderDashboardPortal()}</ProtectedRoute>
-              ) : (
-                <Navigate to={ROUTES.home} replace />
-              )
-            }
-          />
+          <Route path="/dashboard/*" element={dashboardRouteElement} />
         </>
       ) : (
         <>
@@ -3386,18 +3349,11 @@ function App() {
               />
             }
           />
-          <Route path={ROUTES.home} element={token ? <Navigate to={ROUTES.dashboard} replace /> : <Navigate to={ROUTES.shop} replace />} />
-          <Route path={ROUTES.login} element={token ? <Navigate to={ROUTES.dashboard} replace /> : renderLoginPage()} />
+          <Route path={ROUTES.home} element={token && canAccessWebDashboard(user) ? <Navigate to={ROUTES.dashboard} replace /> : <Navigate to={ROUTES.shop} replace />} />
+          <Route path={ROUTES.login} element={loggedInDashboardRedirect || renderLoginPage()} />
           <Route path={ROUTES.register} element={<ExternalRedirect to={mainSiteRegisterUrl()} />} />
           {sharedPublicRoutes}
-          <Route
-            path="/dashboard/*"
-            element={
-              <ProtectedRoute token={token}>
-                {renderDashboardPortal()}
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/dashboard/*" element={dashboardRouteElement} />
         </>
       )}
       <Route path="*" element={<Navigate to={onTenantSite ? ROUTES.shop : ROUTES.home} replace />} />

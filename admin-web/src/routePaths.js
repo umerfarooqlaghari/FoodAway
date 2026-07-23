@@ -22,6 +22,8 @@ export const ROUTES = {
   dashboardChats: '/dashboard/chats',
   dashboardStaff: '/dashboard/staff',
   dashboardUsers: '/dashboard/users',
+  dashboardRiders: '/dashboard/riders',
+  dashboardCustomers: '/dashboard/customers',
   dashboardAppReviews: '/dashboard/app-reviews',
 };
 
@@ -33,6 +35,8 @@ const TAB_TO_PATH = {
   chats: ROUTES.dashboardChats,
   staff: ROUTES.dashboardStaff,
   superadmin: ROUTES.dashboardUsers,
+  partners: ROUTES.dashboardRiders,
+  customers: ROUTES.dashboardCustomers,
   appreviews: ROUTES.dashboardAppReviews,
 };
 
@@ -47,6 +51,8 @@ export function activeTabFromPath(pathname) {
   if (pathname.startsWith('/dashboard/chats')) return 'chats';
   if (pathname.startsWith('/dashboard/staff')) return 'staff';
   if (pathname.startsWith('/dashboard/users')) return 'superadmin';
+  if (pathname.startsWith('/dashboard/riders')) return 'partners';
+  if (pathname.startsWith('/dashboard/customers')) return 'customers';
   if (pathname.startsWith('/dashboard/app-reviews')) return 'appreviews';
   if (pathname.startsWith('/dashboard')) return 'dashboard';
   return null;

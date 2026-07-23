@@ -27,6 +27,8 @@ const {
   getTenantForUser,
   ensureTenantSubdomain,
   listTenantsForSuperAdmin,
+  getTenantDetailForSuperAdmin,
+  deleteTenantCascade,
 } = require('./tenants');
 const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess, assertMenuItemAccess, assertOrderAccess } = require('./tenant');
 const { registerSellerAdmin, mapRegistrationError, deleteOrphanTenants } = require('./sellerRegistration');
@@ -101,6 +103,11 @@ function resolveRequestSubdomain(req) {
 
 function isMobileAppClient(req) {
   return req.headers['x-grabengo-client'] === 'mobile';
+}
+
+function isAdminWebClient(req) {
+  const client = req.headers['x-grabengo-client'];
+  return client === 'admin-web' || client === 'web';
 }
 
 // ── Partner delivery helpers ──
@@ -465,6 +472,7 @@ app.post('/api/auth/register', async (req, res) => {
       const finalName = (brand_name || name || '').trim();
       if (!finalName) return res.status(400).json({ error: 'Brand name is required' });
       if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+      if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Phone number is required' });
 
       let logoUrl = null;
       if (logo) {
@@ -475,14 +483,21 @@ app.post('/api/auth/register', async (req, res) => {
         }
       }
 
+      const { store_name, store_address, store_lat, store_lng } = req.body;
       const { userId, tenantId, subdomain } = await registerSellerAdmin(db, {
         brandName: finalName,
         email,
         hashedPassword,
-        phone,
+        phone: String(phone).trim(),
         logoUrl,
         requestedSubdomain: req.body.subdomain,
       });
+
+      if (store_name && store_address && store_lat != null && store_lng != null) {
+        await db.prepare(
+          'INSERT INTO stores (tenant_id, name, address, lat, lng, is_active) VALUES (?, ?, ?, ?, ?, TRUE)'
+        ).run(tenantId, store_name, store_address, Number(store_lat), Number(store_lng));
+      }
 
       const storeUrl = tenantStoreUrl(subdomain);
       const loginUrl = tenantStoreUrl(subdomain, { path: '/login' });
@@ -506,7 +521,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required' });
     if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Phone number is required' });
-    const info = await db.prepare('INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, ?, ?)').run(name, email, hashedPassword, 'Customers', phone.trim());
+    const { delivery_address } = req.body;
+    const info = await db.prepare(
+      'INSERT INTO users (name, email, password, role, phone, delivery_address) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(name, email, hashedPassword, 'Customers', phone.trim(), delivery_address ? String(delivery_address).trim() : null);
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
     const mapped = mapRegistrationError(err);
@@ -535,17 +553,18 @@ app.post('/api/auth/login', async (req, res) => {
       if (!tenant) return res.status(403).json({ error: 'Seller account is not linked to a store.' });
       await ensureTenantSubdomain(db, tenant);
       const storeUrl = tenantStoreUrl(tenant.subdomain);
-      if (!requestSubdomain) {
-        if (!isMobileAppClient(req)) {
-          return res.status(403).json({
-            error: 'Please sign in on your store portal.',
-            storeUrl,
-            subdomain: tenant.subdomain,
-          });
-        }
-      } else if (requestSubdomain !== tenant.subdomain) {
+      if (requestSubdomain && requestSubdomain !== tenant.subdomain) {
         return res.status(403).json({
           error: 'This account belongs to a different store.',
+          storeUrl,
+          subdomain: tenant.subdomain,
+        });
+      }
+      // Web admin portal and mobile app may sign in without a subdomain host;
+      // tenant is resolved from the JWT after login.
+      if (!requestSubdomain && !isMobileAppClient(req) && !isAdminWebClient(req)) {
+        return res.status(403).json({
+          error: 'Please sign in on your store portal or the Grabengo admin site.',
           storeUrl,
           subdomain: tenant.subdomain,
         });
@@ -2081,16 +2100,25 @@ async function notifyDeliveryParties(deliveryId, event) {
 // Partners are provisioned by the platform (no self-signup).
 app.post('/api/superadmin/partners', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
-  const { name, email, password, phone } = req.body;
+  const { name, email, password, phone, city, base_lat, base_lng } = req.body;
   if (!name || !email || !password || !phone) {
     return res.status(400).json({ error: 'name, email, password and phone are required' });
   }
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const info = await db.prepare(
-      "INSERT INTO users (name, email, password, role, phone) VALUES (?, ?, ?, 'Partner', ?)"
-    ).run(name, email, hashedPassword, phone);
-    res.status(201).json({ id: info.lastInsertRowid, name, email, phone, role: 'Partner' });
+      `INSERT INTO users (name, email, password, role, phone, delivery_address, duty_lat, duty_lng)
+       VALUES (?, ?, ?, 'Partner', ?, ?, ?, ?)`
+    ).run(
+      name,
+      email,
+      hashedPassword,
+      String(phone).trim(),
+      city ? String(city).trim() : null,
+      base_lat != null ? Number(base_lat) : null,
+      base_lng != null ? Number(base_lng) : null,
+    );
+    res.status(201).json({ id: info.lastInsertRowid, name, email, phone, city: city || null, role: 'Partner' });
   } catch (err) {
     const mapped = mapRegistrationError(err);
     if (mapped) return res.status(mapped.status).json({ error: mapped.error });
@@ -2102,7 +2130,8 @@ app.get('/api/superadmin/partners', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const partners = await db.prepare(`
-      SELECT u.id, u.name, u.email, u.phone, u.is_on_duty,
+      SELECT u.id, u.name, u.email, u.phone, u.delivery_address AS city, u.duty_lat, u.duty_lng,
+             u.is_on_duty, u.created_at,
              (SELECT COUNT(*) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS delivered_count,
              (SELECT COALESCE(SUM(d.fee), 0) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS total_earnings,
              (SELECT COALESCE(SUM(d.cod_amount), 0) FROM deliveries d WHERE d.partner_id = u.id AND d.status = 'delivered') AS total_cod_collected
@@ -2133,7 +2162,13 @@ app.get('/api/superadmin/deliveries', verifyToken, async (req, res) => {
 
 app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
-  const { name, email, password, brand_name, logo } = req.body;
+  const {
+    name, email, password, brand_name, logo, phone,
+    store_name, store_address, store_lat, store_lng,
+  } = req.body;
+  if (!phone || !String(phone).trim()) {
+    return res.status(400).json({ error: 'Phone number is required' });
+  }
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const finalName = brand_name || name;
@@ -2145,9 +2180,14 @@ app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
       brandName: finalName,
       email,
       hashedPassword,
-      phone: null,
+      phone: String(phone).trim(),
       logoUrl,
     });
+    if (store_name && store_address && store_lat != null && store_lng != null) {
+      await db.prepare(
+        'INSERT INTO stores (tenant_id, name, address, lat, lng, is_active) VALUES (?, ?, ?, ?, ?, TRUE)'
+      ).run(tenantId, store_name, store_address, Number(store_lat), Number(store_lng));
+    }
     const storeUrl = tenantStoreUrl(subdomain);
     res.status(201).json({
       id: tenantId,
@@ -2155,6 +2195,52 @@ app.post('/api/superadmin/tenants', verifyToken, async (req, res) => {
       subdomain,
       storeUrl,
       message: 'Tenant created successfully',
+    });
+  } catch (err) {
+    const mapped = mapRegistrationError(err);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/superadmin/customers', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const customers = await db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.delivery_address, u.created_at,
+             (SELECT COUNT(*)::int FROM orders o WHERE o.customer_id = u.id) AS order_count
+      FROM users u
+      WHERE u.role = 'Customers'
+      ORDER BY u.created_at DESC
+    `).all();
+    res.json(customers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/superadmin/customers', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  const { name, email, password, phone, delivery_address, delivery_lat, delivery_lng } = req.body;
+  if (!name || !email || !password || !phone) {
+    return res.status(400).json({ error: 'name, email, password and phone are required' });
+  }
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    let address = delivery_address ? String(delivery_address).trim() : null;
+    if (address && delivery_lat != null && delivery_lng != null) {
+      address = `${address} (${Number(delivery_lat).toFixed(5)}, ${Number(delivery_lng).toFixed(5)})`;
+    }
+    const info = await db.prepare(
+      "INSERT INTO users (name, email, password, role, phone, delivery_address) VALUES (?, ?, ?, 'Customers', ?, ?)"
+    ).run(name, email, hashedPassword, String(phone).trim(), address);
+    res.status(201).json({
+      id: info.lastInsertRowid,
+      name,
+      email,
+      phone: String(phone).trim(),
+      delivery_address: address,
+      role: 'Customers',
     });
   } catch (err) {
     const mapped = mapRegistrationError(err);
@@ -2179,17 +2265,254 @@ app.get('/api/superadmin/tenants', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/api/superadmin/tenants/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const tenant = await getTenantDetailForSuperAdmin(db, req.params.id);
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+    res.json({
+      ...tenant,
+      email: tenant.admin_email,
+      logo: await getPresignedUrl(tenant.logo),
+      storeUrl: tenant.subdomain ? tenantStoreUrl(tenant.subdomain) : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/superadmin/tenants/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  const {
+    brand_name, name, email, phone, password, logo,
+    store_name, store_address, store_lat, store_lng,
+  } = req.body;
+  try {
+    const tenant = await getTenantDetailForSuperAdmin(db, req.params.id);
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    const finalName = (brand_name || name || tenant.name || '').trim();
+    if (!finalName) return res.status(400).json({ error: 'Brand name is required' });
+
+    let logoUrl = tenant.logo;
+    if (logo !== undefined) {
+      logoUrl = logo ? await uploadImageToS3(logo) : null;
+    }
+
+    await db.prepare(
+      'UPDATE tenants SET name = ?, phone = ?, logo = COALESCE(?, logo) WHERE id = ?'
+    ).run(finalName, phone ? String(phone).trim() : tenant.phone, logoUrl, tenant.id);
+
+    if (tenant.admin_user_id) {
+      const adminUpdates = [];
+      const adminParams = [];
+      if (email) {
+        adminUpdates.push('email = ?');
+        adminParams.push(String(email).trim());
+      }
+      if (phone) {
+        adminUpdates.push('phone = ?');
+        adminParams.push(String(phone).trim());
+      }
+      adminUpdates.push('name = ?');
+      adminParams.push(finalName);
+      if (password) {
+        adminUpdates.push('password = ?');
+        adminParams.push(await bcrypt.hash(password, 10));
+      }
+      if (adminUpdates.length) {
+        await db.prepare(
+          `UPDATE users SET ${adminUpdates.join(', ')} WHERE id = ?`
+        ).run(...adminParams, tenant.admin_user_id);
+      }
+    }
+
+    if (store_name || store_address || store_lat != null || store_lng != null) {
+      const sName = (store_name || finalName).trim();
+      const sAddress = store_address != null ? String(store_address).trim() : tenant.primary_store_address;
+      const sLat = store_lat != null ? Number(store_lat) : tenant.primary_store_lat;
+      const sLng = store_lng != null ? Number(store_lng) : tenant.primary_store_lng;
+      if (tenant.primary_store_id) {
+        await db.prepare(
+          'UPDATE stores SET name = ?, address = ?, lat = ?, lng = ? WHERE id = ?'
+        ).run(sName, sAddress, sLat, sLng, tenant.primary_store_id);
+      } else if (sAddress && sLat != null && sLng != null) {
+        await db.prepare(
+          'INSERT INTO stores (tenant_id, name, address, lat, lng, is_active) VALUES (?, ?, ?, ?, ?, TRUE)'
+        ).run(tenant.id, sName, sAddress, sLat, sLng);
+      }
+    }
+
+    const updated = await getTenantDetailForSuperAdmin(db, tenant.id);
+    res.json({
+      ...updated,
+      email: updated.admin_email,
+      logo: await getPresignedUrl(updated.logo),
+      storeUrl: updated.subdomain ? tenantStoreUrl(updated.subdomain) : null,
+    });
+  } catch (err) {
+    const mapped = mapRegistrationError(err);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/superadmin/tenants/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const tenant = await getTenantDetailForSuperAdmin(db, req.params.id);
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+    await deleteTenantCascade(db, tenant.id);
+    res.json({ message: 'Tenant deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/superadmin/partners/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const partner = await db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.delivery_address AS city, u.duty_lat, u.duty_lng,
+             u.is_on_duty, u.created_at
+      FROM users u WHERE u.id = ? AND u.role = 'Partner'
+    `).get(req.params.id);
+    if (!partner) return res.status(404).json({ error: 'Rider not found' });
+    res.json(partner);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/superadmin/partners/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  const { name, email, phone, password, city, base_lat, base_lng } = req.body;
+  try {
+    const partner = await db.prepare('SELECT id FROM users WHERE id = ? AND role = ?').get(req.params.id, 'Partner');
+    if (!partner) return res.status(404).json({ error: 'Rider not found' });
+
+    const updates = [];
+    const params = [];
+    if (name) { updates.push('name = ?'); params.push(String(name).trim()); }
+    if (email) { updates.push('email = ?'); params.push(String(email).trim()); }
+    if (phone) { updates.push('phone = ?'); params.push(String(phone).trim()); }
+    if (city !== undefined) { updates.push('delivery_address = ?'); params.push(city ? String(city).trim() : null); }
+    if (base_lat != null) { updates.push('duty_lat = ?'); params.push(Number(base_lat)); }
+    if (base_lng != null) { updates.push('duty_lng = ?'); params.push(Number(base_lng)); }
+    if (password) { updates.push('password = ?'); params.push(await bcrypt.hash(password, 10)); }
+
+    if (updates.length) {
+      await db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params, partner.id);
+    }
+
+    const updated = await db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.delivery_address AS city, u.duty_lat, u.duty_lng,
+             u.is_on_duty, u.created_at
+      FROM users u WHERE u.id = ?
+    `).get(partner.id);
+    res.json(updated);
+  } catch (err) {
+    const mapped = mapRegistrationError(err);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/superadmin/partners/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const partner = await db.prepare('SELECT id FROM users WHERE id = ? AND role = ?').get(req.params.id, 'Partner');
+    if (!partner) return res.status(404).json({ error: 'Rider not found' });
+    await db.prepare('UPDATE deliveries SET partner_id = NULL WHERE partner_id = ?').run(partner.id);
+    await db.prepare('DELETE FROM users WHERE id = ?').run(partner.id);
+    res.json({ message: 'Rider deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/superadmin/customers/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const customer = await db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.delivery_address, u.created_at,
+             (SELECT COUNT(*)::int FROM orders o WHERE o.customer_id = u.id) AS order_count
+      FROM users u WHERE u.id = ? AND u.role = 'Customers'
+    `).get(req.params.id);
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    res.json(customer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/superadmin/customers/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  const { name, email, phone, password, delivery_address, delivery_lat, delivery_lng } = req.body;
+  try {
+    const customer = await db.prepare('SELECT id FROM users WHERE id = ? AND role = ?').get(req.params.id, 'Customers');
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+    let address = delivery_address !== undefined
+      ? (delivery_address ? String(delivery_address).trim() : null)
+      : undefined;
+    if (address && delivery_lat != null && delivery_lng != null) {
+      address = `${address} (${Number(delivery_lat).toFixed(5)}, ${Number(delivery_lng).toFixed(5)})`;
+    }
+
+    const updates = [];
+    const params = [];
+    if (name) { updates.push('name = ?'); params.push(String(name).trim()); }
+    if (email) { updates.push('email = ?'); params.push(String(email).trim()); }
+    if (phone) { updates.push('phone = ?'); params.push(String(phone).trim()); }
+    if (address !== undefined) { updates.push('delivery_address = ?'); params.push(address); }
+    if (password) { updates.push('password = ?'); params.push(await bcrypt.hash(password, 10)); }
+
+    if (updates.length) {
+      await db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params, customer.id);
+    }
+
+    const updated = await db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.delivery_address, u.created_at,
+             (SELECT COUNT(*)::int FROM orders o WHERE o.customer_id = u.id) AS order_count
+      FROM users u WHERE u.id = ?
+    `).get(customer.id);
+    res.json(updated);
+  } catch (err) {
+    const mapped = mapRegistrationError(err);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/superadmin/customers/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const customer = await db.prepare('SELECT id FROM users WHERE id = ? AND role = ?').get(req.params.id, 'Customers');
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    await db.prepare('DELETE FROM app_reviews WHERE customer_id = ?').run(customer.id);
+    await db.prepare('DELETE FROM reviews WHERE customer_id = ?').run(customer.id);
+    await db.prepare('DELETE FROM chat_messages WHERE customer_id = ?').run(customer.id);
+    await db.prepare('DELETE FROM favorites WHERE user_id = ?').run(customer.id);
+    await db.prepare('DELETE FROM orders WHERE customer_id = ?').run(customer.id);
+    await db.prepare('DELETE FROM users WHERE id = ?').run(customer.id);
+    res.json({ message: 'Customer deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
   
   try {
     const inactiveUsers = await db.prepare(`
-      SELECT u.id, u.name, u.email, MAX(o.created_at) as last_order
+      SELECT u.id, u.name, u.email, MAX(o.created_at) AS last_order
       FROM users u
       LEFT JOIN orders o ON o.customer_id = u.id
       WHERE u.role = 'Customers'
-      GROUP BY u.id
-      HAVING last_order IS NULL OR datetime(last_order) < datetime('now', '-3 days')
+      GROUP BY u.id, u.name, u.email
+      HAVING MAX(o.created_at) IS NULL OR MAX(o.created_at) < NOW() - INTERVAL '3 days'
     `).all();
 
     const notified = [];
@@ -2217,10 +2540,19 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
         console.error(`Failed to send inactivity email to ${customer.email}:`, emailErr.message);
       }
 
-      notified.push(customer.id);
+      notified.push({
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        last_order: customer.last_order || 'Never Ordered',
+      });
     }
 
-    res.json({ message: `Inactivity reminders sent to ${notified.length} users.`, count: notified.length });
+    res.json({
+      message: `Inactivity reminders sent to ${notified.length} users.`,
+      count: notified.length,
+      users: notified,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

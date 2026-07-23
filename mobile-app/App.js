@@ -459,6 +459,22 @@ const registerForPushNotificationsAsync = async () => {
 const AuthContext = createContext();
 const CartContext = createContext();
 const ChatContext = createContext();
+const LandingBrandsContext = createContext({ tenants: [], ready: false });
+
+async function prefetchLandingBrands() {
+  try {
+    const res = await axios.get(`${API_URL}/public/tenants`);
+    const tenants = Array.isArray(res.data) ? res.data : [];
+    await Promise.all(
+      tenants
+        .filter((t) => t.logo)
+        .map((t) => Image.prefetch(t.logo).catch(() => false))
+    );
+    return tenants;
+  } catch {
+    return [];
+  }
+}
 
 const CURRENCIES = [
   { code: 'GBP', symbol: '£' },
@@ -1374,23 +1390,12 @@ function LandingAuthSheet({ visible, onClose, navigation }) {
 function LandingScreen({ navigation }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
-  const [carouselTenants, setCarouselTenants] = useState([]);
+  const { tenants: carouselTenants } = useContext(LandingBrandsContext);
   const carouselAnim = useRef(new Animated.Value(0)).current;
   const screenWidth = Dimensions.get('window').width;
   const illustrationWidth = screenWidth - 48;
   const illustrationHeight = illustrationWidth * (360 / 480);
   const CARD_STEP = 156;
-
-  // Fetch active tenants for the brand carousel
-  useEffect(() => {
-    axios.get(`${API_URL}/public/tenants`)
-      .then(res => {
-        if (Array.isArray(res.data) && res.data.length > 0) {
-          setCarouselTenants(res.data);
-        }
-      })
-      .catch(() => {}); // silently ignore — static fallback stays visible
-  }, []);
 
   // Smooth carousel loop — Animated avoids ScrollView scrollTo stealing touches on device.
   useEffect(() => {
@@ -1520,7 +1525,8 @@ function LandingScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Brands Carousel — live from active tenants (display only, no touch capture) */}
+          {/* Brands Carousel — prefetched before landing appears */}
+          {carouselTenants.length > 0 && (
           <View style={{ marginTop: 40 }} pointerEvents="none">
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 16, paddingLeft: 24 }}>Top Brands</Text>
             <View style={{ overflow: 'hidden' }}>
@@ -1531,7 +1537,7 @@ function LandingScreen({ navigation }) {
                   transform: [{ translateX: carouselAnim }],
                 }}
               >
-                {(carouselTenants.length > 0 ? [...carouselTenants, ...carouselTenants] : []).map((tenant, idx) => (
+                {[...carouselTenants, ...carouselTenants].map((tenant, idx) => (
                   <View key={`${tenant.id}-${idx}`} style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111827', marginRight: 16, justifyContent: 'center', alignItems: 'center' }}>
                     {tenant.logo ? (
                       <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
@@ -1553,6 +1559,7 @@ function LandingScreen({ navigation }) {
               </Animated.View>
             </View>
           </View>
+          )}
 
           {/* What's coming teaser */}
           <View style={{ marginTop: 20, paddingHorizontal: 24, alignItems: 'flex-end' }}>
@@ -1844,6 +1851,9 @@ function RegisterScreen({ navigation }) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [logo, setLogo] = useState(null);
+  const [storeName, setStoreName] = useState('');
+  const [storeAddress, setStoreAddress] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useContext(AuthContext);
@@ -1903,6 +1913,7 @@ function RegisterScreen({ navigation }) {
           password,
           phone: phone.trim(),
           role: 'Customers',
+          delivery_address: deliveryAddress.trim() || undefined,
         });
         const loginRes = await axios.post(`${API_URL}/auth/login`, { email: email.trim(), password });
         login(loginRes.data.token, loginRes.data.user);
@@ -1915,6 +1926,8 @@ function RegisterScreen({ navigation }) {
           phone: phone.trim(),
           role: 'SellersAdmin',
           logo: logo || undefined,
+          store_name: storeName.trim() || brandName.trim(),
+          store_address: storeAddress.trim() || undefined,
         });
         Alert.alert(
           'Seller account created',
@@ -2020,6 +2033,9 @@ function RegisterScreen({ navigation }) {
             )}
             <TextInput style={styles.input} placeholder="Email address" placeholderTextColor="#94a3b8" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" editable={!loading} />
             <TextInput style={styles.input} placeholder="Phone number" placeholderTextColor="#94a3b8" value={phone} onChangeText={setPhone} keyboardType="phone-pad" editable={!loading} />
+            {accountType === 'customer' && (
+              <TextInput style={styles.input} placeholder="Default delivery address (optional)" placeholderTextColor="#94a3b8" value={deliveryAddress} onChangeText={setDeliveryAddress} editable={!loading} />
+            )}
           </>
         )}
 
@@ -2038,6 +2054,15 @@ function RegisterScreen({ navigation }) {
                 )}
                 <Text style={{ color: '#64748B', fontWeight: '600' }}>{logo ? 'Change brand logo' : 'Add brand logo (optional)'}</Text>
               </TouchableOpacity>
+            )}
+            {accountType === 'seller' && (
+              <>
+                <TextInput style={styles.input} placeholder="First store name (optional)" placeholderTextColor="#94a3b8" value={storeName} onChangeText={setStoreName} editable={!loading} />
+                <TextInput style={styles.input} placeholder="Store address (recommended)" placeholderTextColor="#94a3b8" value={storeAddress} onChangeText={setStoreAddress} editable={!loading} />
+                <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 12, lineHeight: 18 }}>
+                  Pin the exact map location after sign-in from Store Management.
+                </Text>
+              </>
             )}
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingRight: 14, marginBottom: 12 }}>
               <TextInput
@@ -8059,6 +8084,8 @@ export default function App() {
     user: null,
   });
   const [appReady, setAppReady] = useState(false);
+  const [landingBrands, setLandingBrands] = useState([]);
+  const [landingBrandsReady, setLandingBrandsReady] = useState(false);
 
   const [cartItems, setCartItems] = useState([]);
   const DEFAULT_DELIVERY_INFO = { fulfillmentType: 'pickup', address: '', phone: '', lat: null, lng: null };
@@ -8170,11 +8197,29 @@ export default function App() {
 
   useEffect(() => {
     if (state.isLoading) return undefined;
+    let cancelled = false;
+    const role = state.user?.role;
+    const skipPrefetch = role === 'SellersAdmin' || role === 'SellersStaff' || role === 'Partner';
+    if (skipPrefetch) {
+      setLandingBrandsReady(true);
+      return undefined;
+    }
+    (async () => {
+      const tenants = await prefetchLandingBrands();
+      if (cancelled) return;
+      setLandingBrands(tenants);
+      setLandingBrandsReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, [state.isLoading, state.user?.role]);
+
+  useEffect(() => {
+    if (state.isLoading || !landingBrandsReady) return undefined;
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => setAppReady(true));
     });
     return () => task.cancel();
-  }, [state.isLoading]);
+  }, [state.isLoading, landingBrandsReady]);
 
   useEffect(() => {
     if (!appReady || !state.userToken) return undefined;
@@ -8242,8 +8287,18 @@ export default function App() {
     [state, currencyCode, currencySymbol, changeCurrency, profileModalVisible]
   );
 
-  if (state.isLoading || !appReady) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#10b981" /></View>;
+  const landingBrandsContext = React.useMemo(
+    () => ({ tenants: landingBrands, ready: landingBrandsReady }),
+    [landingBrands, landingBrandsReady]
+  );
+
+  if (state.isLoading || !landingBrandsReady || !appReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#FF5C00', justifyContent: 'center', alignItems: 'center' }}>
+        <Image source={require('./assets/images/grabengo-logo.png')} style={{ width: 140, height: 40, marginBottom: 24 }} resizeMode="contain" />
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
   }
 
   const initialRouteName =
@@ -8255,49 +8310,51 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <SafeAreaProvider>
-      <AuthContext.Provider value={authContext}>
-        <CartContext.Provider value={cartContext}>
-          <ChatProvider>
-            <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
-              <Stack.Navigator
-                screenOptions={{
-                  headerShown: false,
-                  cardStyle: { backgroundColor: '#FFFFFF' },
-                  cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
-                }}
-                initialRouteName={initialRouteName}
-              >
-              {state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff' ? (
-                <Stack.Screen name="SellerDashboard" component={SellerDashboardScreen} />
-              ) : state.user?.role === 'Partner' ? (
-                <Stack.Screen name="PartnerDashboard" component={PartnerDashboardScreen} />
-              ) : (
-                <>
-                  <Stack.Screen name="Landing" component={LandingScreen} />
-                  <Stack.Screen name="Intro" component={IntroScreen} />
-                  <Stack.Screen name="Login" component={LoginScreen} />
-                  <Stack.Screen name="Register" component={RegisterScreen} />
-                  <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-                  <Stack.Screen name="ExploreTenants" component={ExploreTenantsScreen} />
-                  <Stack.Screen name="Discover" component={DiscoverScreen} />
-                  <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} />
-                  <Stack.Screen name="Cart" component={CartScreen} />
-                  <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
-                  <Stack.Screen name="Bookings" component={BookingsScreen} />
-                  <Stack.Screen name="Splash" component={SplashScreen} />
-                </>
-              )}
-            </Stack.Navigator>
-          </NavigationContainer>
-          <GlobalToast />
-          <GlobalChatModal />
-          <GlobalReceiptModal />
-          <GlobalProfileModal />
-        </ChatProvider>
-      </CartContext.Provider>
-    </AuthContext.Provider>
-    </SafeAreaProvider>
+      <SafeAreaProvider>
+        <AuthContext.Provider value={authContext}>
+          <LandingBrandsContext.Provider value={landingBrandsContext}>
+            <CartContext.Provider value={cartContext}>
+              <ChatProvider>
+                <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
+                  <Stack.Navigator
+                    screenOptions={{
+                      headerShown: false,
+                      cardStyle: { backgroundColor: '#FFFFFF' },
+                      cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+                    }}
+                    initialRouteName={initialRouteName}
+                  >
+                    {state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff' ? (
+                      <Stack.Screen name="SellerDashboard" component={SellerDashboardScreen} />
+                    ) : state.user?.role === 'Partner' ? (
+                      <Stack.Screen name="PartnerDashboard" component={PartnerDashboardScreen} />
+                    ) : (
+                      <>
+                        <Stack.Screen name="Landing" component={LandingScreen} />
+                        <Stack.Screen name="Intro" component={IntroScreen} />
+                        <Stack.Screen name="Login" component={LoginScreen} />
+                        <Stack.Screen name="Register" component={RegisterScreen} />
+                        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+                        <Stack.Screen name="ExploreTenants" component={ExploreTenantsScreen} />
+                        <Stack.Screen name="Discover" component={DiscoverScreen} />
+                        <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} />
+                        <Stack.Screen name="Cart" component={CartScreen} />
+                        <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
+                        <Stack.Screen name="Bookings" component={BookingsScreen} />
+                        <Stack.Screen name="Splash" component={SplashScreen} />
+                      </>
+                    )}
+                  </Stack.Navigator>
+                </NavigationContainer>
+                <GlobalToast />
+                <GlobalChatModal />
+                <GlobalReceiptModal />
+                <GlobalProfileModal />
+              </ChatProvider>
+            </CartContext.Provider>
+          </LandingBrandsContext.Provider>
+        </AuthContext.Provider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
