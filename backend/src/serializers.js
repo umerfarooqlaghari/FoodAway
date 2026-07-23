@@ -1,12 +1,29 @@
+function parseReviewTags(raw) {
+  if (raw == null || raw === '') return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
+  if (typeof raw === 'string') {
+    try {
+      let parsed = JSON.parse(raw);
+      while (typeof parsed === 'string') {
+        parsed = JSON.parse(parsed);
+      }
+      return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+    } catch {
+      return raw.trim() ? [raw.trim()] : [];
+    }
+  }
+  return [];
+}
+
 function formatStoreReview(row) {
   return {
     id: row.id,
     store_id: row.store_id,
     store_name: row.store_name,
     customer_name: row.customer_name,
-    rating: row.rating,
+    rating: Number(row.rating) || 0,
     comment: row.comment,
-    tags: row.tags,
+    tags: parseReviewTags(row.tags),
     created_at: row.created_at,
   };
 }
@@ -31,4 +48,5 @@ module.exports = {
   formatStoreReview,
   formatAppReview,
   stripStoreTenantId,
+  parseReviewTags,
 };

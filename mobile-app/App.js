@@ -2909,6 +2909,23 @@ const SharedBottomNav = ({ navigation, activeTab, cartTotalCount }) => {
 
 const PRESET_TAGS = ["Friendly Staff", "Great Value", "Fresh Quality", "Clean Store", "Generous Portion", "Highly Recommend"];
 
+function parseReviewTags(raw) {
+  if (raw == null || raw === '') return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
+  if (typeof raw === 'string') {
+    try {
+      let parsed = JSON.parse(raw);
+      while (typeof parsed === 'string') {
+        parsed = JSON.parse(parsed);
+      }
+      return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+    } catch {
+      return raw.trim() ? [raw.trim()] : [];
+    }
+  }
+  return [];
+}
+
 // --- App Screens ---
 function DiscoverScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -3136,12 +3153,17 @@ function DiscoverScreen({ navigation, route }) {
     setSubmittingReview(true);
     try {
       await axios.post(`${API_URL}/reviews`, { store_id: reviewStoreId, rating: reviewRating, comment: reviewComment, tags: reviewTags }, { headers: { Authorization: `Bearer ${token}` } });
-      Alert.alert("Success", "Review submitted!");
-      setAddReviewVisible(false);
-      setReviewComment('');
-      setReviewRating(5);
-      setReviewTags([]);
-      fetchReviews();
+      Alert.alert("Success", "Review submitted!", [{
+        text: 'OK',
+        onPress: () => {
+          setAddReviewVisible(false);
+          setReviewComment('');
+          setReviewRating(5);
+          setReviewTags([]);
+          setReviewStoreId(null);
+          fetchReviews();
+        },
+      }]);
     } catch (e) {
       Alert.alert("Error", e.response?.data?.error || "Failed to submit review");
     } finally {
@@ -3153,7 +3175,7 @@ function DiscoverScreen({ navigation, route }) {
     let distanceText = "Near you";
     if (userLocation && item.lat && item.lng) {
       const distMeters = getDistance(
-        { latitude: usergetLocationModule().latitude, longitude: usergetLocationModule().longitude },
+        { latitude: userLocation.latitude, longitude: userLocation.longitude },
         { latitude: item.lat, longitude: item.lng }
       );
       distanceText = `${(distMeters / 1000).toFixed(1)} km`;
@@ -3233,7 +3255,7 @@ function DiscoverScreen({ navigation, route }) {
     let distanceText = "Near you";
     if (userLocation && item.lat && item.lng) {
       const distMeters = getDistance(
-        { latitude: usergetLocationModule().latitude, longitude: usergetLocationModule().longitude },
+        { latitude: userLocation.latitude, longitude: userLocation.longitude },
         { latitude: item.lat, longitude: item.lng }
       );
       distanceText = `${(distMeters / 1000).toFixed(1)} km`;
@@ -3674,7 +3696,7 @@ function DiscoverScreen({ navigation, route }) {
             let nearestDist = Infinity;
             if (userLocation) {
               visibleStores.forEach(s => {
-                const d = Math.hypot(s.lat - usergetLocationModule().latitude, s.lng - usergetLocationModule().longitude);
+                const d = Math.hypot(s.lat - userLocation.latitude, s.lng - userLocation.longitude);
                 if (d < nearestDist) { nearestDist = d; nearestStore = s; }
               });
             }
@@ -3700,8 +3722,8 @@ function DiscoverScreen({ navigation, route }) {
                 <MapView
                   style={{ flex: 1 }}
                   initialRegion={userLocation ? {
-                    latitude: usergetLocationModule().latitude,
-                    longitude: usergetLocationModule().longitude,
+                    latitude: userLocation.latitude,
+                    longitude: userLocation.longitude,
                     latitudeDelta: 0.05,
                     longitudeDelta: 0.05,
                   } : { latitude: 51.5074, longitude: -0.1278, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
@@ -3873,24 +3895,17 @@ function DiscoverScreen({ navigation, route }) {
                       ) : null}
                       {/* Render Tags */}
                       {(() => {
-                        let parsedTags = [];
-                        try {
-                          parsedTags = typeof review.tags === 'string' ? JSON.parse(review.tags) : (review.tags || []);
-                        } catch (e) {
-                          parsedTags = [];
-                        }
-                        if (parsedTags && parsedTags.length > 0) {
-                          return (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                              {parsedTags.map(tag => (
-                                <View key={tag} style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.1)' }}>
-                                  <Text style={{ color: '#CC4A00', fontSize: 10, fontWeight: '700' }}>{tag}</Text>
-                                </View>
-                              ))}
-                            </View>
-                          );
-                        }
-                        return null;
+                        const parsedTags = parseReviewTags(review.tags);
+                        if (!parsedTags.length) return null;
+                        return (
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                            {parsedTags.map(tag => (
+                              <View key={tag} style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.1)' }}>
+                                <Text style={{ color: '#CC4A00', fontSize: 10, fontWeight: '700' }}>{tag}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        );
                       })()}
                     </View>
                   ))}
@@ -4195,17 +4210,21 @@ function StoreDetailsScreen({ navigation, route }) {
         store_id: store.id,
         rating: localReviewRating,
         comment: localReviewComment,
-        tags: JSON.stringify(localReviewTags)
+        tags: localReviewTags
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      Alert.alert("Success", "Thank you! Your review has been posted.");
-      setLocalAddReviewVisible(false);
-      setLocalReviewComment('');
-      setLocalReviewRating(5);
-      setLocalReviewTags([]);
-      fetchData(); // Refresh reviews list
+      Alert.alert("Success", "Thank you! Your review has been posted.", [{
+        text: 'OK',
+        onPress: () => {
+          setLocalAddReviewVisible(false);
+          setLocalReviewComment('');
+          setLocalReviewRating(5);
+          setLocalReviewTags([]);
+          fetchData();
+        },
+      }]);
     } catch (e) {
       Alert.alert("Error", e.response?.data?.error || "Failed to submit review");
     } finally {
@@ -4224,7 +4243,7 @@ function StoreDetailsScreen({ navigation, route }) {
   let distanceText = "Near you";
   if (userLocation && store.lat && store.lng) {
     const distMeters = getDistance(
-      { latitude: usergetLocationModule().latitude, longitude: usergetLocationModule().longitude },
+      { latitude: userLocation.latitude, longitude: userLocation.longitude },
       { latitude: store.lat, longitude: store.lng }
     );
     distanceText = `${(distMeters / 1000).toFixed(1)} km`;
@@ -4988,9 +5007,7 @@ function StoreDetailsScreen({ navigation, route }) {
                   {(() => {
                     let allTags = [];
                     reviews.forEach(r => {
-                      let parsed = [];
-                      try { parsed = typeof r.tags === 'string' ? JSON.parse(r.tags) : (r.tags || []); } catch(e) {}
-                      allTags.push(...parsed);
+                      allTags.push(...parseReviewTags(r.tags));
                     });
                     
                     const counts = {};
@@ -5095,21 +5112,18 @@ function StoreDetailsScreen({ navigation, route }) {
                           <Text style={{ fontSize: 13, color: '#475569', lineHeight: 20 }}>{review.comment}</Text>
                         ) : null}
 
-                        {review.tags && (() => {
-                          let parsedTags = [];
-                          try { parsedTags = typeof review.tags === 'string' ? JSON.parse(review.tags) : (review.tags || []); } catch (e) { parsedTags = []; }
-                          if (parsedTags && parsedTags.length > 0) {
-                            return (
-                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                                {parsedTags.map(tag => (
-                                  <View key={tag} style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.1)' }}>
-                                    <Text style={{ color: '#FF5C00', fontSize: 10, fontWeight: '700' }}>{tag}</Text>
-                                  </View>
-                                ))}
-                              </View>
-                            );
-                          }
-                          return null;
+                        {(() => {
+                          const parsedTags = parseReviewTags(review.tags);
+                          if (!parsedTags.length) return null;
+                          return (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                              {parsedTags.map(tag => (
+                                <View key={tag} style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.1)' }}>
+                                  <Text style={{ color: '#FF5C00', fontSize: 10, fontWeight: '700' }}>{tag}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          );
                         })()}
                       </View>
                     ))

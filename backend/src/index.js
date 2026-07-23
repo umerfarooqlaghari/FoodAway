@@ -32,7 +32,7 @@ const {
 } = require('./tenants');
 const { getTenantId, requireTenantId, assertStoreAccess, assertBagAccess, assertFoodItemAccess, assertMenuItemAccess, assertOrderAccess } = require('./tenant');
 const { registerSellerAdmin, mapRegistrationError, deleteOrphanTenants } = require('./sellerRegistration');
-const { formatStoreReview, formatAppReview, stripStoreTenantId } = require('./serializers');
+const { formatStoreReview, formatAppReview, stripStoreTenantId, parseReviewTags } = require('./serializers');
 const { normalizePhone, phoneDigits, phoneLookupVariants, phonesMatch } = require('./phone');
 const {
   PRODUCT_CATEGORY_GROUPS,
@@ -2654,7 +2654,7 @@ app.post('/api/reviews', verifyToken, async (req, res) => {
   const { store_id, rating, comment, tags } = req.body;
   if (!store_id || !rating) return res.status(400).json({ error: 'Store ID and rating are required' });
   try {
-    const tagsStr = JSON.stringify(tags || []);
+    const tagsStr = JSON.stringify(parseReviewTags(tags));
     const info = await db.prepare('INSERT INTO reviews (store_id, customer_id, rating, comment, tags) VALUES (?, ?, ?, ?, ?)').run(store_id, req.user.id, rating, comment, tagsStr);
     res.status(201).json({ id: info.lastInsertRowid });
   } catch (error) {
