@@ -398,15 +398,19 @@ app.get('/api/public/tenants', async (req, res) => {
     const lng = parseFloatParam(req.query.lng);
     const sort = req.query.sort;
 
+    const requireStores = req.query.require_stores === 'true' || req.query.require_stores === '1';
+    const havingClause = requireStores ? 'HAVING COUNT(DISTINCT s.id) FILTER (WHERE s.is_active = TRUE) > 0' : '';
+
     const rows = await db.prepare(`
       SELECT t.id, t.name, t.subdomain, t.logo,
-             COUNT(DISTINCT s.id)::int AS store_count,
-             AVG(s.lat) AS avg_lat,
-             AVG(s.lng) AS avg_lng,
-             array_remove(array_agg(DISTINCT s.category), NULL) AS categories
+             COUNT(DISTINCT s.id) FILTER (WHERE s.is_active = TRUE)::int AS store_count,
+             AVG(s.lat) FILTER (WHERE s.is_active = TRUE) AS avg_lat,
+             AVG(s.lng) FILTER (WHERE s.is_active = TRUE) AS avg_lng,
+             array_remove(array_agg(DISTINCT s.category) FILTER (WHERE s.is_active = TRUE), NULL) AS categories
       FROM tenants t
-      INNER JOIN stores s ON s.tenant_id = t.id AND s.is_active = TRUE
+      LEFT JOIN stores s ON s.tenant_id = t.id
       GROUP BY t.id, t.name, t.subdomain, t.logo
+      ${havingClause}
       ORDER BY t.name ASC
     `).all();
 

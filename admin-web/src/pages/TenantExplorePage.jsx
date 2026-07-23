@@ -87,8 +87,8 @@ export default function TenantExplorePage({ onBack }) {
         params.set('sort', 'nearest');
       }
       const qs = params.toString();
-      const res = await axios.get(`${API}/public/tenants${qs ? `?${qs}` : ''}`);
-      setTenants(res.data || []);
+      const res = await axios.get(`${API}/public/tenants?require_stores=1${qs ? `&${qs}` : ''}`);
+      setTenants((res.data || []).filter((t) => (t.store_count || 0) > 0));
     } catch (err) {
       setError(err.response?.data?.error || 'Could not load brands. Please try again.');
     }

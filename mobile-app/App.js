@@ -471,7 +471,8 @@ async function prefetchLandingBrands() {
         .map((t) => Image.prefetch(t.logo).catch(() => false))
     );
     return tenants;
-  } catch {
+  } catch (err) {
+    console.warn('Landing brands prefetch failed:', err.message);
     return [];
   }
 }
@@ -1390,12 +1391,29 @@ function LandingAuthSheet({ visible, onClose, navigation }) {
 function LandingScreen({ navigation }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
-  const { tenants: carouselTenants } = useContext(LandingBrandsContext);
+  const { tenants: contextTenants } = useContext(LandingBrandsContext);
+  const [carouselTenants, setCarouselTenants] = useState(contextTenants);
   const carouselAnim = useRef(new Animated.Value(0)).current;
   const screenWidth = Dimensions.get('window').width;
   const illustrationWidth = screenWidth - 48;
   const illustrationHeight = illustrationWidth * (360 / 480);
   const CARD_STEP = 156;
+
+  useEffect(() => {
+    setCarouselTenants(contextTenants);
+  }, [contextTenants]);
+
+  useEffect(() => {
+    if (carouselTenants.length > 0) return undefined;
+    let cancelled = false;
+    axios.get(`${API_URL}/public/tenants`)
+      .then((res) => {
+        if (cancelled || !Array.isArray(res.data) || !res.data.length) return;
+        setCarouselTenants(res.data);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [carouselTenants.length]);
 
   // Smooth carousel loop — Animated avoids ScrollView scrollTo stealing touches on device.
   useEffect(() => {
@@ -1483,24 +1501,24 @@ function LandingScreen({ navigation }) {
 
         <GHScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 60 }}>
           {/* Hero Section */}
-          <View style={{ paddingHorizontal: 24, marginTop: 20, minHeight: 320 }} pointerEvents="box-none">
-            <View style={{ position: 'absolute', right: -120, top: -20, zIndex: 0, pointerEvents: 'none' }}>
+          <View style={{ paddingHorizontal: 24, marginTop: 12, paddingBottom: 8, overflow: 'hidden' }} pointerEvents="box-none">
+            <View style={{ position: 'absolute', right: -24, top: 8, width: 210, height: 260, zIndex: 0, pointerEvents: 'none' }}>
               <Image
                 source={require('./assets/images/grabengo_landing.png')}
-                style={{ width: 400, height: 500, resizeMode: 'contain', backgroundColor: 'transparent' }}
+                style={{ width: '100%', height: '100%', resizeMode: 'contain', backgroundColor: 'transparent' }}
               />
             </View>
-            <View style={{ paddingTop: 40, zIndex: 2, elevation: 4 }} pointerEvents="box-none">
-              <Text style={{ fontSize: 42, fontWeight: '800', color: '#FFFFFF', lineHeight: 50, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
+            <View style={{ paddingTop: 28, paddingRight: 130, zIndex: 2, elevation: 4 }} pointerEvents="box-none">
+              <Text style={{ fontSize: 38, fontWeight: '800', color: '#FFFFFF', lineHeight: 46, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
                 Delicious Treats
               </Text>
-              <Text style={{ fontSize: 42, fontWeight: '800', color: '#FFFFFF', lineHeight: 50, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
+              <Text style={{ fontSize: 38, fontWeight: '800', color: '#FFFFFF', lineHeight: 46, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
                 Waiting For You
               </Text>
-              <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.92)', marginTop: 16, lineHeight: 24, paddingRight: 60 }}>
+              <Text style={{ fontSize: 15, color: 'rgba(255,255,255,0.92)', marginTop: 14, lineHeight: 22 }}>
                 Rescue surplus pastries, donuts, and meals from top local spots before they go to waste.
               </Text>
-              <View style={{ flexDirection: 'row', marginTop: 30, gap: 12, zIndex: 10 }}>
+              <View style={{ flexDirection: 'row', marginTop: 24, gap: 12, zIndex: 10 }}>
                 <GHPressable
                   onPress={() => navigation.navigate('Intro')}
                   hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
@@ -1526,10 +1544,10 @@ function LandingScreen({ navigation }) {
           </View>
 
           {/* Brands Carousel — prefetched before landing appears */}
-          {carouselTenants.length > 0 && (
-          <View style={{ marginTop: 40 }} pointerEvents="none">
+          {carouselTenants.length > 0 ? (
+          <View style={{ marginTop: 28 }} pointerEvents="none">
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 16, paddingLeft: 24 }}>Top Brands</Text>
-            <View style={{ overflow: 'hidden' }}>
+            <View style={{ overflow: 'hidden', height: 220 }}>
               <Animated.View
                 style={{
                   flexDirection: 'row',
@@ -1551,7 +1569,7 @@ function LandingScreen({ navigation }) {
                     <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '55%', justifyContent: 'flex-end', padding: 12 }}>
                       <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 }} numberOfLines={1}>{tenant.name}</Text>
                       <Text style={{ color: '#D1D5DB', fontSize: 11 }}>
-                        {tenant.store_count > 1 ? `${tenant.store_count} locations` : '1 location'}
+                        {tenant.store_count > 1 ? `${tenant.store_count} locations` : tenant.store_count === 1 ? '1 location' : 'Coming soon'}
                       </Text>
                     </LinearGradient>
                   </View>
@@ -1559,10 +1577,10 @@ function LandingScreen({ navigation }) {
               </Animated.View>
             </View>
           </View>
-          )}
+          ) : null}
 
-          {/* What's coming teaser */}
-          <View style={{ marginTop: 20, paddingHorizontal: 24, alignItems: 'flex-end' }}>
+          {/* What's coming teaser — below carousel, left-aligned to avoid donut overlap */}
+          <View style={{ marginTop: 24, paddingHorizontal: 24, alignItems: 'flex-start' }}>
             <GHPressable
               onPress={() => setShowComingSoon(true)}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
