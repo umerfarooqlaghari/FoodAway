@@ -306,6 +306,7 @@ const getDevApiUrl = () => {
 };
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || getDevApiUrl();
+const CUSTOMER_DELIVERY_LIVE = process.env.EXPO_PUBLIC_CUSTOMER_DELIVERY_LIVE === 'true';
 axios.defaults.headers.common['X-Grabengo-Client'] = 'mobile';
 
 const navigationRef = createNavigationContainerRef();
@@ -527,14 +528,15 @@ function ChatProvider({ children }) {
   }, [chatVisible]);
 
   const markChatAsRead = async (storeId) => {
-    if (!token) return;
+    const parsedStoreId = Number(storeId);
+    if (!token || !parsedStoreId || Number.isNaN(parsedStoreId)) return;
     try {
-      await axios.post(`${API_URL}/chat/read`, { store_id: storeId }, {
+      await axios.post(`${API_URL}/chat/read`, { store_id: parsedStoreId }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUnreadStores(prev => {
         const next = { ...prev };
-        delete next[storeId];
+        delete next[parsedStoreId];
         return next;
       });
     } catch (err) {
@@ -572,14 +574,15 @@ function ChatProvider({ children }) {
           const activeStore = activeChatStoreRef.current;
           const isModalVisible = chatVisibleRef.current;
 
-          if (activeStore && msg.store_id === activeStore.id && isModalVisible) {
+          if (activeStore && chatStoreMatches(activeStore, msg.store_id) && isModalVisible) {
             setChatMessages((prev) => {
-              if (prev.some(m => m.id === msg.id)) return prev;
-              return [...prev, msg];
+              if (msg.id != null && prev.some(m => m.id === msg.id)) return prev;
+              const withoutTemps = prev.filter(m => !(String(m.id).startsWith('temp-') && m.message === msg.message));
+              return [...withoutTemps, msg];
             });
-            markChatAsRead(activeStore.id);
+            markChatAsRead(resolveStoreChatId(activeStore));
             playSoundAndHaptic('light');
-          } else {
+          } else if (!chatStoreMatches(activeStore, msg.store_id) || !isModalVisible) {
             setUnreadStores((prev) => ({ ...prev, [msg.store_id]: true }));
             playSoundAndHaptic('light');
             setToastNotification({
@@ -681,9 +684,11 @@ function ChatProvider({ children }) {
           );
         } else if (payload.type === 'typing') {
           const activeStore = activeChatStoreRef.current;
-          if (activeStore && payload.storeId === activeStore.id && payload.senderRole === 'Seller') {
+          if (activeStore && chatStoreMatches(activeStore, payload.storeId) && payload.senderRole === 'Seller') {
             setIsStoreTyping(payload.isTyping);
           }
+        } else if (payload.type === 'error') {
+          console.log('Chat WS error:', payload.error);
         }
       } catch (err) {
         console.log('WS message parsing error:', err.message);
@@ -713,30 +718,43 @@ function ChatProvider({ children }) {
   };
 
   const sendTypingStatus = (typing) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !activeChatStoreRef.current) return;
+    const storeId = resolveStoreChatId(activeChatStoreRef.current);
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !storeId) return;
     if (isTypingRef.current === typing) return;
     isTypingRef.current = typing;
     
     wsRef.current.send(JSON.stringify({
       type: 'typing',
-      storeId: activeChatStoreRef.current.id,
+      storeId: resolveStoreChatId(activeChatStoreRef.current),
       isTyping: typing
     }));
   };
 
   const handleSendChatMessage = () => {
-    if (!chatInput.trim() || !activeChatStore || !wsRef.current) return;
+    const storeId = resolveStoreChatId(activeChatStore);
+    const text = chatInput.trim();
+    if (!text || !storeId || !wsRef.current) return;
+
+    const optimistic = {
+      id: `temp-${Date.now()}`,
+      store_id: storeId,
+      customer_id: user?.id,
+      sender_role: 'Customer',
+      message: text,
+      created_at: new Date().toISOString(),
+    };
+    setChatMessages((prev) => [...prev, optimistic]);
+    setChatInput('');
+    sendTypingStatus(false);
 
     const msgPayload = {
       type: 'message',
-      storeId: activeChatStore.id,
-      text: chatInput.trim()
+      storeId,
+      text,
     };
 
     if (wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msgPayload));
-      setChatInput('');
-      sendTypingStatus(false);
     } else {
       Alert.alert("Connection Lost", "Chat is currently offline. Trying to reconnect...");
       connectWebSocket();
@@ -748,17 +766,43 @@ function ChatProvider({ children }) {
       promptSignIn('Sign in to message stores.');
       return;
     }
-    setActiveChatStore(store);
+
+    let storeId = resolveStoreChatId(store);
+    const storeName = store?.name || store?.store_name;
+
+    if (!storeId && storeName) {
+      try {
+        const res = await axios.get(`${API_URL}/public/stores`, { headers: authHeaders(token) });
+        const match = (Array.isArray(res.data) ? res.data : []).find(
+          (s) => s.name === storeName || (s.name && storeName && s.name.toLowerCase() === storeName.toLowerCase())
+        );
+        storeId = resolveStoreChatId(match);
+      } catch (e) {
+        console.log('Error resolving store for chat:', e.message);
+      }
+    }
+
+    if (!storeId) {
+      Alert.alert('Chat unavailable', 'Could not identify this store. Please try again in a moment.');
+      return;
+    }
+
+    const normalizedStore = {
+      ...store,
+      id: storeId,
+      name: storeName || 'Store',
+    };
+    setActiveChatStore(normalizedStore);
     setChatMessages([]);
     setChatVisible(true);
-    markChatAsRead(store.id);
+    markChatAsRead(storeId);
     connectWebSocket();
 
     try {
-      const res = await axios.get(`${API_URL}/chat/history?store_id=${store.id}`, {
+      const res = await axios.get(`${API_URL}/chat/history?store_id=${storeId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setChatMessages(res.data);
+      setChatMessages(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       console.log("Error loading chat history:", e.message);
     }
@@ -998,13 +1042,19 @@ function GlobalChatModal() {
         <ScrollView
           ref={flatListRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12, flexGrow: 1 }}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         >
+          {chatMessages.length === 0 ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
+              <Ionicons name="chatbubble-ellipses-outline" size={40} color="#D1D5DB" />
+              <Text style={{ marginTop: 12, color: '#9CA3AF', fontSize: 14, fontWeight: '500' }}>No messages yet — say hello!</Text>
+            </View>
+          ) : null}
           {chatMessages.map((item) => {
             const isMe = item.sender_role === 'Customer';
             return (
-              <View key={item.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+              <View key={String(item.id)} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
                 <View style={{
                   backgroundColor: isMe ? '#FF5C00' : '#F3F4F6',
                   paddingHorizontal: 16,
@@ -2926,6 +2976,65 @@ function parseReviewTags(raw) {
   return [];
 }
 
+function resolveStoreChatId(store) {
+  const raw = store?.id ?? store?.store_id ?? store?.storeId;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function chatStoreMatches(activeStore, msgStoreId) {
+  const activeId = resolveStoreChatId(activeStore);
+  return activeId != null && activeId === Number(msgStoreId);
+}
+
+function firstProductImage(item) {
+  if (item?.image) return item.image;
+  if (!item?.images) return null;
+  try {
+    const parsed = typeof item.images === 'string' ? JSON.parse(item.images) : item.images;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+  } catch {
+    return typeof item.images === 'string' && item.images.startsWith('http') ? item.images : null;
+  }
+}
+
+function formatProductPrice(amount, symbol) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return `${symbol}0`;
+  if (Math.abs(n - Math.round(n)) < 0.001) return `${symbol}${Math.round(n).toLocaleString('en-PK')}`;
+  return `${symbol}${n.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+const storeProductUi = {
+  price: { fontSize: 15, fontWeight: '600', color: '#EA580C', letterSpacing: -0.3 },
+  priceOld: { fontSize: 11, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 2, fontWeight: '500' },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  addBtnText: { color: '#C2410C', fontWeight: '600', fontSize: 12, letterSpacing: 0.1 },
+};
+
+function ProductThumb({ uri, style, fallback }) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) return fallback;
+  return (
+    <Image
+      source={{ uri }}
+      style={style}
+      resizeMode="cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 // --- App Screens ---
 function DiscoverScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -3185,9 +3294,8 @@ function DiscoverScreen({ navigation, route }) {
       setMapVisible(true);
     };
 
-    const imageUrl = item.images && JSON.parse(item.images).length > 0
-      ? JSON.parse(item.images)[0]
-      : 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&auto=format&fit=crop';
+    const imageUrl = firstProductImage(item)
+      || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&auto=format&fit=crop';
 
     return (
       <TouchableOpacity 
@@ -3261,9 +3369,8 @@ function DiscoverScreen({ navigation, route }) {
       distanceText = `${(distMeters / 1000).toFixed(1)} km`;
     }
 
-    const imageUrl = item.images && JSON.parse(item.images).length > 0
-      ? JSON.parse(item.images)[0]
-      : 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?q=80&w=400&auto=format&fit=crop';
+    const imageUrl = firstProductImage(item)
+      || 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?q=80&w=400&auto=format&fit=crop';
 
     const catColor = CATEGORY_COLORS[item.category] || '#F3F4F6';
 
@@ -4424,26 +4531,29 @@ function StoreDetailsScreen({ navigation, route }) {
           shadowRadius: 16,
           elevation: 8
         }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <View style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#FF5C00', letterSpacing: 0.5 }}>MERCHANT PARTNER</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              {store.delivery_enabled ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                  <Ionicons name="bicycle-outline" size={13} color="#1D4ED8" />
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8' }}>Delivery Available</Text>
-                </View>
-              ) : null}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="leaf" size={14} color="#10B981" />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>Eco Hero</Text>
+            {CUSTOMER_DELIVERY_LIVE && store.delivery_enabled ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                <Ionicons name="bicycle-outline" size={13} color="#1D4ED8" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8' }}>Delivery Available</Text>
               </View>
+            ) : !CUSTOMER_DELIVERY_LIVE ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF7ED', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                <Ionicons name="time-outline" size={13} color="#C2410C" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#C2410C' }}>Delivery coming soon</Text>
+              </View>
+            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+              <Ionicons name="leaf" size={14} color="#10B981" />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>Eco Hero</Text>
             </View>
           </View>
 
-          <Text style={{ fontSize: 26, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>{store.name}</Text>
-          {store.delivery_enabled && store.delivery_fee_note ? (
+          <Text style={{ fontSize: 26, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }} numberOfLines={2}>{store.name}</Text>
+          {CUSTOMER_DELIVERY_LIVE && store.delivery_enabled && store.delivery_fee_note ? (
             <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>🛵 {store.delivery_fee_note}</Text>
           ) : null}
           
@@ -4705,10 +4815,10 @@ function StoreDetailsScreen({ navigation, route }) {
                             
                             {/* Price Column */}
                             <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                              <Text style={{ fontSize: 18, fontWeight: '900', color: '#FF5C00' }}>{currencySymbol}{bag.price.toFixed(2)}</Text>
+                              <Text style={storeProductUi.price}>{formatProductPrice(bag.price, currencySymbol)}</Text>
                               {bag.original_price && (
-                                <Text style={{ fontSize: 11, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 2, fontWeight: '600' }}>
-                                  {currencySymbol}{bag.original_price.toFixed(2)}
+                                <Text style={storeProductUi.priceOld}>
+                                  {formatProductPrice(bag.original_price, currencySymbol)}
                                 </Text>
                               )}
                             </View>
@@ -4735,19 +4845,10 @@ function StoreDetailsScreen({ navigation, route }) {
 
                         <TouchableOpacity 
                           onPress={() => addToCart(bag, 'bag')}
-                          style={{ 
-                            backgroundColor: '#FF5C00', 
-                            paddingHorizontal: 16, 
-                            paddingVertical: 8, 
-                            borderRadius: 20,
-                            shadowColor: '#FF5C00',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.2,
-                            shadowRadius: 8,
-                            elevation: 2
-                          }}
+                          style={storeProductUi.addBtn}
                         >
-                          <Text style={{ color: 'white', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 }}>+ Add</Text>
+                          <Ionicons name="add" size={14} color="#C2410C" />
+                          <Text style={storeProductUi.addBtnText}>Add</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -4755,7 +4856,7 @@ function StoreDetailsScreen({ navigation, route }) {
                 )}
 
                 {liveDeals.length > 0 && (
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginHorizontal: 20, marginTop: 20, marginBottom: 4 }}>⚡ Grabengo Deals</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginHorizontal: 20, marginTop: 20, marginBottom: 4 }}>Grabengo Deals</Text>
                 )}
                 {liveDeals.length > 0 && (
                   liveDeals.map(item => (
@@ -4774,16 +4875,25 @@ function StoreDetailsScreen({ navigation, route }) {
                       elevation: 3
                     }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <View style={{
-                          width: 72, height: 72, borderRadius: 16, marginRight: 14,
-                          position: 'relative', overflow: 'hidden',
-                          shadowColor: '#FF5C00', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3
-                        }}>
-                          <LinearGradient colors={['#FF7E40', '#FF5C00']} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-                          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                            <Ionicons name="flash" size={32} color="white" />
-                          </View>
-                        </View>
+                        {(() => {
+                          const dealImage = firstProductImage(item);
+                          const thumbStyle = {
+                            width: 72, height: 72, borderRadius: 16, marginRight: 14,
+                            position: 'relative', overflow: 'hidden',
+                            backgroundColor: '#FFF7ED',
+                          };
+                          const fallback = (
+                            <View style={thumbStyle}>
+                              <LinearGradient colors={['#FF7E40', '#FF5C00']} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+                              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                <Ionicons name="flash" size={28} color="white" />
+                              </View>
+                            </View>
+                          );
+                          return (
+                            <ProductThumb uri={dealImage} style={thumbStyle} fallback={fallback} />
+                          );
+                        })()}
                         <View style={{ flex: 1, justifyContent: 'center' }}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <View style={{ flex: 1, marginRight: 8 }}>
@@ -4796,10 +4906,10 @@ function StoreDetailsScreen({ navigation, route }) {
                               </Text>
                             </View>
                             <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                              <Text style={{ fontSize: 18, fontWeight: '900', color: '#FF5C00' }}>{currencySymbol}{item.price.toFixed(2)}</Text>
+                              <Text style={storeProductUi.price}>{formatProductPrice(item.price, currencySymbol)}</Text>
                               {item.original_price && (
-                                <Text style={{ fontSize: 11, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 2, fontWeight: '600' }}>
-                                  {currencySymbol}{item.original_price.toFixed(2)}
+                                <Text style={storeProductUi.priceOld}>
+                                  {formatProductPrice(item.original_price, currencySymbol)}
                                 </Text>
                               )}
                             </View>
@@ -4828,12 +4938,10 @@ function StoreDetailsScreen({ navigation, route }) {
 
                         <TouchableOpacity
                           onPress={() => addToCart(item, 'food')}
-                          style={{
-                            backgroundColor: '#FF5C00', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-                            shadowColor: '#FF5C00', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 2
-                          }}
+                          style={storeProductUi.addBtn}
                         >
-                          <Text style={{ color: 'white', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 }}>+ Add</Text>
+                          <Ionicons name="add" size={14} color="#C2410C" />
+                          <Text style={storeProductUi.addBtnText}>Add</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -4880,28 +4988,32 @@ function StoreDetailsScreen({ navigation, route }) {
                         elevation: 3
                       }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          {/* Left: Thumbnail Graphic */}
-                          <View style={{
-                            width: 72,
-                            height: 72,
-                            borderRadius: 16,
-                            marginRight: 14,
-                            position: 'relative',
-                            overflow: 'hidden',
-                            shadowColor: gradColors[1],
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.15,
-                            shadowRadius: 8,
-                            elevation: 3
-                          }}>
-                            <LinearGradient
-                              colors={gradColors}
-                              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-                            />
-                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                              <Ionicons name={catIcon} size={32} color="white" />
-                            </View>
-                          </View>
+                          {(() => {
+                            const menuImage = firstProductImage(item);
+                            const thumbStyle = {
+                              width: 72,
+                              height: 72,
+                              borderRadius: 16,
+                              marginRight: 14,
+                              position: 'relative',
+                              overflow: 'hidden',
+                              backgroundColor: '#F8FAFC',
+                            };
+                            const fallback = (
+                              <View style={thumbStyle}>
+                                <LinearGradient
+                                  colors={gradColors}
+                                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                                />
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                  <Ionicons name={catIcon} size={28} color="white" />
+                                </View>
+                              </View>
+                            );
+                            return (
+                              <ProductThumb uri={menuImage} style={thumbStyle} fallback={fallback} />
+                            );
+                          })()}
 
                           {/* Middle & Right Top Section */}
                           <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -4918,7 +5030,7 @@ function StoreDetailsScreen({ navigation, route }) {
 
                               {/* Price Column */}
                               <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#FF5C00' }}>{currencySymbol}{item.price.toFixed(2)}</Text>
+                                <Text style={storeProductUi.price}>{formatProductPrice(item.price, currencySymbol)}</Text>
                               </View>
                             </View>
                           </View>
@@ -4931,19 +5043,10 @@ function StoreDetailsScreen({ navigation, route }) {
                         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
                           <TouchableOpacity
                             onPress={() => addToCart({ ...item, quantity: 9999 }, 'menu')}
-                            style={{
-                              backgroundColor: '#FF5C00',
-                              paddingHorizontal: 16,
-                              paddingVertical: 8,
-                              borderRadius: 20,
-                              shadowColor: '#FF5C00',
-                              shadowOffset: { width: 0, height: 4 },
-                              shadowOpacity: 0.2,
-                              shadowRadius: 8,
-                              elevation: 2
-                            }}
+                            style={storeProductUi.addBtn}
                           >
-                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 }}>+ Add</Text>
+                            <Ionicons name="add" size={14} color="#C2410C" />
+                            <Text style={storeProductUi.addBtnText}>Add</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -5513,7 +5616,7 @@ function CartScreen({ navigation, route }) {
   }, [token, navigation]);
 
   const isDelivery = deliveryInfo.fulfillmentType === 'delivery';
-  const deliveryEligible = cartItems.length > 0 && cartItems.every(item => item.delivery_enabled);
+  const deliveryEligible = CUSTOMER_DELIVERY_LIVE && cartItems.length > 0 && cartItems.every(item => item.delivery_enabled);
   const feeNotes = [...new Set(cartItems.map(i => i.delivery_fee_note).filter(Boolean))];
   const storeNames = [...new Set(cartItems.map(i => i.store_name).filter(Boolean))];
   const partnerDelivery = deliveryEligible && cartItems.every(item => item.delivery_mode === 'partner');
@@ -5649,9 +5752,8 @@ function CartScreen({ navigation, route }) {
   };
 
   const renderItem = ({ item }) => {
-    const imageUrl = item.images && JSON.parse(item.images).length > 0
-      ? JSON.parse(item.images)[0]
-      : 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&auto=format&fit=crop';
+    const imageUrl = firstProductImage(item)
+      || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&auto=format&fit=crop';
       
     return (
       <View style={{ flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 12, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
@@ -5746,19 +5848,25 @@ function CartScreen({ navigation, route }) {
                   <Text style={{ fontWeight: '700', fontSize: 13, color: !isDelivery ? '#FF5C00' : '#6B7280' }}>Pickup</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => deliveryEligible && goToDeliveryAddress()}
-                  disabled={!deliveryEligible}
-                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isDelivery ? '#FF5C00' : '#E5E7EB', backgroundColor: isDelivery ? '#FFFFFF' : (deliveryEligible ? '#F9FAFB' : '#F3F4F6'), opacity: deliveryEligible ? 1 : 0.5 }}
+                  disabled={!CUSTOMER_DELIVERY_LIVE || !deliveryEligible}
+                  onPress={() => CUSTOMER_DELIVERY_LIVE && deliveryEligible && goToDeliveryAddress()}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isDelivery ? '#FF5C00' : '#E5E7EB', backgroundColor: isDelivery ? '#FFFFFF' : (CUSTOMER_DELIVERY_LIVE && deliveryEligible ? '#F9FAFB' : '#F3F4F6'), opacity: CUSTOMER_DELIVERY_LIVE && deliveryEligible ? 1 : 0.85 }}
                 >
-                  <Ionicons name="bicycle-outline" size={16} color={isDelivery ? '#FF5C00' : '#6B7280'} />
-                  <Text style={{ fontWeight: '700', fontSize: 13, color: isDelivery ? '#FF5C00' : '#6B7280' }}>Delivery</Text>
+                  <Ionicons name={CUSTOMER_DELIVERY_LIVE ? 'bicycle-outline' : 'time-outline'} size={16} color={isDelivery ? '#FF5C00' : '#C2410C'} />
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: isDelivery ? '#FF5C00' : '#C2410C' }}>
+                    {CUSTOMER_DELIVERY_LIVE ? 'Delivery' : 'Delivery coming soon'}
+                  </Text>
                 </TouchableOpacity>
               </View>
-              {!deliveryEligible && (
+              {!CUSTOMER_DELIVERY_LIVE ? (
+                <Text style={{ fontSize: 11, color: '#C2410C', marginTop: 6, fontWeight: '600' }}>
+                  Home delivery is launching soon. Pickup is available now.
+                </Text>
+              ) : !deliveryEligible ? (
                 <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>
                   Delivery isn't offered by every store in your cart, so pickup is the only option right now.
                 </Text>
-              )}
+              ) : null}
             </View>
 
             {isDelivery && (
@@ -5917,7 +6025,7 @@ function BookingsScreen({ navigation }) {
             <Text style={{ color: '#FF5C00', fontSize: 12, fontWeight: '700' }}>Download Receipt</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            onPress={() => openChatWithStore({ id: item.store_id, name: item.store_name })}
+            onPress={() => openChatWithStore({ id: item.store_id, store_id: item.store_id, name: item.store_name, store_name: item.store_name })}
             style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, position: 'relative', gap: 6 }}
           >
             <Ionicons name="chatbubble-ellipses-outline" size={15} color="#1D4ED8" />
@@ -6178,6 +6286,7 @@ function PartnerDashboardScreen() {
     <View style={[styles.card, { marginBottom: 12, borderWidth: isActive ? 2 : 0, borderColor: '#FF5C00' }]}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text style={{ fontSize: 11, fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', marginBottom: 4 }}>Pick up from restaurant</Text>
           <Text style={{ fontWeight: '800', fontSize: 15, color: '#111827' }}>{d.store_name}</Text>
           <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }} numberOfLines={2}>{d.store_address}</Text>
         </View>
@@ -6186,8 +6295,8 @@ function PartnerDashboardScreen() {
           <Text style={{ fontSize: 10, color: '#9CA3AF' }}>your fee</Text>
         </View>
       </View>
-      <View style={{ marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10 }}>
-        <Text style={{ fontSize: 11, fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>Deliver to</Text>
+      <View style={{ marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#E5E7EB' }}>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>Deliver to customer</Text>
         <Text style={{ fontSize: 13, color: '#111827', fontWeight: '600', marginTop: 2 }} numberOfLines={2}>{d.address}</Text>
         <Text style={{ fontSize: 11.5, color: '#6B7280', marginTop: 4 }}>~{Number(d.distance_km).toFixed(1)} km · Collect Rs{Number(d.cod_amount).toFixed(0)} cash (order + fee)</Text>
         {d.prep_minutes ? <Text style={{ fontSize: 11.5, color: '#B45309', marginTop: 2 }}>Ready in ~{d.prep_minutes} min</Text> : null}
@@ -6197,21 +6306,31 @@ function PartnerDashboardScreen() {
           {d.items.map(i => `${i.quantity}x ${i.item_name}`).join(', ')}
         </Text>
       ) : null}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        <TouchableOpacity
+          onPress={() => d.store_lat != null && openMaps(d.store_lat, d.store_lng)}
+          disabled={d.store_lat == null}
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 10, opacity: d.store_lat == null ? 0.5 : 1 }}
+        >
+          <Ionicons name="storefront-outline" size={14} color="#1D4ED8" />
+          <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 12 }}>Restaurant</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => d.lat != null && openMaps(d.lat, d.lng)}
+          disabled={d.lat == null}
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 10, opacity: d.lat == null ? 0.5 : 1 }}
+        >
+          <Ionicons name="navigate-outline" size={14} color="#1D4ED8" />
+          <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 12 }}>Customer</Text>
+        </TouchableOpacity>
+      </View>
       {!isActive ? (
         <TouchableOpacity onPress={() => acceptJob(d)} style={[styles.primaryButton, { backgroundColor: '#FF5C00', marginTop: 12, paddingVertical: 13 }]}>
           <Text style={styles.primaryButtonText}>Accept Delivery</Text>
         </TouchableOpacity>
       ) : (
         <>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            <TouchableOpacity onPress={() => openMaps(d.store_lat, d.store_lng)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 10 }}>
-              <Ionicons name="storefront-outline" size={14} color="#1D4ED8" />
-              <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 12 }}>To Store</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => openMaps(d.lat, d.lng)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 10 }}>
-              <Ionicons name="navigate-outline" size={14} color="#1D4ED8" />
-              <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 12 }}>To Customer</Text>
-            </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
             {d.customer_phone ? (
               <TouchableOpacity onPress={() => Linking.openURL(`tel:${d.customer_phone}`)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: '#F0FDF4', borderRadius: 10 }}>
                 <Ionicons name="call-outline" size={14} color="#15803D" />
@@ -7134,18 +7253,12 @@ function SellerDashboardScreen() {
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name="bicycle-outline" size={18} color={store.delivery_enabled ? SELLER_BRAND : '#9CA3AF'} />
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: store.delivery_enabled ? '#111827' : '#6B7280' }}>
-                    Delivery {store.delivery_enabled ? 'On' : 'Off'}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <Ionicons name="time-outline" size={18} color="#C2410C" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#9A3412' }}>
+                    Delivery coming soon
                   </Text>
                 </View>
-                <Switch
-                  value={!!store.delivery_enabled}
-                  onValueChange={(next) => handleToggleStoreDelivery(store, next)}
-                  trackColor={{ false: '#E5E7EB', true: 'rgba(255, 92, 0, 0.15)' }}
-                  thumbColor={store.delivery_enabled ? SELLER_BRAND : '#F3F4F6'}
-                />
               </View>
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                 <TouchableOpacity
@@ -7451,6 +7564,15 @@ function SellerDashboardScreen() {
                   <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13 }}>{order.customer_phone}</Text>
                 </TouchableOpacity>
               ) : null}
+              {order.fulfillment_type === 'delivery' && order.store_lat != null ? (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${order.store_lat},${order.store_lng}`)}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
+                >
+                  <Ionicons name="storefront-outline" size={14} color="#1D4ED8" />
+                  <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Open Restaurant in Maps</Text>
+                </TouchableOpacity>
+              ) : null}
               {order.fulfillment_type === 'delivery' && order.delivery_lat != null ? (
                 <TouchableOpacity
                   onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${order.delivery_lat},${order.delivery_lng}`)}
@@ -7682,56 +7804,16 @@ function SellerDashboardScreen() {
                 </TouchableOpacity>
               )}
 
-              <View style={{ backgroundColor: '#F9FAFB', borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                    <Ionicons name="bicycle-outline" size={20} color={SELLER_BRAND} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: '700', fontSize: 14, color: '#111827' }}>Offer Delivery</Text>
-                      <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>Customers can request delivery at checkout</Text>
-                    </View>
+              <View style={{ backgroundColor: '#FFF7ED', borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#FED7AA' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="time-outline" size={20} color="#C2410C" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '800', fontSize: 14, color: '#9A3412' }}>Delivery coming soon</Text>
+                    <Text style={{ fontSize: 11, color: '#C2410C', marginTop: 4, lineHeight: 16 }}>
+                      Customer delivery is not live yet. Your store location is saved for pickup orders, and Grabengo partner riders are wired on the backend for when delivery launches.
+                    </Text>
                   </View>
-                  <Switch
-                    value={storeDeliveryEnabled}
-                    onValueChange={setStoreDeliveryEnabled}
-                    trackColor={{ false: '#E5E7EB', true: 'rgba(255, 92, 0, 0.15)' }}
-                    thumbColor={storeDeliveryEnabled ? SELLER_BRAND : '#F3F4F6'}
-                  />
                 </View>
-                {storeDeliveryEnabled && (
-                  <View style={{ marginTop: 14 }}>
-                    <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 8, fontSize: 13 }}>Who delivers the orders?</Text>
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-                      <TouchableOpacity
-                        onPress={() => setStoreDeliveryMode('self')}
-                        style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: storeDeliveryMode === 'self' ? SELLER_BRAND : '#E5E7EB', backgroundColor: storeDeliveryMode === 'self' ? '#FFFFFF' : '#FFFFFF' }}>
-                        <Text style={{ fontWeight: '800', fontSize: 13, color: storeDeliveryMode === 'self' ? SELLER_BRAND : '#374151' }}>Self delivery</Text>
-                        <Text style={{ fontSize: 10.5, color: '#6B7280', marginTop: 3, lineHeight: 14 }}>Your own riders deliver. You set and collect any charges.</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setStoreDeliveryMode('partner')}
-                        style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: storeDeliveryMode === 'partner' ? SELLER_BRAND : '#E5E7EB', backgroundColor: storeDeliveryMode === 'partner' ? '#FFFFFF' : '#FFFFFF' }}>
-                        <Text style={{ fontWeight: '800', fontSize: 13, color: storeDeliveryMode === 'partner' ? SELLER_BRAND : '#374151' }}>Grabengo Partner</Text>
-                        <Text style={{ fontSize: 10.5, color: '#6B7280', marginTop: 3, lineHeight: 14 }}>A Grabengo rider picks up and delivers. Fee is charged to the customer by distance.</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {storeDeliveryMode === 'self' ? (
-                    <>
-                    <Text style={{ color: '#6B7280', fontWeight: '600', marginBottom: 6, fontSize: 13 }}>Delivery Fee / Notes (optional)</Text>
-                    <TextInput
-                      style={[styles.input, { marginBottom: 0 }]}
-                      placeholder="e.g. Rs 150 flat fee, or 'call to confirm charge'"
-                      placeholderTextColor="#9CA3AF"
-                      value={storeDeliveryFeeNote}
-                      onChangeText={setStoreDeliveryFeeNote}
-                    />
-                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>Shown to customers before they choose delivery. You collect this charge directly — it's not processed by Grabengo.</Text>
-                    </>
-                    ) : (
-                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2, lineHeight: 15 }}>When you confirm a delivery order, nearby Grabengo partners are notified. The rider collects the order total plus the distance-based delivery fee in cash from the customer. Deliveries are limited to 12 km from your store.</Text>
-                    )}
-                  </View>
-                )}
               </View>
 
               <TouchableOpacity onPress={handleCreateStore} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND }]}>
@@ -8125,7 +8207,7 @@ export default function App() {
   const [profileModalVisible, setProfileModalVisible] = useState(false);
 
   // Global Currency State
-  const [currencyCode, setCurrencyCode] = useState('GBP');
+  const [currencyCode, setCurrencyCode] = useState('PKR');
   
   useEffect(() => {
     AsyncStorage.getItem('currencyCode').then(val => {

@@ -43,6 +43,7 @@ import {
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const CUSTOMER_DELIVERY_LIVE = import.meta.env.VITE_CUSTOMER_DELIVERY_LIVE === 'true';
 
 axios.defaults.headers.common = axios.defaults.headers.common || {};
 axios.defaults.headers.common['X-Grabengo-Client'] = 'admin-web';
@@ -2388,6 +2389,14 @@ function App() {
                         );
                       })()}
                     </div>
+                    {!CUSTOMER_DELIVERY_LIVE && (
+                      <div style={{ marginBottom: '1.25rem', padding: '0.9rem 1rem', borderRadius: '12px', background: '#FFF7ED', border: '1px solid #FED7AA', color: '#9A3412' }}>
+                        <strong style={{ display: 'block', marginBottom: '0.25rem' }}>Delivery coming soon</strong>
+                        <span style={{ fontSize: '0.82rem', lineHeight: 1.45 }}>
+                          Customer delivery checkout is not live yet. Store pickup works now, and Grabengo partner riders are wired on the backend for when delivery launches.
+                        </span>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: '1rem' }}>
                       <button type="button" disabled={storeSaving} onClick={() => setShowStoreModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: storeSaving ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: storeSaving ? 0.6 : 1 }}>Cancel</button>
                       <button
@@ -2981,6 +2990,30 @@ function App() {
                             <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
                               {isDelivery ? (o.delivery_address || 'Delivery address') : `Pickup: ${o.pickup_time}`}
                             </span>
+                            {isDelivery && (
+                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem', flexWrap: 'wrap' }}>
+                                {o.store_lat != null && (
+                                  <a
+                                    href={`https://www.google.com/maps/dir/?api=1&destination=${o.store_lat},${o.store_lng}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1D4ED8', textDecoration: 'none' }}
+                                  >
+                                    Restaurant on map
+                                  </a>
+                                )}
+                                {o.delivery_lat != null && (
+                                  <a
+                                    href={`https://www.google.com/maps/dir/?api=1&destination=${o.delivery_lat},${o.delivery_lng}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1D4ED8', textDecoration: 'none' }}
+                                  >
+                                    Customer on map
+                                  </a>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
 

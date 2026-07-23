@@ -4,10 +4,22 @@ require('dotenv').config();
 
 const STORE_CATEGORIES = ['Restaurants', 'Bakeries', 'Cafes', 'Grocery Store'];
 
+function resolveStoreDeliverySettings(user, { delivery_enabled, delivery_mode } = {}) {
+  const isSeller = user?.role === 'SellersAdmin' || user?.role === 'SellersStaff';
+  if (isSeller) {
+    return { deliveryEnabled: true, deliveryMode: 'partner' };
+  }
+  const deliveryEnabled = Boolean(delivery_enabled);
+  return {
+    deliveryEnabled,
+    deliveryMode: deliveryEnabled ? (delivery_mode === 'partner' ? 'partner' : 'self') : null,
+  };
+}
+
 const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
-const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl, delivery: DELIVERY_CFG } = require('./config');
+const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl, delivery: DELIVERY_CFG, customerDeliveryLive } = require('./config');
 const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout, emailSellerWelcomeLayout } = require('./emailTemplates');
 const {
   validateSubdomain,
@@ -383,6 +395,13 @@ app.get('/api/public/tenant/:subdomain', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.get('/api/public/config', (_req, res) => {
+  res.json({
+    customer_delivery_live: customerDeliveryLive,
+    brand_name: brandName,
+  });
 });
 
 app.get('/api/public/product-categories', (_req, res) => {
@@ -897,10 +916,9 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
     const imageUrl = image
       ? await uploadImageToS3(image)
       : (tenant?.logo || null);
-    const deliveryEnabledBool = Boolean(delivery_enabled);
-    const deliveryMode = deliveryEnabledBool ? (delivery_mode === 'partner' ? 'partner' : 'self') : null;
+    const { deliveryEnabled: deliveryEnabledBool, deliveryMode } = resolveStoreDeliverySettings(req.user, { delivery_enabled, delivery_mode });
     const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category, delivery_mode) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category, deliveryMode);
-    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category, delivery_mode: deliveryMode });
+    res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category, delivery_mode: deliveryMode, customer_delivery_live: customerDeliveryLive });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -920,7 +938,13 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
       imageUrl = image ? await uploadImageToS3(image) : null;
     }
     const isActiveBool = is_active !== undefined && is_active !== null ? Boolean(is_active) : null;
-    const deliveryEnabledBool = delivery_enabled !== undefined && delivery_enabled !== null ? Boolean(delivery_enabled) : null;
+    const isSeller = req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff';
+    let deliveryEnabledBool = delivery_enabled !== undefined && delivery_enabled !== null ? Boolean(delivery_enabled) : null;
+    let deliveryModeValue = delivery_mode !== undefined ? (delivery_mode === 'partner' ? 'partner' : (delivery_mode === 'self' ? 'self' : null)) : null;
+    if (isSeller) {
+      deliveryEnabledBool = true;
+      deliveryModeValue = 'partner';
+    }
     await db.prepare(
       `UPDATE stores SET
         lat = COALESCE(?, lat),
@@ -936,7 +960,10 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
        WHERE id = ?`
     ).run(lat, lng, isActiveBool, name, address, imageUrl, deliveryEnabledBool,
       delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category,
-      delivery_mode !== undefined, delivery_mode !== undefined ? (delivery_mode === 'partner' ? 'partner' : (delivery_mode === 'self' ? 'self' : null)) : null, id);
+      deliveryModeValue !== undefined, deliveryModeValue, id);
+    if (isSeller) {
+      await db.prepare("UPDATE stores SET delivery_enabled = TRUE, delivery_mode = 'partner' WHERE id = ?").run(id);
+    }
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -1394,6 +1421,10 @@ app.post('/api/orders', verifyToken, async (req, res) => {
   const method = paymentMethod || 'Card';
   const isDelivery = fulfillmentType === 'delivery';
 
+  if (isDelivery && !customerDeliveryLive) {
+    return res.status(400).json({ error: 'Delivery is coming soon. Please choose pickup for now.' });
+  }
+
   if (isDelivery && (!deliveryAddress || !deliveryAddress.trim() || !deliveryPhone || !deliveryPhone.trim())) {
     return res.status(400).json({ error: 'Delivery address and phone number are required for delivery orders.' });
   }
@@ -1698,7 +1729,7 @@ app.get('/api/orders/me', verifyToken, async (req, res) => {
   }
   try {
     const orders = await db.prepare(`
-      SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+      SELECT o.id, o.store_id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
              o.fulfillment_type, o.delivery_address, o.delivery_phone, o.status,
              s.name as store_name, s.address, s.image as store_image, s.delivery_fee_note,
              s.delivery_mode,
@@ -1754,7 +1785,7 @@ app.get('/api/seller/orders', verifyToken, async (req, res) => {
              o.delivery_lat, o.delivery_lng, o.delivery_id,
              COALESCE(o.delivery_phone, u.phone) as customer_phone,
              u.name as customer_name, u.email as customer_email,
-             s.name as store_name, s.delivery_mode,
+             s.name as store_name, s.delivery_mode, s.lat AS store_lat, s.lng AS store_lng,
              COALESCE(b.pickup_time, 'N/A') as pickup_time,
              COALESCE(b.description, f.name) as item_name,
              d.status AS delivery_status, d.fee AS delivery_fee, d.cod_amount AS delivery_cod,
@@ -2714,18 +2745,23 @@ app.get('/api/reviews', optionalVerifyToken, async (req, res) => {
 // Get chat history between a customer and a store
 app.get('/api/chat/history', verifyToken, async (req, res) => {
   const { store_id, customer_id } = req.query;
-  if (!store_id) return res.status(400).json({ error: 'store_id is required' });
+  const parsedStoreId = parseInt(store_id, 10);
+  if (!parsedStoreId || Number.isNaN(parsedStoreId)) {
+    return res.status(400).json({ error: 'store_id is required' });
+  }
 
-  let targetCustomerId = customer_id;
+  let targetCustomerId = customer_id ? parseInt(customer_id, 10) : null;
   if (req.user.role === 'Customers') {
     targetCustomerId = req.user.id;
   } else {
-    if (!targetCustomerId) return res.status(400).json({ error: 'customer_id is required for admins/sellers' });
+    if (!targetCustomerId || Number.isNaN(targetCustomerId)) {
+      return res.status(400).json({ error: 'customer_id is required for admins/sellers' });
+    }
   }
 
   try {
     if (req.user.role !== 'Customers') {
-      await assertStoreAccess(db, store_id, req.user);
+      await assertStoreAccess(db, parsedStoreId, req.user);
     }
     const messages = await db.prepare(`
       SELECT m.id, m.store_id, m.customer_id, m.message, m.sender_role, m.is_read, m.created_at,
@@ -2735,7 +2771,7 @@ app.get('/api/chat/history', verifyToken, async (req, res) => {
       JOIN stores s ON m.store_id = s.id
       WHERE m.store_id = ? AND m.customer_id = ?
       ORDER BY m.created_at ASC
-    `).all(store_id, targetCustomerId);
+    `).all(parsedStoreId, targetCustomerId);
     res.json(messages);
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message });

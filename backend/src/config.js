@@ -27,9 +27,13 @@ const delivery = {
   dispatchRadiusKm: Number(process.env.DELIVERY_DISPATCH_RADIUS_KM || 15), // rider sees jobs from stores within this of their duty location
 };
 
+// Customer-facing delivery checkout/UI (rider partner pipeline stays active server-side).
+const customerDeliveryLive = process.env.CUSTOMER_DELIVERY_LIVE === 'true';
+
 module.exports = {
   brandName,
   delivery,
+  customerDeliveryLive,
   tagline: process.env.APP_TAGLINE || 'Reducing food waste, one meal at a time.',
   siteUrl,
   siteHost: process.env.APP_SITE_HOST || siteHostFromUrl(siteUrl),
