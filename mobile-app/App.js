@@ -1499,16 +1499,16 @@ function LandingScreen({ navigation }) {
       <SafeAreaView style={{ flex: 1 }}>
         {renderHeader()}
 
-        <GHScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 60 }}>
+        <GHScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 36 }}>
           {/* Hero Section */}
-          <View style={{ paddingHorizontal: 24, marginTop: 12, paddingBottom: 8, overflow: 'hidden' }} pointerEvents="box-none">
-            <View style={{ position: 'absolute', right: -24, top: 8, width: 210, height: 260, zIndex: 0, pointerEvents: 'none' }}>
+          <View style={{ paddingHorizontal: 24, marginTop: 4, paddingBottom: 8, minHeight: 340, overflow: 'visible' }} pointerEvents="box-none">
+            <View style={{ position: 'absolute', right: -100, top: -24, width: 380, height: 480, zIndex: 0, pointerEvents: 'none' }}>
               <Image
                 source={require('./assets/images/grabengo_landing.png')}
                 style={{ width: '100%', height: '100%', resizeMode: 'contain', backgroundColor: 'transparent' }}
               />
             </View>
-            <View style={{ paddingTop: 28, paddingRight: 130, zIndex: 2, elevation: 4 }} pointerEvents="box-none">
+            <View style={{ paddingTop: 32, paddingRight: 108, zIndex: 2, elevation: 4 }} pointerEvents="box-none">
               <Text style={{ fontSize: 38, fontWeight: '800', color: '#FFFFFF', lineHeight: 46, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
                 Delicious Treats
               </Text>
@@ -1545,9 +1545,9 @@ function LandingScreen({ navigation }) {
 
           {/* Brands Carousel — prefetched before landing appears */}
           {carouselTenants.length > 0 ? (
-          <View style={{ marginTop: 28 }} pointerEvents="none">
+          <View style={{ marginTop: 20 }} pointerEvents="none">
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 16, paddingLeft: 24 }}>Top Brands</Text>
-            <View style={{ overflow: 'hidden', height: 220 }}>
+            <View style={{ overflow: 'hidden' }}>
               <Animated.View
                 style={{
                   flexDirection: 'row',
@@ -1556,9 +1556,9 @@ function LandingScreen({ navigation }) {
                 }}
               >
                 {[...carouselTenants, ...carouselTenants].map((tenant, idx) => (
-                  <View key={`${tenant.id}-${idx}`} style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111827', marginRight: 16, justifyContent: 'center', alignItems: 'center' }}>
+                  <View key={`${tenant.id}-${idx}`} style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111827', marginRight: 16 }}>
                     {tenant.logo ? (
-                      <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                      <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     ) : (
                       <View style={{ width: '100%', height: '100%', backgroundColor: '#2D1F0E', justifyContent: 'center', alignItems: 'center' }}>
                         <Text style={{ color: LANDING_ORANGE, fontSize: 38, fontWeight: '900', letterSpacing: -1 }}>
@@ -1566,7 +1566,7 @@ function LandingScreen({ navigation }) {
                         </Text>
                       </View>
                     )}
-                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '55%', justifyContent: 'flex-end', padding: 12 }}>
+                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '48%', justifyContent: 'flex-end', padding: 12 }}>
                       <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 }} numberOfLines={1}>{tenant.name}</Text>
                       <Text style={{ color: '#D1D5DB', fontSize: 11 }}>
                         {tenant.store_count > 1 ? `${tenant.store_count} locations` : tenant.store_count === 1 ? '1 location' : 'Coming soon'}
@@ -1579,8 +1579,8 @@ function LandingScreen({ navigation }) {
           </View>
           ) : null}
 
-          {/* What's coming teaser — below carousel, left-aligned to avoid donut overlap */}
-          <View style={{ marginTop: 24, paddingHorizontal: 24, alignItems: 'flex-start' }}>
+          {/* What's coming — right below carousel, tucked bottom-right */}
+          <View style={{ marginTop: 18, paddingHorizontal: 24, alignItems: 'flex-end' }}>
             <GHPressable
               onPress={() => setShowComingSoon(true)}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -8313,7 +8313,9 @@ export default function App() {
   if (state.isLoading || !landingBrandsReady || !appReady) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FF5C00', justifyContent: 'center', alignItems: 'center' }}>
-        <Image source={require('./assets/images/grabengo-logo.png')} style={{ width: 140, height: 40, marginBottom: 24 }} resizeMode="contain" />
+        <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 12, marginBottom: 24 }}>
+          <Image source={require('./assets/images/grabengo-logo.png')} style={{ width: 140, height: 40 }} resizeMode="contain" />
+        </View>
         <ActivityIndicator size="large" color="#FFFFFF" />
       </View>
     );

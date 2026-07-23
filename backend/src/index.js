@@ -893,7 +893,10 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
 
   try {
     const targetTenantId = requireTenantId(req.user);
-    const imageUrl = image ? await uploadImageToS3(image) : null;
+    const tenant = await db.prepare('SELECT logo FROM tenants WHERE id = ?').get(targetTenantId);
+    const imageUrl = image
+      ? await uploadImageToS3(image)
+      : (tenant?.logo || null);
     const deliveryEnabledBool = Boolean(delivery_enabled);
     const deliveryMode = deliveryEnabledBool ? (delivery_mode === 'partner' ? 'partner' : 'self') : null;
     const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category, delivery_mode) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category, deliveryMode);
