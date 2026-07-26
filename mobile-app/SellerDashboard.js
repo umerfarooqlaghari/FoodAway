@@ -72,7 +72,7 @@ function SellerMapPicker({ lat, lng, onChange }) {
 }
 
 export default function SellerDashboardScreen({ AuthContext, API_URL }) {
-  const { token, logout, user, currencyCode, currencySymbol, changeCurrency, CURRENCIES } = useContext(AuthContext);
+  const { token, logout, user, currencySymbol } = useContext(AuthContext);
 
   const [sellerTab, setSellerTab] = useState('stores');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -646,14 +646,6 @@ export default function SellerDashboardScreen({ AuthContext, API_URL }) {
 
       {menuOpen && (
         <View style={s.menuPanel}>
-          <Text style={s.menuLabel}>Currency</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-            {CURRENCIES.map(c => (
-              <TouchableOpacity key={c.code} onPress={() => changeCurrency(c.code)} style={[s.currencyPill, currencyCode === c.code && s.currencyPillActive]}>
-                <Text style={[s.currencyText, currencyCode === c.code && s.currencyTextActive]}>{c.symbol} {c.code}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
           <TouchableOpacity style={s.logoutBtn} onPress={() => { setMenuOpen(false); logout(); }}>
             <Ionicons name="log-out-outline" size={20} color="#DC2626" />
             <Text style={s.logoutText}>Log out</Text>

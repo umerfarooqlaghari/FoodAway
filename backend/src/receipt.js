@@ -5,7 +5,7 @@ const ORANGE = '#FF5C00';
 const DARK   = '#1a1a1a';
 const GREY   = '#555555';
 const LIGHT  = '#f5f5f5';
-const CURRENCY = '£';
+const CURRENCY = 'Rs';
 
 /**
  * Generates a PDF receipt buffer.

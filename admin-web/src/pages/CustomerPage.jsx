@@ -11,7 +11,7 @@ import GrabengoLogoMark from '../components/GrabengoLogoMark';
 import { mainSiteUrl } from '../host';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-const CURRENCY = '£';
+const CURRENCY = 'Rs';
 
 function formatDistance(km) {
   if (km == null || !Number.isFinite(km)) return null;
@@ -30,8 +30,8 @@ function downloadReceipt(orders, contactInfo, tenantName) {
       <td>${o.item_name || (o.type === 'bag' ? 'Surprise Bag' : 'Food Item')}</td>
       <td>${o.store_name || ''}</td>
       <td style="text-align:center">${o.quantity || 1}</td>
-      <td style="text-align:right">£${Number(o.price).toFixed(2)}</td>
-      <td style="text-align:right">£${(o.price * (o.quantity || 1)).toFixed(2)}</td>
+      <td style="text-align:right">${CURRENCY}${Number(o.price).toFixed(2)}</td>
+      <td style="text-align:right">${CURRENCY}${(o.price * (o.quantity || 1)).toFixed(2)}</td>
       <td>${o.pickup_time || 'During opening hours'}</td>
     </tr>`).join('');
 
@@ -103,7 +103,7 @@ function downloadReceipt(orders, contactInfo, tenantName) {
       </table>
       <div class="total-row">
         <span class="label">Total Amount (Cash at Pickup)</span>
-        <span class="amount">£${total.toFixed(2)}</span>
+        <span class="amount">${CURRENCY}${total.toFixed(2)}</span>
       </div>
       <div class="notice">
         <strong>Important:</strong> Please present this receipt at the store when collecting your order.

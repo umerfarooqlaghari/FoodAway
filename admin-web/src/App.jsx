@@ -291,22 +291,12 @@ function App() {
   const [inactivityResult, setInactivityResult] = useState(null);
   const [inactiveUsersList, setInactiveUsersList] = useState([]);
 
-  // Currency
-  const CURRENCIES = [
-    { code: 'GBP', symbol: '£', name: 'British Pound' },
-    { code: 'USD', symbol: '$', name: 'US Dollar' },
-    { code: 'EUR', symbol: '€', name: 'Euro' },
-    { code: 'PKR', symbol: '₨', name: 'Pakistani Rupee' },
-    { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham' },
-    { code: 'SAR', symbol: '﷼', name: 'Saudi Riyal' },
-    { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
-    { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
-    { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
-    { code: 'TRY', symbol: '₺', name: 'Turkish Lira' },
-  ];
-  const [currencyCode, setCurrencyCode] = useState(localStorage.getItem('currencyCode') || 'GBP');
-  const currencySymbol = CURRENCIES.find(c => c.code === currencyCode)?.symbol || '£';
-  const handleCurrencyChange = (code) => { setCurrencyCode(code); localStorage.setItem('currencyCode', code); };
+  // Currency fixed to PKR (Pakistan market)
+  const currencyCode = 'PKR';
+  const currencySymbol = 'Rs';
+  useEffect(() => {
+    localStorage.setItem('currencyCode', 'PKR');
+  }, []);
 
   // Bag form state
   const [bagStoreId, setBagStoreId] = useState('');
@@ -842,7 +832,7 @@ function App() {
             setToastNotification({
               type: 'order',
               storeName: order.store_name,
-              message: `New order: ${order.quantity}x ${order.item_name} for £${order.price.toFixed(2)}`,
+              message: `New order: ${order.quantity}x ${order.item_name} for Rs${order.price.toFixed(2)}`,
               customerName: order.customer_name
             });
             fetchOrders();
@@ -1999,18 +1989,8 @@ function App() {
             </>
           )}
           {user?.role !== 'SuperAdmin' && (
-            <div style={{ padding: '0.75rem 1rem', marginTop: 'auto' }}>
-              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-                Currency
-              </label>
-              <select
-                value={currencyCode}
-                onChange={e => handleCurrencyChange(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-                {CURRENCIES.map(c => (
-                  <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>
-                ))}
-              </select>
+            <div style={{ padding: '0.75rem 1rem', marginTop: 'auto', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              Prices shown in <strong style={{ color: 'var(--text-primary)' }}>Rs (PKR)</strong>
             </div>
           )}
           <div className="nav-item" onClick={handleLogout} style={{ color: 'var(--danger)' }}>Logout</div>

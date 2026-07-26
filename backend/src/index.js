@@ -1586,7 +1586,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     if (customer && customer.email) {
       const total     = placedOrders.reduce((sum, o) => sum + (Number(o.price) * (o.quantity || 1)), 0);
       const itemsList = placedOrders.map(o =>
-        `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — £${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
+        `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — Rs${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
       ).join('');
       const anyDelivery = placedOrders.some(o => o.fulfillment_type === 'delivery');
       const isPartnerDelivery = createdDeliveries.length > 0;
@@ -1614,7 +1614,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
               <h3 style="color:#FF5C00;border-bottom:2px solid #FF5C00;padding-bottom:6px;">Order Summary</h3>
               <ul style="color:#333;line-height:1.8;">${itemsList}</ul>
               <p style="font-size:18px;font-weight:bold;color:#1a1a1a;border-top:1px solid #eee;padding-top:12px;">
-                Total: <span style="color:#FF5C00;">£${total.toFixed(2)}</span>
+                Total: <span style="color:#FF5C00;">Rs${total.toFixed(2)}</span>
               </p>
               <div style="background:#fff8f5;border:1px solid #ffe0cc;border-radius:6px;padding:14px;margin-top:16px;">
                 <p style="margin:0;color:#FF5C00;font-weight:bold;">Payment: Cash at Pickup</p>
@@ -1626,7 +1626,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
               ${emailFooter()}
             </div>
           </div>`,
-        text: `Hi ${customer.name}, your ${brandName} order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: £${total.toFixed(2)}. Your receipt is attached.`,
+        text: `Hi ${customer.name}, your ${brandName} order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: Rs${total.toFixed(2)}. Your receipt is attached.`,
         attachments,
       })).catch(err => console.error('Failed to send order confirmation email:', err.message));
     }
@@ -3853,7 +3853,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
     <tr>
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.item_name}</td>
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;text-align:center;">${o.quantity}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">£${(o.price * o.quantity).toFixed(2)}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">Rs${(o.price * o.quantity).toFixed(2)}</td>
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.store_name}</td>
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.pickup_time}</td>
     </tr>`).join('');
@@ -3906,7 +3906,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
                     <tfoot>
                       <tr style="background:#fdf5ef;">
                         <td colspan="2" style="padding:12px 14px;font-weight:700;color:#1a1a1a;">Total</td>
-                        <td colspan="3" style="padding:12px 14px;font-weight:700;color:#ff6b35;font-size:16px;">£${total.toFixed(2)}</td>
+                        <td colspan="3" style="padding:12px 14px;font-weight:700;color:#ff6b35;font-size:16px;">Rs${total.toFixed(2)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -3931,7 +3931,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
         </table>
       </body>
       </html>`,
-      text: `Hi ${name}, your ${brandName} order is confirmed! Total: £${total.toFixed(2)}. Order refs: #${placedOrders.map(o => o.id).join(', #')}. Payment: cash at pickup. Your receipt is attached.`
+      text: `Hi ${name}, your ${brandName} order is confirmed! Total: Rs${total.toFixed(2)}. Order refs: #${placedOrders.map(o => o.id).join(', #')}. Payment: cash at pickup. Your receipt is attached.`
     });
   } catch (emailErr) {
     console.error('[Checkout Confirm] Order confirmed but receipt email failed:', emailErr);

@@ -478,26 +478,14 @@ async function prefetchLandingBrands() {
   }
 }
 
-const CURRENCIES = [
-  { code: 'GBP', symbol: '£' },
-  { code: 'USD', symbol: '$' },
-  { code: 'EUR', symbol: '€' },
-  { code: 'PKR', symbol: 'Rs' },
-  { code: 'AED', symbol: 'AED ' },
-  { code: 'SAR', symbol: 'SAR ' },
-  { code: 'CAD', symbol: 'CA$' },
-  { code: 'AUD', symbol: 'A$' },
-  { code: 'INR', symbol: 'Rs' },
-];
+const APP_CURRENCY_CODE = 'PKR';
+const APP_CURRENCY_SYMBOL = 'Rs';
 
-function formatMoney(amount, symbol = '£') {
+function formatMoney(amount, symbol = APP_CURRENCY_SYMBOL) {
   const n = Number(amount);
   const safe = Number.isFinite(n) ? n : 0;
-  return `${symbol}${safe.toFixed(2)}`;
-}
-
-function currencySymbolFor(code) {
-  return CURRENCIES.find((c) => c.code === code)?.symbol || '£';
+  if (Math.abs(safe - Math.round(safe)) < 0.001) return `${symbol}${Math.round(safe).toLocaleString('en-PK')}`;
+  return `${symbol}${safe.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function ChatProvider({ children }) {
@@ -601,7 +589,7 @@ function ChatProvider({ children }) {
           if (payload.isFlashDeal) {
             playSoundAndHaptic('success');
             const discountPct = payload.bag ? Math.round(((payload.bag.original_price - payload.bag.price) / payload.bag.original_price) * 100) : 70;
-            const priceLabel = payload.bag ? `${currencySymbol || '£'}${payload.bag.price.toFixed(2)}` : 'surplus price';
+            const priceLabel = payload.bag ? `${APP_CURRENCY_SYMBOL}${payload.bag.price.toFixed(2)}` : 'surplus price';
             const pickupTime = payload.bag?.pickup_time || 'Today';
             setToastNotification({
               type: 'flash_deal',
@@ -6588,7 +6576,7 @@ function SellerDashboardScreen() {
   const FOOD_CATEGORIES = PRODUCT_CATEGORIES;
 
   // Currency
-  const { currencyCode, currencySymbol, changeCurrency, CURRENCIES } = useContext(AuthContext);
+  const { currencySymbol } = useContext(AuthContext);
 
   // Structured pickup
   const ALL_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -7211,20 +7199,6 @@ function SellerDashboardScreen() {
           <SellerStatCard label="Bags Sold" value={String(stats.bagsSold)} />
           <SellerStatCard label="Products Sold" value={String(stats.productsSold)} />
         </View>
-      </View>
-
-      {/* Currency Picker Row */}
-      <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {CURRENCIES.map(c => (
-            <TouchableOpacity key={c.code} onPress={() => changeCurrency(c.code)}
-              style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, marginRight: 6, borderWidth: 1, borderColor: currencyCode === c.code ? '#FF5C00' : '#E5E7EB', backgroundColor: currencyCode === c.code ? '#FFFFFF' : '#F9FAFB' }}>
-              <Text style={{ fontWeight: '700', fontSize: 12, color: currencyCode === c.code ? '#FF5C00' : '#6B7280' }}>
-                {c.symbol.trim()} {c.code}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </View>
 
       {/* ── STORES TAB ── */}
@@ -8206,24 +8180,12 @@ export default function App() {
   const [deliveryInfo, setDeliveryInfo] = useState(DEFAULT_DELIVERY_INFO);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
 
-  // Global Currency State
-  const [currencyCode, setCurrencyCode] = useState('PKR');
-  
+  // Currency is fixed to PKR for all users (Pakistan market).
+  const currencyCode = APP_CURRENCY_CODE;
+  const currencySymbol = APP_CURRENCY_SYMBOL;
   useEffect(() => {
-    AsyncStorage.getItem('currencyCode').then(val => {
-      if (val) setCurrencyCode(val);
-    });
+    AsyncStorage.setItem('currencyCode', APP_CURRENCY_CODE).catch(() => {});
   }, []);
-
-  // Push registration disabled until iOS 26 TurboModule crash is resolved.
-
-  const changeCurrency = async (code) => {
-    setCurrencyCode(code);
-    await AsyncStorage.setItem('currencyCode', code);
-  };
-
-  const CURRENCIES_LIST = CURRENCIES;
-  const currencySymbol = currencySymbolFor(currencyCode);
 
   // Cart Functions
   const addToCart = (item, type) => {
@@ -8392,13 +8354,11 @@ export default function App() {
       user: state.user,
       currencyCode,
       currencySymbol,
-      changeCurrency,
-      CURRENCIES: CURRENCIES_LIST,
       profileModalVisible,
       openProfile: () => setProfileModalVisible(true),
       closeProfile: () => setProfileModalVisible(false),
     }),
-    [state, currencyCode, currencySymbol, changeCurrency, profileModalVisible]
+    [state, profileModalVisible]
   );
 
   const landingBrandsContext = React.useMemo(
