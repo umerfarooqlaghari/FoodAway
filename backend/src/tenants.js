@@ -14,10 +14,10 @@ async function getTenantBySubdomain(db, subdomain) {
   ).get(subdomain);
 }
 
-async function createTenant(db, { name, subdomain, logo, phone }) {
+async function createTenant(db, { name, subdomain, logo, phone, primary_color }) {
   const info = await db.prepare(
-    'INSERT INTO tenants (name, subdomain, logo, phone) VALUES (?, ?, ?, ?)'
-  ).run(name, subdomain || null, logo || null, phone || null);
+    'INSERT INTO tenants (name, subdomain, logo, phone, primary_color) VALUES (?, ?, ?, ?, ?)'
+  ).run(name, subdomain || null, logo || null, phone || null, primary_color || '#FFFFFF');
   return getTenantById(db, info.lastInsertRowid);
 }
 

@@ -39,6 +39,7 @@ async function registerSellerAdmin(db, {
   hashedPassword,
   phone,
   logoUrl,
+  primaryColor,
   requestedSubdomain,
 }) {
   // db.transaction(fn) returns a wrapper that must be invoked (see db.js)
@@ -64,6 +65,7 @@ async function registerSellerAdmin(db, {
       subdomain,
       logo: logoUrl,
       phone: phone || null,
+      primary_color: primaryColor,
     });
 
     const info = await db.prepare(

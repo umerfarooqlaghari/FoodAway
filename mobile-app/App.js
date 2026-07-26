@@ -1570,18 +1570,21 @@ function LandingScreen({ navigation }) {
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.2,
-                    shadowRadius: 8,
-                    elevation: 8,
+                    shadowRadius: 10,
+                    elevation: 5,
                     opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.96 : 1 }]
                   })}
                 >
-                  <Text style={{ color: '#FF5C00', fontWeight: '800', fontSize: 16 }}>Explore</Text>
+                  <Text style={{ color: '#FF5C00', fontSize: 16, fontWeight: '800', letterSpacing: -0.3 }}>
+                    Explore ➔
+                  </Text>
                 </GHPressable>
               </View>
             </View>
           </View>
 
-          {/* Brands Carousel — prefetched before landing appears */}
+          {/* Brands Carousel — clean white logo badges, unclipped */}
           {carouselTenants.length > 0 ? (
           <View style={{ marginTop: 20 }} pointerEvents="none">
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 16, paddingLeft: 24 }}>Top Brands</Text>
@@ -1594,22 +1597,35 @@ function LandingScreen({ navigation }) {
                 }}
               >
                 {[...carouselTenants, ...carouselTenants].map((tenant, idx) => (
-                  <View key={`${tenant.id}-${idx}`} style={{ width: 140, height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111827', marginRight: 16 }}>
-                    {tenant.logo ? (
-                      <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    ) : (
-                      <View style={{ width: '100%', height: '100%', backgroundColor: '#2D1F0E', justifyContent: 'center', alignItems: 'center' }}>
-                        <Text style={{ color: LANDING_ORANGE, fontSize: 38, fontWeight: '900', letterSpacing: -1 }}>
+                  <View key={`${tenant.id}-${idx}`} style={{ width: 96, marginRight: 16, alignItems: 'center' }}>
+                    <View style={{
+                      width: 88,
+                      height: 88,
+                      borderRadius: 22,
+                      backgroundColor: tenant.primary_color || '#FFFFFF',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      padding: 10,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.15,
+                      shadowRadius: 6,
+                      elevation: 4,
+                    }}>
+                      {tenant.logo ? (
+                        <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                      ) : (
+                        <Text style={{ color: LANDING_ORANGE, fontSize: 28, fontWeight: '900' }}>
                           {tenantInitials(tenant.name)}
                         </Text>
-                      </View>
-                    )}
-                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '48%', justifyContent: 'flex-end', padding: 12 }}>
-                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 }} numberOfLines={1}>{tenant.name}</Text>
-                      <Text style={{ color: '#D1D5DB', fontSize: 11 }}>
-                        {tenant.store_count > 1 ? `${tenant.store_count} locations` : tenant.store_count === 1 ? '1 location' : 'Coming soon'}
-                      </Text>
-                    </LinearGradient>
+                      )}
+                    </View>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13, marginTop: 8, textAlign: 'center' }} numberOfLines={1}>
+                      {tenant.name}
+                    </Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 2, textAlign: 'center' }}>
+                      {tenant.store_count > 1 ? `${tenant.store_count} locations` : tenant.store_count === 1 ? '1 location' : 'Coming soon'}
+                    </Text>
                   </View>
                 ))}
               </Animated.View>
@@ -2904,10 +2920,210 @@ function SplashScreen({ navigation }) {
   );
 }
 
+function ProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const { user, logout, updateUser, token } = useContext(AuthContext);
+  const { cartTotalCount } = useContext(CartContext);
+  const [editName, setEditName] = useState(user?.name || '');
+  const [editEmail, setEditEmail] = useState(user?.email || '');
+  const [editPhone, setEditPhone] = useState(user?.phone || '');
+  const [saving, setSaving] = useState(false);
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setEditName(user.name || '');
+      setEditEmail(user.email || '');
+      setEditPhone(user.phone || '');
+    }
+  }, [user?.name, user?.email, user?.phone]);
+
+  const handleSave = async () => {
+    if (!user?.id) return;
+    if (!editName.trim()) return Alert.alert('Required', 'Please enter your name.');
+    if (!editEmail.trim()) return Alert.alert('Required', 'Please enter your email.');
+    if (!editPhone.trim()) return Alert.alert('Required', 'Please enter your phone number.');
+    setSaving(true);
+    try {
+      await axios.put(`${API_URL}/users/${user.id}`, {
+        name: editName.trim(),
+        email: editEmail.trim(),
+        phone: editPhone.trim(),
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await updateUser({ name: editName.trim(), email: editEmail.trim(), phone: editPhone.trim() });
+      Alert.alert('Saved', 'Profile updated.');
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || 'Could not save profile.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      Alert.alert('Password required', 'Enter your password to permanently delete your account.');
+      return;
+    }
+    Alert.alert(
+      'Delete account permanently?',
+      'This removes your profile, favorites, and reviews. Order history is kept for records but is no longer linked to you. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete my account',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await axios.delete(`${API_URL}/users/me`, {
+                data: { password: deletePassword },
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              logout();
+              Alert.alert('Account deleted', 'Your Grabengo account has been permanently deleted.');
+            } catch (e) {
+              Alert.alert('Could not delete account', e.response?.data?.error || 'Please try again.');
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
+      <StatusBar style="dark" />
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: '#0F172A' }}>My Profile</Text>
+        {token ? (
+          <TouchableOpacity onPress={logout} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#FEE2E2' }}>
+            <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>Logout</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {!token || !user?.id ? (
+        <View style={{ flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' }}>
+          <Ionicons name="person-circle-outline" size={80} color="#94A3B8" style={{ marginBottom: 16 }} />
+          <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>Guest User</Text>
+          <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
+            Sign in to manage your profile, view orders, and save your favorite stores.
+          </Text>
+          <TouchableOpacity style={[styles.primaryButton, { width: '100%', marginBottom: 12 }]} onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.primaryButtonText}>Sign In</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ width: '100%', paddingVertical: 14, alignItems: 'center', borderRadius: 30, borderWidth: 1.5, borderColor: '#FF5C00' }} onPress={() => navigation.navigate('Register')}>
+            <Text style={{ color: '#FF5C00', fontWeight: '800', fontSize: 16 }}>Create Account</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 16 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#FF5C00', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '900' }}>
+                  {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>{user.name || 'User'}</Text>
+                <Text style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{user.email}</Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 6 }}>Full Name</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: '#F8FAFC' }]}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Your name"
+              placeholderTextColor="#94a3b8"
+            />
+
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 6, marginTop: 14 }}>Email Address</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: '#F8FAFC' }]}
+              value={editEmail}
+              onChangeText={setEditEmail}
+              placeholder="Your email"
+              placeholderTextColor="#94a3b8"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 6, marginTop: 14 }}>Phone Number</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: '#F8FAFC' }]}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="Your phone number"
+              placeholderTextColor="#94a3b8"
+              keyboardType="phone-pad"
+            />
+
+            <TouchableOpacity style={[styles.primaryButton, { marginTop: 20 }]} onPress={handleSave} disabled={saving || deleting}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Changes</Text>}
+            </TouchableOpacity>
+          </View>
+
+          {/* Account Deletion */}
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#DC2626', marginBottom: 4 }}>Delete Account</Text>
+            <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 18, marginBottom: 14 }}>
+              Permanently delete your account and personal data.
+            </Text>
+            {!deleteMode ? (
+              <TouchableOpacity
+                onPress={() => setDeleteMode(true)}
+                style={{ paddingVertical: 12, alignItems: 'center', borderRadius: 24, borderWidth: 1.5, borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }}
+              >
+                <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 14 }}>Delete my account</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TextInput
+                  style={[styles.input, { backgroundColor: '#F8FAFC', marginBottom: 12 }]}
+                  value={deletePassword}
+                  onChangeText={setDeletePassword}
+                  placeholder="Enter password to confirm"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry
+                />
+                <TouchableOpacity
+                  style={{ paddingVertical: 12, alignItems: 'center', borderRadius: 24, backgroundColor: '#DC2626', opacity: deleting ? 0.7 : 1 }}
+                  onPress={handleDeleteAccount}
+                  disabled={deleting}
+                >
+                  {deleting ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Confirm permanent deletion</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setDeleteMode(false); setDeletePassword(''); }} style={{ paddingVertical: 10, alignItems: 'center' }}>
+                  <Text style={{ color: '#64748B', fontWeight: '600', fontSize: 13 }}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </ScrollView>
+      )}
+
+      <SharedBottomNav navigation={navigation} activeTab="Profile" cartTotalCount={cartTotalCount} />
+    </SafeAreaView>
+  );
+}
+
 // --- Shared Bottom Nav ---
 const SharedBottomNav = ({ navigation, activeTab, cartTotalCount }) => {
   const { openProfile, token } = useContext(AuthContext);
   const isHome = activeTab === 'Home' || activeTab === 'Explore';
+  const isBookings = activeTab === 'Bookings';
+  const isProfile = activeTab === 'Profile';
+  const isCart = activeTab === 'Cart';
   return (
     <View style={styles.bottomNavContainer}>
       <View style={styles.bottomNav}>
@@ -2917,28 +3133,28 @@ const SharedBottomNav = ({ navigation, activeTab, cartTotalCount }) => {
           </View>
           <Text style={{ color: isHome ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: isHome ? '700' : '600' }}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Bookings' && (token ? navigation.navigate('Bookings') : promptSignIn('Sign in to view your orders.'))}>
-          <View style={{ backgroundColor: activeTab === 'Bookings' ? '#FF5C00' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name={activeTab === 'Bookings' ? "receipt" : "receipt-outline"} size={activeTab === 'Bookings' ? 20 : 24} color={activeTab === 'Bookings' ? "white" : "#9CA3AF"} />
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => !isBookings && (token ? navigation.navigate('Bookings') : promptSignIn('Sign in to view your orders.'))}>
+          <View style={{ backgroundColor: isBookings ? '#FF5C00' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+            <Ionicons name={isBookings ? "receipt" : "receipt-outline"} size={isBookings ? 20 : 24} color={isBookings ? "white" : "#9CA3AF"} />
           </View>
-          <Text style={{ color: activeTab === 'Bookings' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Bookings' ? '700' : '600' }}>Bookings</Text>
+          <Text style={{ color: isBookings ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: isBookings ? '700' : '600' }}>Bookings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={openProfile}>
-          <View style={{ backgroundColor: 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name="person-outline" size={24} color="#9CA3AF" />
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => !isProfile && (token ? navigation.navigate('Profile') : openProfile())}>
+          <View style={{ backgroundColor: isProfile ? '#FF5C00' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+            <Ionicons name={isProfile ? "person" : "person-outline"} size={isProfile ? 20 : 24} color={isProfile ? "white" : "#9CA3AF"} />
           </View>
-          <Text style={{ color: '#9CA3AF', fontSize: 12, fontWeight: '600' }}>Profile</Text>
+          <Text style={{ color: isProfile ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: isProfile ? '700' : '600' }}>Profile</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => activeTab !== 'Cart' && (token ? navigation.navigate('Cart') : promptSignIn('Sign in to view your cart and place an order.'))}>
-          <View style={{ backgroundColor: activeTab === 'Cart' ? '#FF5C00' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name={activeTab === 'Cart' ? "cart" : "cart-outline"} size={activeTab === 'Cart' ? 20 : 24} color={activeTab === 'Cart' ? "white" : "#9CA3AF"} />
+        <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => !isCart && (token ? navigation.navigate('Cart') : promptSignIn('Sign in to view your cart and place an order.'))}>
+          <View style={{ backgroundColor: isCart ? '#FF5C00' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+            <Ionicons name={isCart ? "cart" : "cart-outline"} size={isCart ? 20 : 24} color={isCart ? "white" : "#9CA3AF"} />
             {cartTotalCount > 0 && (
               <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
                 <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{cartTotalCount}</Text>
               </View>
             )}
           </View>
-          <Text style={{ color: activeTab === 'Cart' ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: activeTab === 'Cart' ? '700' : '600' }}>Cart</Text>
+          <Text style={{ color: isCart ? '#111827' : '#9CA3AF', fontSize: 12, fontWeight: isCart ? '700' : '600' }}>Cart</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -8417,6 +8633,7 @@ export default function App() {
                         <Stack.Screen name="Cart" component={CartScreen} />
                         <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
                         <Stack.Screen name="Bookings" component={BookingsScreen} />
+                        <Stack.Screen name="Profile" component={ProfileScreen} />
                         <Stack.Screen name="Splash" component={SplashScreen} />
                       </>
                     )}

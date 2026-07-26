@@ -20,6 +20,7 @@ const { initDB, db } = require('./db');
 const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
 const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl, delivery: DELIVERY_CFG, customerDeliveryLive } = require('./config');
+const { extractPrimaryColor } = require('./colorExtractor');
 const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout, emailSellerWelcomeLayout } = require('./emailTemplates');
 const {
   validateSubdomain,
@@ -499,9 +500,11 @@ app.post('/api/auth/register', async (req, res) => {
       if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Phone number is required' });
 
       let logoUrl = null;
+      let primaryColor = '#FFFFFF';
       if (logo) {
         try {
           logoUrl = await uploadImageToS3(logo);
+          primaryColor = await extractPrimaryColor(logo);
         } catch (uploadErr) {
           return res.status(400).json({ error: 'Failed to upload brand logo. Try a smaller image or different format.' });
         }
@@ -514,6 +517,7 @@ app.post('/api/auth/register', async (req, res) => {
         hashedPassword,
         phone: String(phone).trim(),
         logoUrl,
+        primaryColor,
         requestedSubdomain: req.body.subdomain,
       });
 
@@ -2334,13 +2338,25 @@ app.put('/api/superadmin/tenants/:id', verifyToken, async (req, res) => {
     if (!finalName) return res.status(400).json({ error: 'Brand name is required' });
 
     let logoUrl = tenant.logo;
+    let newPrimaryColor = null;
     if (logo !== undefined) {
-      logoUrl = logo ? await uploadImageToS3(logo) : null;
+      if (logo) {
+        logoUrl = await uploadImageToS3(logo);
+        newPrimaryColor = await extractPrimaryColor(logo);
+      } else {
+        logoUrl = null;
+      }
     }
 
-    await db.prepare(
-      'UPDATE tenants SET name = ?, phone = ?, logo = COALESCE(?, logo) WHERE id = ?'
-    ).run(finalName, phone ? String(phone).trim() : tenant.phone, logoUrl, tenant.id);
+    if (newPrimaryColor) {
+      await db.prepare(
+        'UPDATE tenants SET name = ?, phone = ?, logo = COALESCE(?, logo), primary_color = ? WHERE id = ?'
+      ).run(finalName, phone ? String(phone).trim() : tenant.phone, logoUrl, newPrimaryColor, tenant.id);
+    } else {
+      await db.prepare(
+        'UPDATE tenants SET name = ?, phone = ?, logo = COALESCE(?, logo) WHERE id = ?'
+      ).run(finalName, phone ? String(phone).trim() : tenant.phone, logoUrl, tenant.id);
+    }
 
     if (tenant.admin_user_id) {
       const adminUpdates = [];
