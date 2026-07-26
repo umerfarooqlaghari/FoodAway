@@ -421,14 +421,14 @@ app.get('/api/public/tenants', async (req, res) => {
     const havingClause = requireStores ? 'HAVING COUNT(DISTINCT s.id) FILTER (WHERE s.is_active = TRUE) > 0' : '';
 
     const rows = await db.prepare(`
-      SELECT t.id, t.name, t.subdomain, t.logo,
+      SELECT t.id, t.name, t.subdomain, t.logo, t.primary_color,
              COUNT(DISTINCT s.id) FILTER (WHERE s.is_active = TRUE)::int AS store_count,
              AVG(s.lat) FILTER (WHERE s.is_active = TRUE) AS avg_lat,
              AVG(s.lng) FILTER (WHERE s.is_active = TRUE) AS avg_lng,
              array_remove(array_agg(DISTINCT s.category) FILTER (WHERE s.is_active = TRUE), NULL) AS categories
       FROM tenants t
       LEFT JOIN stores s ON s.tenant_id = t.id
-      GROUP BY t.id, t.name, t.subdomain, t.logo
+      GROUP BY t.id, t.name, t.subdomain, t.logo, t.primary_color
       ${havingClause}
       ORDER BY t.name ASC
     `).all();
@@ -442,6 +442,7 @@ app.get('/api/public/tenants', async (req, res) => {
         name: row.name,
         subdomain: row.subdomain,
         logo: signedLogo,
+        primary_color: row.primary_color,
         store_count: row.store_count,
         categories: row.categories || [],
         storeUrl: tenantStoreUrl(row.subdomain, { path: '/shop' }),

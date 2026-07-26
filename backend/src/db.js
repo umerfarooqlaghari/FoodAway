@@ -112,6 +112,7 @@ const initDB = async () => {
       subdomain TEXT,
       logo TEXT,
       phone TEXT,
+      primary_color TEXT DEFAULT '#FFFFFF',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
