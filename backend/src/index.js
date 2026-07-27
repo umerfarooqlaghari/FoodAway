@@ -5,10 +5,6 @@ require('dotenv').config();
 const STORE_CATEGORIES = ['Restaurants', 'Bakeries', 'Cafes', 'Grocery Store'];
 
 function resolveStoreDeliverySettings(user, { delivery_enabled, delivery_mode } = {}) {
-  const isSeller = user?.role === 'SellersAdmin' || user?.role === 'SellersStaff';
-  if (isSeller) {
-    return { deliveryEnabled: true, deliveryMode: 'partner' };
-  }
   const deliveryEnabled = Boolean(delivery_enabled);
   return {
     deliveryEnabled,

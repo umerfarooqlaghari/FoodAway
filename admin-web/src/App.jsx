@@ -1983,7 +1983,7 @@ function App() {
           {user?.role === 'SuperAdmin' && (
             <>
               <NavLink to={ROUTES.dashboardUsers} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Tenants</NavLink>
-              <NavLink to={ROUTES.dashboardRiders} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Delivery Riders</NavLink>
+              <NavLink to={ROUTES.dashboardRiders} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)} style={{ display: 'flex', alignItems: 'center' }}>Delivery Riders <span style={{fontSize: '0.65rem', marginLeft: '8px', background: '#FEF3C7', color: '#92400E', padding: '2px 6px', borderRadius: '4px'}}>Coming soon</span></NavLink>
               <NavLink to={ROUTES.dashboardCustomers} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Customers</NavLink>
               <NavLink to={ROUTES.dashboardAppReviews} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>App Reviews</NavLink>
             </>
