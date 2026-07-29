@@ -1278,12 +1278,6 @@ function App() {
                         </svg>
                       </a>
                     </div>
-                    <div className="hero-trust-row" style={fi(500)}>
-                      <span className="hero-trust-label">Aligned with</span>
-                      <span className="hero-trust-badge">UNEP</span>
-                      <span className="hero-trust-badge">FAO</span>
-                      <span className="hero-trust-badge">EU Farm-to-Fork</span>
-                    </div>
                   </div>
 
                   {/* Right: dark impact panel */}
@@ -1536,7 +1530,6 @@ function App() {
               <div className="footer-logo">
                 <GrabengoLogoMark size={24} textClassName="footer-logo-text" />
               </div>
-              <p className="footer-brand-desc">Reducing food waste, one rescue bag at a time. Aligned with UNEP, FAO, and EU Farm-to-Fork principles.</p>
               <div className="footer-badges">
                 <div className="bcorp-badge">
                   <div className="bcorp-circle">B</div>
