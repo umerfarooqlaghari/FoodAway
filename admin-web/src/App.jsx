@@ -152,7 +152,7 @@ function App() {
         setUser(res.data);
         localStorage.setItem('adminUser', JSON.stringify(res.data));
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [token]);
 
   useEffect(() => {
@@ -432,7 +432,7 @@ function App() {
           if (prev.length === res.data.length && lastPrev?.id === lastNew?.id) return prev;
           return res.data;
         });
-      } catch (_) {}
+      } catch (_) { }
     }, 4000);
     return () => clearInterval(interval);
   }, [activeChat, activeTab, token]);
@@ -1423,20 +1423,20 @@ function App() {
             </div>
             <div className="why-stat-strip">
               <div className="why-stat-cell">
-                <div className="why-stat-num why-stat-num--orange">180k+</div>
-                <div className="why-stat-label">Businesses onboard</div>
+                <div className="why-stat-num why-stat-num--orange">50+</div>
+                <div className="why-stat-label">Partner stores</div>
               </div>
               <div className="why-stat-cell">
-                <div className="why-stat-num">2M+</div>
+                <div className="why-stat-num">Daily</div>
                 <div className="why-stat-label">Bags rescued</div>
               </div>
               <div className="why-stat-cell">
-                <div className="why-stat-num why-stat-num--green">£4.2M</div>
-                <div className="why-stat-label">Saved by customers</div>
+                <div className="why-stat-num why-stat-num--green">70%</div>
+                <div className="why-stat-label">Saved on food</div>
               </div>
               <div className="why-stat-cell why-stat-cell--last">
-                <div className="why-stat-num">4.9★</div>
-                <div className="why-stat-label">Average rating</div>
+                <div className="why-stat-num">4.8★</div>
+                <div className="why-stat-label">Top rated</div>
               </div>
             </div>
           </div>
@@ -1632,195 +1632,195 @@ function App() {
     const loginLogo = onTenantSite && tenantBranding?.logo ? tenantBranding.logo : null;
 
     return (
-        <div className="auth-page">
-          <div className="glass-card animate-fade-in auth-card">
-            {loginLogo ? (
-              <img src={loginLogo} alt="Portal Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain', borderRadius: '12px' }} />
-            ) : (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <GrabengoLogoMark size={70} showText={false} />
-              </div>
-            )}
+      <div className="auth-page">
+        <div className="glass-card animate-fade-in auth-card">
+          {loginLogo ? (
+            <img src={loginLogo} alt="Portal Logo" style={{ height: '70px', marginBottom: '1.5rem', objectFit: 'contain', borderRadius: '12px' }} />
+          ) : (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <GrabengoLogoMark size={70} showText={false} />
+            </div>
+          )}
 
-            {forgotPasswordStep === 'login' && (
-              <>
-                <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>{portalTitle}</h2>
-                <p style={{ color: '#6B7280', marginBottom: '2rem' }}>{portalSubtitle}</p>
+          {forgotPasswordStep === 'login' && (
+            <>
+              <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>{portalTitle}</h2>
+              <p style={{ color: '#6B7280', marginBottom: '2rem' }}>{portalSubtitle}</p>
 
-                {onTenantSite && tenantBranding?.error && (
-                  <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>
-                    Store not found. Check your store link or contact support.
-                  </div>
-                )}
+              {onTenantSite && tenantBranding?.error && (
+                <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>
+                  Store not found. Check your store link or contact support.
+                </div>
+              )}
 
-                {authError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{authError}</div>}
+              {authError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{authError}</div>}
 
-                <form onSubmit={handleLogin} style={{ width: '100%' }}>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <input
-                      type="email"
-                      placeholder="Email Address"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }}
-                      required
-                    />
-                  </div>
-                  <div style={{ marginBottom: '1rem', position: 'relative' }}>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Password"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#4B5563', display: 'flex', alignItems: 'center' }}
-                    >
-                      {showPassword ? (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
-                      ) : (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                      )}
-                    </button>
-                  </div>
-                  <div style={{ textAlign: 'right', marginBottom: '1.5rem' }}>
-                    <span onClick={() => { setForgotPasswordStep('email'); setResetError(''); setResetSuccess(''); }} style={{ color: 'var(--brand-orange)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '700' }}>Forgot Password?</span>
-                  </div>
-                  <button type="submit" className="btn-primary" disabled={loginLoading} style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: loginLoading ? 'not-allowed' : 'pointer', opacity: loginLoading ? 0.75 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    {loginLoading && <div className="portal-spinner portal-spinner-sm" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,0.3)' }} />}
-                    {loginLoading ? 'Signing in...' : 'Login'}
+              <form onSubmit={handleLogin} style={{ width: '100%' }}>
+                <div style={{ marginBottom: '1rem' }}>
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }}
+                    required
+                  />
+                </div>
+                <div style={{ marginBottom: '1rem', position: 'relative' }}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#4B5563', display: 'flex', alignItems: 'center' }}
+                  >
+                    {showPassword ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                    )}
                   </button>
+                </div>
+                <div style={{ textAlign: 'right', marginBottom: '1.5rem' }}>
+                  <span onClick={() => { setForgotPasswordStep('email'); setResetError(''); setResetSuccess(''); }} style={{ color: 'var(--brand-orange)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '700' }}>Forgot Password?</span>
+                </div>
+                <button type="submit" className="btn-primary" disabled={loginLoading} style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: loginLoading ? 'not-allowed' : 'pointer', opacity: loginLoading ? 0.75 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  {loginLoading && <div className="portal-spinner portal-spinner-sm" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,0.3)' }} />}
+                  {loginLoading ? 'Signing in...' : 'Login'}
+                </button>
 
-                  {onMainSite && (
-                    <Link
-                      to={ROUTES.register}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        padding: '0.75rem',
-                        borderRadius: 'var(--radius-md)',
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--brand-orange)',
-                        cursor: 'pointer',
-                        fontWeight: '700',
-                        marginTop: '0.75rem',
-                        textDecoration: 'none',
-                        textAlign: 'center',
-                      }}
-                    >
-                      Register your business
-                    </Link>
-                  )}
-
+                {onMainSite && (
                   <Link
-                    to={onMainSite ? ROUTES.home : ROUTES.shop}
+                    to={ROUTES.register}
                     style={{
                       display: 'block',
                       width: '100%',
                       padding: '0.75rem',
                       borderRadius: 'var(--radius-md)',
-                      border: '1px solid #E5E7EB',
+                      border: 'none',
                       background: 'transparent',
-                      color: '#374151',
+                      color: 'var(--brand-orange)',
                       cursor: 'pointer',
-                      fontWeight: '600',
-                      marginTop: '1rem',
-                      transition: 'all 0.2s',
+                      fontWeight: '700',
+                      marginTop: '0.75rem',
                       textDecoration: 'none',
                       textAlign: 'center',
                     }}
                   >
-                    Back to {onMainSite ? 'Home' : 'Storefront'}
+                    Register your business
                   </Link>
-                </form>
-              </>
-            )}
+                )}
 
-            {forgotPasswordStep === 'email' && (
-              <>
-                <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Reset Password</h2>
-                <p style={{ color: '#6B7280', marginBottom: '2rem' }}>Enter your email to receive a 6-digit OTP verification code</p>
+                <Link
+                  to={onMainSite ? ROUTES.home : ROUTES.shop}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid #E5E7EB',
+                    background: 'transparent',
+                    color: '#374151',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    marginTop: '1rem',
+                    transition: 'all 0.2s',
+                    textDecoration: 'none',
+                    textAlign: 'center',
+                  }}
+                >
+                  Back to {onMainSite ? 'Home' : 'Storefront'}
+                </Link>
+              </form>
+            </>
+          )}
 
-                {resetError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{resetError}</div>}
-                {resetSuccess && <div style={{ color: '#065F46', marginBottom: '1rem', padding: '0.5rem', background: '#D1FAE5', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{resetSuccess}</div>}
+          {forgotPasswordStep === 'email' && (
+            <>
+              <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Reset Password</h2>
+              <p style={{ color: '#6B7280', marginBottom: '2rem' }}>Enter your email to receive a 6-digit OTP verification code</p>
 
-                <form onSubmit={handleSendOtp} style={{ width: '100%' }}>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <input
-                      type="email"
-                      placeholder="Email Address"
-                      value={resetEmail}
-                      onChange={e => setResetEmail(e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }}
-                      required
-                    />
-                  </div>
-                  <button type="submit" className="btn-primary" style={{ width: '100%', marginBottom: '1rem', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700' }}>Send Verification Code</button>
-                  <button type="button" onClick={() => setForgotPasswordStep('login')} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7EB', background: 'transparent', color: '#374151', cursor: 'pointer', fontWeight: '600' }}>Back to Login</button>
-                </form>
-              </>
-            )}
+              {resetError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{resetError}</div>}
+              {resetSuccess && <div style={{ color: '#065F46', marginBottom: '1rem', padding: '0.5rem', background: '#D1FAE5', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{resetSuccess}</div>}
 
-            {forgotPasswordStep === 'reset' && (
-              <>
-                <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Verify OTP</h2>
-                <p style={{ color: '#6B7280', marginBottom: '2rem' }}>Enter the OTP sent to your email and choose a new password</p>
+              <form onSubmit={handleSendOtp} style={{ width: '100%' }}>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={resetEmail}
+                    onChange={e => setResetEmail(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }}
+                    required
+                  />
+                </div>
+                <button type="submit" className="btn-primary" style={{ width: '100%', marginBottom: '1rem', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700' }}>Send Verification Code</button>
+                <button type="button" onClick={() => setForgotPasswordStep('login')} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7EB', background: 'transparent', color: '#374151', cursor: 'pointer', fontWeight: '600' }}>Back to Login</button>
+              </form>
+            </>
+          )}
 
-                {resetError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{resetError}</div>}
-                {resetSuccess && <div style={{ color: '#065F46', marginBottom: '1rem', padding: '0.5rem', background: '#D1FAE5', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{resetSuccess}</div>}
+          {forgotPasswordStep === 'reset' && (
+            <>
+              <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Verify OTP</h2>
+              <p style={{ color: '#6B7280', marginBottom: '2rem' }}>Enter the OTP sent to your email and choose a new password</p>
 
-                <form onSubmit={handleResetPassword} style={{ width: '100%' }}>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <input
-                      type="email"
-                      value={resetEmail}
-                      disabled
-                      style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F3F4F6', color: '#374151', cursor: 'not-allowed' }}
-                    />
-                  </div>
-                  <div style={{ marginBottom: '1rem' }}>
-                    <input
-                      type="text"
-                      placeholder="6-Digit OTP Code"
-                      value={resetOtp}
-                      onChange={e => setResetOtp(e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', letterSpacing: '2px', fontWeight: '700', textAlign: 'center' }}
-                      required
-                    />
-                  </div>
-                  <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      placeholder="New Password"
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#4B5563', display: 'flex', alignItems: 'center' }}
-                    >
-                      {showNewPassword ? (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
-                      ) : (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                      )}
-                    </button>
-                  </div>
-                  <button type="submit" className="btn-primary" style={{ width: '100%', marginBottom: '1rem', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700' }}>Reset Password</button>
-                  <button type="button" onClick={() => setForgotPasswordStep('login')} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7EB', background: 'transparent', color: '#374151', cursor: 'pointer', fontWeight: '600' }}>Back to Login</button>
-                </form>
-              </>
-            )}
-          </div>
+              {resetError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{resetError}</div>}
+              {resetSuccess && <div style={{ color: '#065F46', marginBottom: '1rem', padding: '0.5rem', background: '#D1FAE5', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{resetSuccess}</div>}
+
+              <form onSubmit={handleResetPassword} style={{ width: '100%' }}>
+                <div style={{ marginBottom: '1rem' }}>
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    disabled
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F3F4F6', color: '#374151', cursor: 'not-allowed' }}
+                  />
+                </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <input
+                    type="text"
+                    placeholder="6-Digit OTP Code"
+                    value={resetOtp}
+                    onChange={e => setResetOtp(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', letterSpacing: '2px', fontWeight: '700', textAlign: 'center' }}
+                    required
+                  />
+                </div>
+                <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    placeholder="New Password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#4B5563', display: 'flex', alignItems: 'center' }}
+                  >
+                    {showNewPassword ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                    )}
+                  </button>
+                </div>
+                <button type="submit" className="btn-primary" style={{ width: '100%', marginBottom: '1rem', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700' }}>Reset Password</button>
+                <button type="button" onClick={() => setForgotPasswordStep('login')} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7EB', background: 'transparent', color: '#374151', cursor: 'pointer', fontWeight: '600' }}>Back to Login</button>
+              </form>
+            </>
+          )}
         </div>
+      </div>
     );
   };
 
@@ -1857,87 +1857,87 @@ function App() {
   };
 
   const renderRegisterPage = () => (
-        <div className="auth-page">
-          <div className="glass-card animate-fade-in auth-card auth-card--wide">
-            <div style={{ marginBottom: '1.5rem' }}>
-              <GrabengoLogoMark size={70} showText={false} />
-            </div>
-            <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Register as Seller</h2>
-            <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on Grabengo and start selling surplus food</p>
-
-            {registerError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerError}</div>}
-
-            <form onSubmit={handleSellerRegister} style={{ width: '100%', textAlign: 'left' }}>
-              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Name *</label>
-              <input type="text" placeholder="e.g. KFC, Starbucks" value={registerBrand} onChange={e => setRegisterBrand(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '0.5rem' }} required />
-              {registerSubdomainPreview && (
-                <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '1rem' }}>
-                  Your store link will be similar to: <strong style={{ color: 'var(--brand-orange)' }}>{tenantStoreUrl(registerSubdomainPreview)}</strong>
-                </p>
-              )}
-
-              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Email Address *</label>
-              <input type="email" placeholder="admin@brand.com" value={registerEmail} onChange={e => setRegisterEmail(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
-
-              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Phone Number *</label>
-              <input type="tel" placeholder="+44 7700 000000" value={registerPhone} onChange={e => setRegisterPhone(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
-
-              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Password *</label>
-              <div style={{ marginBottom: '1rem', position: 'relative' }}>
-                <input type={showRegisterPassword ? 'text' : 'password'} placeholder="Password" value={registerPassword} onChange={e => setRegisterPassword(e.target.value)} style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }} required />
-                <button type="button" onClick={() => setShowRegisterPassword(!showRegisterPassword)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#4B5563' }}>
-                  {showRegisterPassword ? 'Hide' : 'Show'}
-                </button>
-              </div>
-
-              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Logo (optional)</label>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-                <input type="text" placeholder="Image URL or upload below..." value={registerLogo} onChange={e => setRegisterLogo(e.target.value)} style={{ flex: 1, padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }} />
-                <label style={{ cursor: 'pointer', padding: '0.75rem 1rem', background: '#E5E7EB', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
-                  Upload
-                  <input type="file" accept="image/*" onChange={e => handleSingleImageUpload(e, setRegisterLogo)} style={{ display: 'none' }} />
-                </label>
-              </div>
-              {registerLogo && (
-                <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <img src={registerLogo} alt="Logo preview" style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #E5E7EB' }} />
-                  <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>Logo preview</span>
-                </div>
-              )}
-
-              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>First Store Name (optional)</label>
-              <input type="text" placeholder="Main branch" value={registerStoreName} onChange={e => setRegisterStoreName(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} />
-
-              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Store Address (recommended)</label>
-              <input type="text" placeholder="Street, city, postcode" value={registerStoreAddress} onChange={e => setRegisterStoreAddress(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} />
-
-              {registerStoreAddress.trim() && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Pin Store on Map</label>
-                  <LocationMapPicker
-                    lat={registerStoreLat}
-                    lng={registerStoreLng}
-                    addressHint={registerStoreAddress}
-                    onChange={(lat, lng) => { setRegisterStoreLat(lat); setRegisterStoreLng(lng); }}
-                    onAddressChange={(addr) => setRegisterStoreAddress(addr)}
-                  />
-                </div>
-              )}
-
-              <button type="submit" className="btn-primary" disabled={registerLoading} style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: registerLoading ? 'not-allowed' : 'pointer', opacity: registerLoading ? 0.75 : 1 }}>
-                {registerLoading ? 'Creating account...' : 'Create Seller Account'}
-              </button>
-
-              <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#6B7280', textAlign: 'center' }}>
-                After registration, your store link will be emailed to you. Sign in on your dedicated store portal — not on this page.
-              </p>
-              <Link to={ROUTES.home} style={{ display: 'block', width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: 'none', background: 'transparent', color: '#6B7280', cursor: 'pointer', fontWeight: '600', marginTop: '0.5rem', textDecoration: 'none', textAlign: 'center' }}>
-                Back to Home
-              </Link>
-            </form>
-            {renderRegisterCompleteModal()}
-          </div>
+    <div className="auth-page">
+      <div className="glass-card animate-fade-in auth-card auth-card--wide">
+        <div style={{ marginBottom: '1.5rem' }}>
+          <GrabengoLogoMark size={70} showText={false} />
         </div>
+        <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Register as Seller</h2>
+        <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on Grabengo and start selling surplus food</p>
+
+        {registerError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerError}</div>}
+
+        <form onSubmit={handleSellerRegister} style={{ width: '100%', textAlign: 'left' }}>
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Name *</label>
+          <input type="text" placeholder="e.g. KFC, Starbucks" value={registerBrand} onChange={e => setRegisterBrand(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '0.5rem' }} required />
+          {registerSubdomainPreview && (
+            <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '1rem' }}>
+              Your store link will be similar to: <strong style={{ color: 'var(--brand-orange)' }}>{tenantStoreUrl(registerSubdomainPreview)}</strong>
+            </p>
+          )}
+
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Email Address *</label>
+          <input type="email" placeholder="admin@brand.com" value={registerEmail} onChange={e => setRegisterEmail(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
+
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Phone Number *</label>
+          <input type="tel" placeholder="+44 7700 000000" value={registerPhone} onChange={e => setRegisterPhone(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
+
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Password *</label>
+          <div style={{ marginBottom: '1rem', position: 'relative' }}>
+            <input type={showRegisterPassword ? 'text' : 'password'} placeholder="Password" value={registerPassword} onChange={e => setRegisterPassword(e.target.value)} style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }} required />
+            <button type="button" onClick={() => setShowRegisterPassword(!showRegisterPassword)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#4B5563' }}>
+              {showRegisterPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
+
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Logo (optional)</label>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+            <input type="text" placeholder="Image URL or upload below..." value={registerLogo} onChange={e => setRegisterLogo(e.target.value)} style={{ flex: 1, padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }} />
+            <label style={{ cursor: 'pointer', padding: '0.75rem 1rem', background: '#E5E7EB', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+              Upload
+              <input type="file" accept="image/*" onChange={e => handleSingleImageUpload(e, setRegisterLogo)} style={{ display: 'none' }} />
+            </label>
+          </div>
+          {registerLogo && (
+            <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <img src={registerLogo} alt="Logo preview" style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #E5E7EB' }} />
+              <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>Logo preview</span>
+            </div>
+          )}
+
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>First Store Name (optional)</label>
+          <input type="text" placeholder="Main branch" value={registerStoreName} onChange={e => setRegisterStoreName(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} />
+
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Store Address (recommended)</label>
+          <input type="text" placeholder="Street, city, postcode" value={registerStoreAddress} onChange={e => setRegisterStoreAddress(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} />
+
+          {registerStoreAddress.trim() && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Pin Store on Map</label>
+              <LocationMapPicker
+                lat={registerStoreLat}
+                lng={registerStoreLng}
+                addressHint={registerStoreAddress}
+                onChange={(lat, lng) => { setRegisterStoreLat(lat); setRegisterStoreLng(lng); }}
+                onAddressChange={(addr) => setRegisterStoreAddress(addr)}
+              />
+            </div>
+          )}
+
+          <button type="submit" className="btn-primary" disabled={registerLoading} style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: registerLoading ? 'not-allowed' : 'pointer', opacity: registerLoading ? 0.75 : 1 }}>
+            {registerLoading ? 'Creating account...' : 'Create Seller Account'}
+          </button>
+
+          <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#6B7280', textAlign: 'center' }}>
+            After registration, your store link will be emailed to you. Sign in on your dedicated store portal — not on this page.
+          </p>
+          <Link to={ROUTES.home} style={{ display: 'block', width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: 'none', background: 'transparent', color: '#6B7280', cursor: 'pointer', fontWeight: '600', marginTop: '0.5rem', textDecoration: 'none', textAlign: 'center' }}>
+            Back to Home
+          </Link>
+        </form>
+        {renderRegisterCompleteModal()}
+      </div>
+    </div>
   );
 
   const renderDashboardPortal = () => (
@@ -1983,7 +1983,7 @@ function App() {
           {user?.role === 'SuperAdmin' && (
             <>
               <NavLink to={ROUTES.dashboardUsers} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Tenants</NavLink>
-              <NavLink to={ROUTES.dashboardRiders} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)} style={{ display: 'flex', alignItems: 'center' }}>Delivery Riders <span style={{fontSize: '0.65rem', marginLeft: '8px', background: '#FEF3C7', color: '#92400E', padding: '2px 6px', borderRadius: '4px'}}>Coming soon</span></NavLink>
+              <NavLink to={ROUTES.dashboardRiders} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)} style={{ display: 'flex', alignItems: 'center' }}>Delivery Riders <span style={{ fontSize: '0.65rem', marginLeft: '8px', background: '#FEF3C7', color: '#92400E', padding: '2px 6px', borderRadius: '4px' }}>Coming soon</span></NavLink>
               <NavLink to={ROUTES.dashboardCustomers} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Customers</NavLink>
               <NavLink to={ROUTES.dashboardAppReviews} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>App Reviews</NavLink>
             </>
@@ -2069,15 +2069,15 @@ function App() {
               {tabLoading.dashboard ? (
                 <TabLoading label="Loading chart data..." />
               ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={stats.dailySales} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="revenue" stroke="#FF5C00" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
-                </LineChart>
-              </ResponsiveContainer>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={stats.dailySales} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="revenue" stroke="#FF5C00" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               )}
             </div>
           </div>
@@ -2114,478 +2114,478 @@ function App() {
             {tabLoading.stores ? (
               <TabLoading label="Loading store data..." />
             ) : (
-            <>
-            {/* ── STORES TAB ── */}
-            {storeSubTab === 'stores' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                  <button className="btn-primary" onClick={() => { setEditingStore(null); setNewStoreName(''); setNewStoreAddress(''); setNewStoreImage(null); setShowStoreModal(true); }}>+ Add Store</button>
-                </div>
-                <div className="glass-card portal-table" style={{ padding: '0' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Store</th>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Address</th>
-                        <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Status</th>
-                        <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stores.length === 0 ? (
-                        <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No stores yet. Add your first store!</td></tr>
-                      ) : stores.map((store, idx) => (
-                        <tr key={store.id} style={{ borderBottom: idx < stores.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
-                          <td style={{ padding: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              {store.image ? (
-                                <img src={store.image} alt={store.name} style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
-                              ) : (
-                                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>🏪</div>
-                              )}
-                              <strong>{store.name}</strong>
-                            </div>
-                          </td>
-                          <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{store.address}</td>
-                          <td style={{ padding: '1rem', textAlign: 'center' }}>
-                            <button
-                              onClick={() => handleToggleStoreStatus(store.id, store.is_active)}
-                              style={{ padding: '0.3rem 0.9rem', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.8rem', background: store.is_active ? '#D1FAE5' : '#FEE2E2', color: store.is_active ? '#065F46' : '#991B1B' }}>
-                              {store.is_active ? 'Open' : 'Closed'}
-                            </button>
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                              <button onClick={() => { setEditingStore(store); setNewStoreName(store.name); setNewStoreAddress(store.address); setNewStoreImage(store.image); setShowStoreModal(true); }} style={{ padding: '0.4rem 0.9rem', background: '#EEF2FF', color: '#4338CA', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Edit</button>
-                              <button onClick={() => handleDeleteStore(store.id)} style={{ padding: '0.4rem 0.9rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+              <>
+                {/* ── STORES TAB ── */}
+                {storeSubTab === 'stores' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                      <button className="btn-primary" onClick={() => { setEditingStore(null); setNewStoreName(''); setNewStoreAddress(''); setNewStoreImage(null); setShowStoreModal(true); }}>+ Add Store</button>
+                    </div>
+                    <div className="glass-card portal-table" style={{ padding: '0' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Store</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Address</th>
+                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Status</th>
+                            <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stores.length === 0 ? (
+                            <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No stores yet. Add your first store!</td></tr>
+                          ) : stores.map((store, idx) => (
+                            <tr key={store.id} style={{ borderBottom: idx < stores.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                              <td style={{ padding: '1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                  {store.image ? (
+                                    <img src={store.image} alt={store.name} style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
+                                  ) : (
+                                    <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>🏪</div>
+                                  )}
+                                  <strong>{store.name}</strong>
+                                </div>
+                              </td>
+                              <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{store.address}</td>
+                              <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                <button
+                                  onClick={() => handleToggleStoreStatus(store.id, store.is_active)}
+                                  style={{ padding: '0.3rem 0.9rem', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.8rem', background: store.is_active ? '#D1FAE5' : '#FEE2E2', color: store.is_active ? '#065F46' : '#991B1B' }}>
+                                  {store.is_active ? 'Open' : 'Closed'}
+                                </button>
+                              </td>
+                              <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                  <button onClick={() => { setEditingStore(store); setNewStoreName(store.name); setNewStoreAddress(store.address); setNewStoreImage(store.image); setShowStoreModal(true); }} style={{ padding: '0.4rem 0.9rem', background: '#EEF2FF', color: '#4338CA', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Edit</button>
+                                  <button onClick={() => handleDeleteStore(store.id)} style={{ padding: '0.4rem 0.9rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Delete</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
-            {/* ── SURPRISE BAGS TAB ── */}
-            {storeSubTab === 'bags' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                  <button className="btn-primary" onClick={() => { setEditingBag(null); setBagStoreId(''); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setShowBagModal(true); }}>+ Add Bag</button>
-                </div>
-                <div className="glass-card portal-table" style={{ padding: '0' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Store</th>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Price</th>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Qty</th>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Pickup</th>
-                        <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bags.length === 0 ? (
-                        <tr><td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No surprise bags yet.</td></tr>
-                      ) : bags.map((bag, idx) => (
-                        <tr key={bag.id} style={{ borderBottom: idx < bags.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
-                          <td style={{ padding: '1rem', fontWeight: '600' }}>{bag.store_name}</td>
-                          <td style={{ padding: '1rem' }}>
-                            {bag.original_price && <span style={{ textDecoration: 'line-through', color: '#9CA3AF', marginRight: '6px', fontSize: '0.85rem' }}>{currencySymbol}{bag.original_price.toFixed(2)}</span>}
-                            <span style={{ color: 'var(--accent-primary)', fontWeight: '700' }}>{currencySymbol}{bag.price.toFixed(2)}</span>
-                          </td>
-                          <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{bag.quantity}</td>
-                          <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{bag.pickup_time}</td>
-                          <td style={{ padding: '1rem', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                              <button onClick={() => {
-                                const details = parsePickupTimeDetails(bag.pickup_time);
-                                let parsedImgs = [];
-                                try {
-                                  parsedImgs = bag.images ? (typeof bag.images === 'string' ? JSON.parse(bag.images) : bag.images) : [];
-                                } catch (e) { }
-                                setEditingBag({
-                                  ...bag,
-                                  images: parsedImgs,
-                                  _pickupDays: details.days,
-                                  _pickupFrom: details.from,
-                                  _pickupTo: details.to
-                                });
-                                setShowBagModal(true);
-                              }} style={{ padding: '0.4rem 0.9rem', background: '#EEF2FF', color: '#4338CA', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Edit</button>
-                              <button onClick={() => handleDeleteBag(bag.id)} style={{ padding: '0.4rem 0.9rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                {/* ── SURPRISE BAGS TAB ── */}
+                {storeSubTab === 'bags' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                      <button className="btn-primary" onClick={() => { setEditingBag(null); setBagStoreId(''); setBagPrice(''); setBagOriginalPrice(''); setBagQuantity(''); setPickupTime(''); setBagDescription(''); setBagImages([]); setShowBagModal(true); }}>+ Add Bag</button>
+                    </div>
+                    <div className="glass-card portal-table" style={{ padding: '0' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Store</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Price</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Qty</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Pickup</th>
+                            <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bags.length === 0 ? (
+                            <tr><td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No surprise bags yet.</td></tr>
+                          ) : bags.map((bag, idx) => (
+                            <tr key={bag.id} style={{ borderBottom: idx < bags.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                              <td style={{ padding: '1rem', fontWeight: '600' }}>{bag.store_name}</td>
+                              <td style={{ padding: '1rem' }}>
+                                {bag.original_price && <span style={{ textDecoration: 'line-through', color: '#9CA3AF', marginRight: '6px', fontSize: '0.85rem' }}>{currencySymbol}{bag.original_price.toFixed(2)}</span>}
+                                <span style={{ color: 'var(--accent-primary)', fontWeight: '700' }}>{currencySymbol}{bag.price.toFixed(2)}</span>
+                              </td>
+                              <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{bag.quantity}</td>
+                              <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{bag.pickup_time}</td>
+                              <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                  <button onClick={() => {
+                                    const details = parsePickupTimeDetails(bag.pickup_time);
+                                    let parsedImgs = [];
+                                    try {
+                                      parsedImgs = bag.images ? (typeof bag.images === 'string' ? JSON.parse(bag.images) : bag.images) : [];
+                                    } catch (e) { }
+                                    setEditingBag({
+                                      ...bag,
+                                      images: parsedImgs,
+                                      _pickupDays: details.days,
+                                      _pickupFrom: details.from,
+                                      _pickupTo: details.to
+                                    });
+                                    setShowBagModal(true);
+                                  }} style={{ padding: '0.4rem 0.9rem', background: '#EEF2FF', color: '#4338CA', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Edit</button>
+                                  <button onClick={() => handleDeleteBag(bag.id)} style={{ padding: '0.4rem 0.9rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Delete</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
-            {/* ── OPEN FOOD TAB ── */}
-            {storeSubTab === 'food' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                  <button className="btn-primary" style={{ background: '#059669' }} onClick={() => { setEditingFood(null); setFoodForm({ store_id: '', name: '', price: '', original_price: '', quantity: '', description: '', category: 'Other', images: [] }); setShowFoodModal(true); }}>+ Add Product</button>
-                </div>
-                <div className="glass-card portal-table" style={{ padding: '0' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Item</th>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Store</th>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Category</th>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Price</th>
-                        <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Qty</th>
-                        <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Status</th>
-                        <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {foodItems.length === 0 ? (
-                        <tr><td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No products yet.</td></tr>
-                      ) : foodItems.map((item, idx) => (
-                        <tr key={item.id} style={{ borderBottom: idx < foodItems.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
-                          <td style={{ padding: '1rem', fontWeight: '600' }}>{item.name}</td>
-                          <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{item.store_name}</td>
-                          <td style={{ padding: '1rem' }}>
-                            <span style={{ background: '#ECFDF5', color: '#065F46', padding: '0.2rem 0.6rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '600' }}>{item.category}</span>
-                          </td>
-                          <td style={{ padding: '1rem' }}>
-                            {item.original_price && <span style={{ textDecoration: 'line-through', color: '#9CA3AF', marginRight: '6px', fontSize: '0.85rem' }}>{currencySymbol}{parseFloat(item.original_price).toFixed(2)}</span>}
-                            <span style={{ color: '#059669', fontWeight: '700' }}>{currencySymbol}{parseFloat(item.price).toFixed(2)}</span>
-                          </td>
-                          <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{item.quantity}</td>
-                          <td style={{ padding: '1rem', textAlign: 'center' }}>
-                            <span style={{ padding: '0.2rem 0.7rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '700', background: item.is_available ? '#D1FAE5' : '#FEE2E2', color: item.is_available ? '#065F46' : '#991B1B' }}>
-                              {item.is_available ? 'Available' : 'Unavailable'}
+                {/* ── OPEN FOOD TAB ── */}
+                {storeSubTab === 'food' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                      <button className="btn-primary" style={{ background: '#059669' }} onClick={() => { setEditingFood(null); setFoodForm({ store_id: '', name: '', price: '', original_price: '', quantity: '', description: '', category: 'Other', images: [] }); setShowFoodModal(true); }}>+ Add Product</button>
+                    </div>
+                    <div className="glass-card portal-table" style={{ padding: '0' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Item</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Store</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Category</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Price</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Qty</th>
+                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Status</th>
+                            <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {foodItems.length === 0 ? (
+                            <tr><td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No products yet.</td></tr>
+                          ) : foodItems.map((item, idx) => (
+                            <tr key={item.id} style={{ borderBottom: idx < foodItems.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                              <td style={{ padding: '1rem', fontWeight: '600' }}>{item.name}</td>
+                              <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{item.store_name}</td>
+                              <td style={{ padding: '1rem' }}>
+                                <span style={{ background: '#ECFDF5', color: '#065F46', padding: '0.2rem 0.6rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '600' }}>{item.category}</span>
+                              </td>
+                              <td style={{ padding: '1rem' }}>
+                                {item.original_price && <span style={{ textDecoration: 'line-through', color: '#9CA3AF', marginRight: '6px', fontSize: '0.85rem' }}>{currencySymbol}{parseFloat(item.original_price).toFixed(2)}</span>}
+                                <span style={{ color: '#059669', fontWeight: '700' }}>{currencySymbol}{parseFloat(item.price).toFixed(2)}</span>
+                              </td>
+                              <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{item.quantity}</td>
+                              <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                <span style={{ padding: '0.2rem 0.7rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '700', background: item.is_available ? '#D1FAE5' : '#FEE2E2', color: item.is_available ? '#065F46' : '#991B1B' }}>
+                                  {item.is_available ? 'Available' : 'Unavailable'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                  <button onClick={() => {
+                                    let parsedImgs = [];
+                                    try {
+                                      parsedImgs = item.images ? (typeof item.images === 'string' ? JSON.parse(item.images) : item.images) : [];
+                                    } catch (e) { }
+                                    setEditingFood(item);
+                                    setFoodForm({ store_id: item.store_id, name: item.name, price: item.price, original_price: item.original_price || '', quantity: item.quantity, description: item.description || '', category: normalizeProductCategory(item.category || 'Other'), images: parsedImgs });
+                                    setShowFoodModal(true);
+                                  }} style={{ padding: '0.4rem 0.9rem', background: '#ECFDF5', color: '#065F46', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Edit</button>
+                                  <button onClick={() => handleDeleteFoodItem(item.id)} style={{ padding: '0.4rem 0.9rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Delete</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── STORE MODAL ── */}
+                {showStoreModal && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
+                    <div className="glass-card portal-modal">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ margin: 0 }}>{editingStore ? 'Edit Store' : 'Add New Store'}</h3>
+                        <button type="button" disabled={storeSaving} onClick={() => setShowStoreModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: storeSaving ? 'not-allowed' : 'pointer', color: 'var(--text-secondary)', opacity: storeSaving ? 0.5 : 1 }}>×</button>
+                      </div>
+                      <form onSubmit={editingStore ? handleUpdateStore : handleCreateStore}>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Name *</label>
+                          <input type="text" value={editingStore ? editingStore.name : newStoreName} onChange={e => editingStore ? setEditingStore({ ...editingStore, name: e.target.value }) : setNewStoreName(e.target.value)} disabled={storeSaving} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.95rem' }} required />
+                        </div>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Address *</label>
+                          <input type="text" value={editingStore ? editingStore.address : newStoreAddress} onChange={e => editingStore ? setEditingStore({ ...editingStore, address: e.target.value }) : setNewStoreAddress(e.target.value)} disabled={storeSaving} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.95rem' }} required />
+                        </div>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Image</label>
+                          {(editingStore ? editingStore.image : newStoreImage) ? (
+                            <div style={{ position: 'relative', width: '100%', height: '160px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: '0.5rem' }}>
+                              <img src={editingStore ? editingStore.image : newStoreImage} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <button type="button" onClick={() => editingStore ? setEditingStore({ ...editingStore, image: null }) : setNewStoreImage(null)} disabled={storeSaving} style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: storeSaving ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>×</button>
+                            </div>
+                          ) : (
+                            <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: storeSaving ? 'not-allowed' : 'pointer', textAlign: 'center', opacity: storeSaving ? 0.6 : 1 }}>
+                              <span style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>📸</span>
+                              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Choose store image</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Click or drag to upload</span>
+                              <input type="file" accept="image/*" disabled={storeSaving} onChange={(e) => editingStore ? handleSingleImageUpload(e, (b64) => setEditingStore({ ...editingStore, image: b64 })) : handleSingleImageUpload(e, setNewStoreImage)} style={{ display: 'none' }} />
+                            </label>
+                          )}
+                        </div>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Location *</label>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>
+                            Pan the map, then click where your store is — or drag the pin
+                          </p>
+                          {(() => {
+                            const pickerLat = editingStore ? (editingStore.lat ?? 51.5074) : newStoreLat;
+                            const pickerLng = editingStore ? (editingStore.lng ?? -0.1278) : newStoreLng;
+                            return (
+                              <>
+                                <div style={{ height: '220px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', cursor: 'crosshair' }}>
+                                  <Map
+                                    key={editingStore ? `store-map-${editingStore.id}` : 'store-map-new'}
+                                    ref={storeMapRef}
+                                    mapboxAccessToken={MAPBOX_TOKEN}
+                                    initialViewState={{ longitude: pickerLng, latitude: pickerLat, zoom: 14 }}
+                                    style={{ width: '100%', height: '100%' }}
+                                    mapStyle="mapbox://styles/mapbox/streets-v12"
+                                    onClick={(e) => setStoreMapCoords(e.lngLat.lat, e.lngLat.lng)}
+                                  >
+                                    <Marker
+                                      longitude={pickerLng}
+                                      latitude={pickerLat}
+                                      draggable
+                                      onDragEnd={(e) => setStoreMapCoords(e.lngLat.lat, e.lngLat.lng)}
+                                      color="#FF5C00"
+                                    />
+                                  </Map>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={useCurrentStoreLocationWeb}
+                                  disabled={storeSaving}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                                    width: '100%', marginTop: '0.6rem', padding: '0.6rem',
+                                    background: '#FFFFFF', border: '1px solid rgba(255, 92, 0, 0.15)', borderRadius: '8px',
+                                    color: '#FF5C00', fontWeight: '700', fontSize: '0.85rem', cursor: storeSaving ? 'not-allowed' : 'pointer',
+                                    opacity: storeSaving ? 0.6 : 1,
+                                  }}
+                                >
+                                  Use Current Location
+                                </button>
+                                <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'center', margin: '0.4rem 0 0' }}>
+                                  {pickerLat.toFixed(5)}, {pickerLng.toFixed(5)}
+                                </p>
+                              </>
+                            );
+                          })()}
+                        </div>
+                        {!CUSTOMER_DELIVERY_LIVE && (
+                          <div style={{ marginBottom: '1.25rem', padding: '0.9rem 1rem', borderRadius: '12px', background: '#FFF7ED', border: '1px solid #FED7AA', color: '#9A3412' }}>
+                            <strong style={{ display: 'block', marginBottom: '0.25rem' }}>Delivery coming soon</strong>
+                            <span style={{ fontSize: '0.82rem', lineHeight: 1.45 }}>
+                              Customer delivery checkout is not live yet. Store pickup works now, and Grabengo partner riders are wired on the backend for when delivery launches.
                             </span>
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                              <button onClick={() => {
-                                let parsedImgs = [];
-                                try {
-                                  parsedImgs = item.images ? (typeof item.images === 'string' ? JSON.parse(item.images) : item.images) : [];
-                                } catch (e) { }
-                                setEditingFood(item);
-                                setFoodForm({ store_id: item.store_id, name: item.name, price: item.price, original_price: item.original_price || '', quantity: item.quantity, description: item.description || '', category: normalizeProductCategory(item.category || 'Other'), images: parsedImgs });
-                                setShowFoodModal(true);
-                              }} style={{ padding: '0.4rem 0.9rem', background: '#ECFDF5', color: '#065F46', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Edit</button>
-                              <button onClick={() => handleDeleteFoodItem(item.id)} style={{ padding: '0.4rem 0.9rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* ── STORE MODAL ── */}
-            {showStoreModal && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
-                <div className="glass-card portal-modal">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h3 style={{ margin: 0 }}>{editingStore ? 'Edit Store' : 'Add New Store'}</h3>
-                    <button type="button" disabled={storeSaving} onClick={() => setShowStoreModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: storeSaving ? 'not-allowed' : 'pointer', color: 'var(--text-secondary)', opacity: storeSaving ? 0.5 : 1 }}>×</button>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                          <button type="button" disabled={storeSaving} onClick={() => setShowStoreModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: storeSaving ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: storeSaving ? 0.6 : 1 }}>Cancel</button>
+                          <button
+                            type="submit"
+                            className="btn-primary"
+                            disabled={storeSaving}
+                            style={{
+                              flex: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.5rem',
+                              opacity: storeSaving ? 0.85 : 1,
+                              cursor: storeSaving ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {storeSaving && <span className="portal-spinner portal-spinner-sm" aria-hidden="true" />}
+                            {storeSaving
+                              ? (editingStore ? 'Saving changes…' : (newStoreImage || editingStore?.image ? 'Uploading & creating…' : 'Creating store…'))
+                              : (editingStore ? 'Save Changes' : 'Create Store')}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   </div>
-                  <form onSubmit={editingStore ? handleUpdateStore : handleCreateStore}>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Name *</label>
-                      <input type="text" value={editingStore ? editingStore.name : newStoreName} onChange={e => editingStore ? setEditingStore({ ...editingStore, name: e.target.value }) : setNewStoreName(e.target.value)} disabled={storeSaving} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.95rem' }} required />
-                    </div>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Address *</label>
-                      <input type="text" value={editingStore ? editingStore.address : newStoreAddress} onChange={e => editingStore ? setEditingStore({ ...editingStore, address: e.target.value }) : setNewStoreAddress(e.target.value)} disabled={storeSaving} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.95rem' }} required />
-                    </div>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Image</label>
-                      {(editingStore ? editingStore.image : newStoreImage) ? (
-                        <div style={{ position: 'relative', width: '100%', height: '160px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: '0.5rem' }}>
-                          <img src={editingStore ? editingStore.image : newStoreImage} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          <button type="button" onClick={() => editingStore ? setEditingStore({ ...editingStore, image: null }) : setNewStoreImage(null)} disabled={storeSaving} style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: storeSaving ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>×</button>
-                        </div>
-                      ) : (
-                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: storeSaving ? 'not-allowed' : 'pointer', textAlign: 'center', opacity: storeSaving ? 0.6 : 1 }}>
-                          <span style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>📸</span>
-                          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Choose store image</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Click or drag to upload</span>
-                          <input type="file" accept="image/*" disabled={storeSaving} onChange={(e) => editingStore ? handleSingleImageUpload(e, (b64) => setEditingStore({ ...editingStore, image: b64 })) : handleSingleImageUpload(e, setNewStoreImage)} style={{ display: 'none' }} />
-                        </label>
-                      )}
-                    </div>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store Location *</label>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>
-                        Pan the map, then click where your store is — or drag the pin
-                      </p>
-                      {(() => {
-                        const pickerLat = editingStore ? (editingStore.lat ?? 51.5074) : newStoreLat;
-                        const pickerLng = editingStore ? (editingStore.lng ?? -0.1278) : newStoreLng;
-                        return (
-                          <>
-                            <div style={{ height: '220px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', cursor: 'crosshair' }}>
-                              <Map
-                                key={editingStore ? `store-map-${editingStore.id}` : 'store-map-new'}
-                                ref={storeMapRef}
-                                mapboxAccessToken={MAPBOX_TOKEN}
-                                initialViewState={{ longitude: pickerLng, latitude: pickerLat, zoom: 14 }}
-                                style={{ width: '100%', height: '100%' }}
-                                mapStyle="mapbox://styles/mapbox/streets-v12"
-                                onClick={(e) => setStoreMapCoords(e.lngLat.lat, e.lngLat.lng)}
-                              >
-                                <Marker
-                                  longitude={pickerLng}
-                                  latitude={pickerLat}
-                                  draggable
-                                  onDragEnd={(e) => setStoreMapCoords(e.lngLat.lat, e.lngLat.lng)}
-                                  color="#FF5C00"
-                                />
-                              </Map>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={useCurrentStoreLocationWeb}
-                              disabled={storeSaving}
-                              style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-                                width: '100%', marginTop: '0.6rem', padding: '0.6rem',
-                                background: '#FFFFFF', border: '1px solid rgba(255, 92, 0, 0.15)', borderRadius: '8px',
-                                color: '#FF5C00', fontWeight: '700', fontSize: '0.85rem', cursor: storeSaving ? 'not-allowed' : 'pointer',
-                                opacity: storeSaving ? 0.6 : 1,
-                              }}
-                            >
-                              Use Current Location
-                            </button>
-                            <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'center', margin: '0.4rem 0 0' }}>
-                              {pickerLat.toFixed(5)}, {pickerLng.toFixed(5)}
-                            </p>
-                          </>
-                        );
-                      })()}
-                    </div>
-                    {!CUSTOMER_DELIVERY_LIVE && (
-                      <div style={{ marginBottom: '1.25rem', padding: '0.9rem 1rem', borderRadius: '12px', background: '#FFF7ED', border: '1px solid #FED7AA', color: '#9A3412' }}>
-                        <strong style={{ display: 'block', marginBottom: '0.25rem' }}>Delivery coming soon</strong>
-                        <span style={{ fontSize: '0.82rem', lineHeight: 1.45 }}>
-                          Customer delivery checkout is not live yet. Store pickup works now, and Grabengo partner riders are wired on the backend for when delivery launches.
-                        </span>
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                      <button type="button" disabled={storeSaving} onClick={() => setShowStoreModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: storeSaving ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: storeSaving ? 0.6 : 1 }}>Cancel</button>
-                      <button
-                        type="submit"
-                        className="btn-primary"
-                        disabled={storeSaving}
-                        style={{
-                          flex: 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.5rem',
-                          opacity: storeSaving ? 0.85 : 1,
-                          cursor: storeSaving ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        {storeSaving && <span className="portal-spinner portal-spinner-sm" aria-hidden="true" />}
-                        {storeSaving
-                          ? (editingStore ? 'Saving changes…' : (newStoreImage || editingStore?.image ? 'Uploading & creating…' : 'Creating store…'))
-                          : (editingStore ? 'Save Changes' : 'Create Store')}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* ── BAG MODAL ── */}
-            {showBagModal && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
-                <div className="glass-card portal-modal">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h3 style={{ margin: 0 }}>{editingBag ? 'Edit Surprise Bag' : 'Add Surprise Bag'}</h3>
-                    <button onClick={() => setShowBagModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
-                  </div>
-                  <form onSubmit={editingBag ? handleUpdateBag : handleCreateBag}>
-                    {!editingBag && (
-                      <div style={{ marginBottom: '1rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store *</label>
-                        <select value={bagStoreId} onChange={e => setBagStoreId(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required>
-                          <option value="">-- Select Store --</option>
-                          {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
+                {/* ── BAG MODAL ── */}
+                {showBagModal && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
+                    <div className="glass-card portal-modal">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ margin: 0 }}>{editingBag ? 'Edit Surprise Bag' : 'Add Surprise Bag'}</h3>
+                        <button onClick={() => setShowBagModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
                       </div>
-                    )}
-                    <div className="portal-form-2col">
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Original Price ({currencySymbol})</label>
-                        <input type="number" step="0.01" value={editingBag ? editingBag.original_price || '' : bagOriginalPrice} onChange={e => editingBag ? setEditingBag({ ...editingBag, original_price: e.target.value }) : setBagOriginalPrice(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Sale Price ({currencySymbol}) *</label>
-                        <input type="number" step="0.01" value={editingBag ? editingBag.price : bagPrice} onChange={e => editingBag ? setEditingBag({ ...editingBag, price: parseFloat(e.target.value) }) : setBagPrice(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
-                      </div>
-                    </div>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Quantity *</label>
-                      <input type="number" value={editingBag ? editingBag.quantity : bagQuantity} onChange={e => editingBag ? setEditingBag({ ...editingBag, quantity: parseInt(e.target.value) }) : setBagQuantity(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
-                    </div>
-                    {/* Pickup Day + Time Picker */}
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Pickup Days (optional)</label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                        {ALL_DAYS.map(day => {
-                          const currentDays = editingBag ? (editingBag._pickupDays || []) : pickupDays;
-                          const isSelected = currentDays.includes(day);
-                          return (
-                            <button key={day} type="button"
-                              onClick={() => editingBag ? setEditingBag({ ...editingBag, _pickupDays: isSelected ? currentDays.filter(d => d !== day) : [...currentDays, day] }) : toggleDay(day)}
-                              style={{ padding: '0.35rem 0.75rem', borderRadius: '20px', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600', background: isSelected ? 'var(--accent-primary)' : 'transparent', color: isSelected ? '#fff' : 'var(--text-secondary)' }}>
-                              {day}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="portal-form-2col">
-                        <div>
-                          <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>From</label>
-                          <input type="time" value={editingBag ? (editingBag._pickupFrom || '18:00') : pickupFrom}
-                            onChange={e => { if (editingBag) { const f = e.target.value; setEditingBag(b => ({ ...b, _pickupFrom: f, pickup_time: buildPickupTime(b._pickupDays || [], f, b._pickupTo || '20:00') })); } else { setPickupFrom(e.target.value); setPickupTime(buildPickupTime(pickupDays, e.target.value, pickupTo)); } }}
-                            style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                      <form onSubmit={editingBag ? handleUpdateBag : handleCreateBag}>
+                        {!editingBag && (
+                          <div style={{ marginBottom: '1rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store *</label>
+                            <select value={bagStoreId} onChange={e => setBagStoreId(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required>
+                              <option value="">-- Select Store --</option>
+                              {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                        )}
+                        <div className="portal-form-2col">
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Original Price ({currencySymbol})</label>
+                            <input type="number" step="0.01" value={editingBag ? editingBag.original_price || '' : bagOriginalPrice} onChange={e => editingBag ? setEditingBag({ ...editingBag, original_price: e.target.value }) : setBagOriginalPrice(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Sale Price ({currencySymbol}) *</label>
+                            <input type="number" step="0.01" value={editingBag ? editingBag.price : bagPrice} onChange={e => editingBag ? setEditingBag({ ...editingBag, price: parseFloat(e.target.value) }) : setBagPrice(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
+                          </div>
                         </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>To</label>
-                          <input type="time" value={editingBag ? (editingBag._pickupTo || '20:00') : pickupTo}
-                            onChange={e => { if (editingBag) { const t = e.target.value; setEditingBag(b => ({ ...b, _pickupTo: t, pickup_time: buildPickupTime(b._pickupDays || [], b._pickupFrom || '18:00', t) })); } else { setPickupTo(e.target.value); setPickupTime(buildPickupTime(pickupDays, pickupFrom, e.target.value)); } }}
-                            style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Quantity *</label>
+                          <input type="number" value={editingBag ? editingBag.quantity : bagQuantity} onChange={e => editingBag ? setEditingBag({ ...editingBag, quantity: parseInt(e.target.value) }) : setBagQuantity(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
                         </div>
-                      </div>
-                      {(editingBag ? editingBag.pickup_time : pickupTime) && (
-                        <div style={{ marginTop: '8px', padding: '6px 12px', background: '#F0FDF4', borderRadius: '6px', fontSize: '0.85rem', color: '#059669', fontWeight: '600' }}>
-                          📅 {editingBag ? editingBag.pickup_time : pickupTime}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Description</label>
-                      <textarea value={editingBag ? editingBag.description || '' : bagDescription} onChange={e => editingBag ? setEditingBag({ ...editingBag, description: e.target.value }) : setBagDescription(e.target.value)} rows="3" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', resize: 'vertical' }} />
-                    </div>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Images</label>
-                      <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: 'pointer', textAlign: 'center', marginBottom: '1rem' }}>
-                        <span style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>🛍️</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Add bag images</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Click or drag multiple files</span>
-                        <input type="file" multiple accept="image/*" onChange={editingBag ? (e => { const files = Array.from(e.target.files); Promise.all(files.map(f => new Promise((res, rej) => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = rej; r.readAsDataURL(f); }))).then(imgs => setEditingBag(b => ({ ...b, images: [...(b.images || []), ...imgs] }))); }) : (e => { const files = Array.from(e.target.files); Promise.all(files.map(f => new Promise((res, rej) => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = rej; r.readAsDataURL(f); }))).then(imgs => setBagImages(prev => [...prev, ...imgs])); })} style={{ display: 'none' }} />
-                      </label>
-                      {(editingBag ? (editingBag.images || []) : bagImages).length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          {(editingBag ? (editingBag.images || []) : bagImages).map((img, idx) => (
-                            <div key={idx} style={{ position: 'relative', width: '70px', height: '70px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                              <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              <button type="button" onClick={() => editingBag ? setEditingBag(b => ({ ...b, images: b.images.filter((_, i) => i !== idx) })) : setBagImages(prev => prev.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>×</button>
+                        {/* Pickup Day + Time Picker */}
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Pickup Days (optional)</label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                            {ALL_DAYS.map(day => {
+                              const currentDays = editingBag ? (editingBag._pickupDays || []) : pickupDays;
+                              const isSelected = currentDays.includes(day);
+                              return (
+                                <button key={day} type="button"
+                                  onClick={() => editingBag ? setEditingBag({ ...editingBag, _pickupDays: isSelected ? currentDays.filter(d => d !== day) : [...currentDays, day] }) : toggleDay(day)}
+                                  style={{ padding: '0.35rem 0.75rem', borderRadius: '20px', border: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600', background: isSelected ? 'var(--accent-primary)' : 'transparent', color: isSelected ? '#fff' : 'var(--text-secondary)' }}>
+                                  {day}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="portal-form-2col">
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>From</label>
+                              <input type="time" value={editingBag ? (editingBag._pickupFrom || '18:00') : pickupFrom}
+                                onChange={e => { if (editingBag) { const f = e.target.value; setEditingBag(b => ({ ...b, _pickupFrom: f, pickup_time: buildPickupTime(b._pickupDays || [], f, b._pickupTo || '20:00') })); } else { setPickupFrom(e.target.value); setPickupTime(buildPickupTime(pickupDays, e.target.value, pickupTo)); } }}
+                                style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
                             </div>
-                          ))}
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>To</label>
+                              <input type="time" value={editingBag ? (editingBag._pickupTo || '20:00') : pickupTo}
+                                onChange={e => { if (editingBag) { const t = e.target.value; setEditingBag(b => ({ ...b, _pickupTo: t, pickup_time: buildPickupTime(b._pickupDays || [], b._pickupFrom || '18:00', t) })); } else { setPickupTo(e.target.value); setPickupTime(buildPickupTime(pickupDays, pickupFrom, e.target.value)); } }}
+                                style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                            </div>
+                          </div>
+                          {(editingBag ? editingBag.pickup_time : pickupTime) && (
+                            <div style={{ marginTop: '8px', padding: '6px 12px', background: '#F0FDF4', borderRadius: '6px', fontSize: '0.85rem', color: '#059669', fontWeight: '600' }}>
+                              📅 {editingBag ? editingBag.pickup_time : pickupTime}
+                            </div>
+                          )}
                         </div>
-                      )}
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Description</label>
+                          <textarea value={editingBag ? editingBag.description || '' : bagDescription} onChange={e => editingBag ? setEditingBag({ ...editingBag, description: e.target.value }) : setBagDescription(e.target.value)} rows="3" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', resize: 'vertical' }} />
+                        </div>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Images</label>
+                          <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: 'pointer', textAlign: 'center', marginBottom: '1rem' }}>
+                            <span style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>🛍️</span>
+                            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Add bag images</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Click or drag multiple files</span>
+                            <input type="file" multiple accept="image/*" onChange={editingBag ? (e => { const files = Array.from(e.target.files); Promise.all(files.map(f => new Promise((res, rej) => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = rej; r.readAsDataURL(f); }))).then(imgs => setEditingBag(b => ({ ...b, images: [...(b.images || []), ...imgs] }))); }) : (e => { const files = Array.from(e.target.files); Promise.all(files.map(f => new Promise((res, rej) => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = rej; r.readAsDataURL(f); }))).then(imgs => setBagImages(prev => [...prev, ...imgs])); })} style={{ display: 'none' }} />
+                          </label>
+                          {(editingBag ? (editingBag.images || []) : bagImages).length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {(editingBag ? (editingBag.images || []) : bagImages).map((img, idx) => (
+                                <div key={idx} style={{ position: 'relative', width: '70px', height: '70px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                                  <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  <button type="button" onClick={() => editingBag ? setEditingBag(b => ({ ...b, images: b.images.filter((_, i) => i !== idx) })) : setBagImages(prev => prev.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                          <button type="button" onClick={() => setShowBagModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                          <button type="submit" className="btn-primary" style={{ flex: 1 }}>{editingBag ? 'Save Changes' : 'Create Bag'}</button>
+                        </div>
+                      </form>
                     </div>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                      <button type="button" onClick={() => setShowBagModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
-                      <button type="submit" className="btn-primary" style={{ flex: 1 }}>{editingBag ? 'Save Changes' : 'Create Bag'}</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* ── FOOD MODAL ── */}
-            {showFoodModal && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
-                <div className="glass-card portal-modal">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h3 style={{ margin: 0 }}>{editingFood ? 'Edit Product' : 'Add Product'}</h3>
-                    <button onClick={() => setShowFoodModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
                   </div>
-                  <form onSubmit={handleCreateFoodItem}>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store *</label>
-                      <select value={foodForm.store_id} onChange={e => setFoodForm(f => ({ ...f, store_id: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required>
-                        <option value="">-- Select Store --</option>
-                        {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    </div>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Item Name *</label>
-                      <input type="text" value={foodForm.name} onChange={e => setFoodForm(f => ({ ...f, name: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
-                    </div>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Product category *</label>
-                      <select value={foodForm.category} onChange={e => setFoodForm(f => ({ ...f, category: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required>
-                        {PRODUCT_CATEGORY_GROUPS.map((group) => (
-                          <optgroup key={group.id} label={group.label}>
-                            {group.categories.map((c) => (
-                              <option key={c} value={c}>{c}</option>
+                )}
+
+                {/* ── FOOD MODAL ── */}
+                {showFoodModal && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
+                    <div className="glass-card portal-modal">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ margin: 0 }}>{editingFood ? 'Edit Product' : 'Add Product'}</h3>
+                        <button onClick={() => setShowFoodModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
+                      </div>
+                      <form onSubmit={handleCreateFoodItem}>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Store *</label>
+                          <select value={foodForm.store_id} onChange={e => setFoodForm(f => ({ ...f, store_id: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required>
+                            <option value="">-- Select Store --</option>
+                            {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Item Name *</label>
+                          <input type="text" value={foodForm.name} onChange={e => setFoodForm(f => ({ ...f, name: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
+                        </div>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Product category *</label>
+                          <select value={foodForm.category} onChange={e => setFoodForm(f => ({ ...f, category: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required>
+                            {PRODUCT_CATEGORY_GROUPS.map((group) => (
+                              <optgroup key={group.id} label={group.label}>
+                                {group.categories.map((c) => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </optgroup>
                             ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-                        e.g. detergent → Household & Cleaning · milk → Dairy & Eggs · rice → Groceries
-                      </p>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Original Price ({currencySymbol})</label>
-                        <input type="number" step="0.01" value={foodForm.original_price} onChange={e => setFoodForm(f => ({ ...f, original_price: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Sale Price ({currencySymbol}) *</label>
-                        <input type="number" step="0.01" value={foodForm.price} onChange={e => setFoodForm(f => ({ ...f, price: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
-                      </div>
-                    </div>
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Quantity *</label>
-                      <input type="number" value={foodForm.quantity} onChange={e => setFoodForm(f => ({ ...f, quantity: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
-                    </div>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Description</label>
-                      <textarea value={foodForm.description} onChange={e => setFoodForm(f => ({ ...f, description: e.target.value }))} rows="3" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', resize: 'vertical' }} />
-                    </div>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Images</label>
-                      <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: 'pointer', textAlign: 'center', marginBottom: '1rem' }}>
-                        <span style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>🍔</span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Add product images</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Click or drag multiple files</span>
-                        <input type="file" multiple accept="image/*" onChange={e => { const files = Array.from(e.target.files); Promise.all(files.map(f => new Promise((res, rej) => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = rej; r.readAsDataURL(f); }))).then(imgs => setFoodForm(f => ({ ...f, images: [...(f.images || []), ...imgs] }))); }} style={{ display: 'none' }} />
-                      </label>
-                      {foodForm.images.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          {foodForm.images.map((img, idx) => (
-                            <div key={idx} style={{ position: 'relative', width: '70px', height: '70px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                              <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              <button type="button" onClick={() => setFoodForm(f => ({ ...f, images: f.images.filter((_, i) => i !== idx) }))} style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>×</button>
-                            </div>
-                          ))}
+                          </select>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                            e.g. detergent → Household & Cleaning · milk → Dairy & Eggs · rice → Groceries
+                          </p>
                         </div>
-                      )}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Original Price ({currencySymbol})</label>
+                            <input type="number" step="0.01" value={foodForm.original_price} onChange={e => setFoodForm(f => ({ ...f, original_price: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Sale Price ({currencySymbol}) *</label>
+                            <input type="number" step="0.01" value={foodForm.price} onChange={e => setFoodForm(f => ({ ...f, price: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
+                          </div>
+                        </div>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Quantity *</label>
+                          <input type="number" value={foodForm.quantity} onChange={e => setFoodForm(f => ({ ...f, quantity: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} required />
+                        </div>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Description</label>
+                          <textarea value={foodForm.description} onChange={e => setFoodForm(f => ({ ...f, description: e.target.value }))} rows="3" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', resize: 'vertical' }} />
+                        </div>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Images</label>
+                          <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed var(--border-color)', borderRadius: '12px', background: '#F9FAFB', cursor: 'pointer', textAlign: 'center', marginBottom: '1rem' }}>
+                            <span style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>🍔</span>
+                            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Add product images</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Click or drag multiple files</span>
+                            <input type="file" multiple accept="image/*" onChange={e => { const files = Array.from(e.target.files); Promise.all(files.map(f => new Promise((res, rej) => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = rej; r.readAsDataURL(f); }))).then(imgs => setFoodForm(f => ({ ...f, images: [...(f.images || []), ...imgs] }))); }} style={{ display: 'none' }} />
+                          </label>
+                          {foodForm.images.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {foodForm.images.map((img, idx) => (
+                                <div key={idx} style={{ position: 'relative', width: '70px', height: '70px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                                  <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  <button type="button" onClick={() => setFoodForm(f => ({ ...f, images: f.images.filter((_, i) => i !== idx) }))} style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                          <button type="button" onClick={() => setShowFoodModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                          <button type="submit" style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none', background: '#059669', color: 'white', cursor: 'pointer', fontWeight: '700' }}>{editingFood ? 'Save Changes' : 'Create Item'}</button>
+                        </div>
+                      </form>
                     </div>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                      <button type="button" onClick={() => setShowFoodModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
-                      <button type="submit" style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none', background: '#059669', color: 'white', cursor: 'pointer', fontWeight: '700' }}>{editingFood ? 'Save Changes' : 'Create Item'}</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
+                  </div>
+                )}
 
-            </>
+              </>
             )}
           </div>
         )}
@@ -2598,18 +2598,18 @@ function App() {
               {tabLoading.appreviews ? (
                 <TabLoading label="Loading app reviews..." />
               ) : (
-              <>
-              {appReviews.map(r => (
-                <div key={r.id} style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <strong>{r.customer_name}</strong>
-                    <span>{"⭐".repeat(r.rating)}</span>
-                  </div>
-                  <p style={{ marginTop: '0.5rem', color: '#4B5563' }}>{r.comment}</p>
-                </div>
-              ))}
-              {appReviews.length === 0 && <p>No app reviews yet.</p>}
-              </>
+                <>
+                  {appReviews.map(r => (
+                    <div key={r.id} style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <strong>{r.customer_name}</strong>
+                        <span>{"⭐".repeat(r.rating)}</span>
+                      </div>
+                      <p style={{ marginTop: '0.5rem', color: '#4B5563' }}>{r.comment}</p>
+                    </div>
+                  ))}
+                  {appReviews.length === 0 && <p>No app reviews yet.</p>}
+                </>
               )}
             </div>
           </div>
@@ -2902,119 +2902,120 @@ function App() {
                     const statusBadge = getOrderStatusBadge(o);
                     const completeLabel = isDelivery ? 'Mark Delivered' : 'Mark Picked Up';
                     return (
-                    <div key={o.id} className="glass-card" style={{ padding: '1.5rem' }}>
-                      <div className="portal-order-card">
-                      <div style={{ width: '48px', height: '48px', borderRadius: '24px', backgroundColor: '#EFF6FF', color: '#1D4ED8', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '1.1rem', flexShrink: 0 }}>
-                        #{o.id}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="portal-order-header">
-                          <div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.35rem' }}>
-                              <span style={{
-                                padding: '0.2rem 0.6rem',
-                                borderRadius: '20px',
-                                fontSize: '0.75rem',
-                                fontWeight: 'bold',
-                                background: isDelivery ? '#DBEAFE' : '#F3F4F6',
-                                color: isDelivery ? '#1D4ED8' : '#374151',
-                              }}>
-                                {isDelivery ? 'DELIVERY' : 'PICKUP'}
-                              </span>
-                              <span style={{
-                                padding: '0.2rem 0.6rem',
-                                borderRadius: '20px',
-                                fontSize: '0.75rem',
-                                fontWeight: 'bold',
-                                background: statusBadge.bg,
-                                color: statusBadge.color,
-                              }}>
-                                {statusBadge.label.toUpperCase()}
-                              </span>
+                      <div key={o.id} className="glass-card" style={{ padding: '1.5rem' }}>
+                        <div className="portal-order-card">
+                          <div style={{ width: '48px', height: '48px', borderRadius: '24px', backgroundColor: '#EFF6FF', color: '#1D4ED8', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '1.1rem', flexShrink: 0 }}>
+                            #{o.id}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="portal-order-header">
+                              <div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.35rem' }}>
+                                  <span style={{
+                                    padding: '0.2rem 0.6rem',
+                                    borderRadius: '20px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 'bold',
+                                    background: isDelivery ? '#DBEAFE' : '#F3F4F6',
+                                    color: isDelivery ? '#1D4ED8' : '#374151',
+                                  }}>
+                                    {isDelivery ? 'DELIVERY' : 'PICKUP'}
+                                  </span>
+                                  <span style={{
+                                    padding: '0.2rem 0.6rem',
+                                    borderRadius: '20px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 'bold',
+                                    background: statusBadge.bg,
+                                    color: statusBadge.color,
+                                  }}>
+                                    {statusBadge.label.toUpperCase()}
+                                  </span>
+                                </div>
+                                <strong style={{ fontSize: '1.15rem', display: 'block', color: 'var(--text-primary)' }}>{o.store_name}</strong>
+                                <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                  Customer: <strong>{o.customer_name}</strong> ({o.customer_email})
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                  {new Date(o.created_at).toLocaleString()}
+                                </span>
+                                <span style={{
+                                  padding: '0.25rem 0.75rem',
+                                  borderRadius: '20px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 'bold',
+                                  background: o.payment_method.toLowerCase() === 'card' ? '#E0F2FE' : '#FEF3C7',
+                                  color: o.payment_method.toLowerCase() === 'card' ? '#0369A1' : '#B45309'
+                                }}>
+                                  {o.payment_method.toUpperCase()}
+                                </span>
+                              </div>
                             </div>
-                            <strong style={{ fontSize: '1.15rem', display: 'block', color: 'var(--text-primary)' }}>{o.store_name}</strong>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                              Customer: <strong>{o.customer_name}</strong> ({o.customer_email})
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                              {new Date(o.created_at).toLocaleString()}
-                            </span>
-                            <span style={{
-                              padding: '0.25rem 0.75rem',
-                              borderRadius: '20px',
-                              fontSize: '0.8rem',
-                              fontWeight: 'bold',
-                              background: o.payment_method.toLowerCase() === 'card' ? '#E0F2FE' : '#FEF3C7',
-                              color: o.payment_method.toLowerCase() === 'card' ? '#0369A1' : '#B45309'
-                            }}>
-                              {o.payment_method.toUpperCase()}
-                            </span>
-                          </div>
-                        </div>
 
-                        <div style={{ padding: '1rem', background: '#F9FAFB', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <strong style={{ fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                              {o.quantity}x {o.item_name}
-                            </strong>
-                            <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                              {o.type === 'bag' ? 'Surprise Bag' : 'Food Item'}
-                            </span>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '800', color: 'var(--success)' }}>
-                              {currencySymbol}{(o.price * o.quantity).toFixed(2)}
-                            </span>
-                            <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                              {isDelivery ? (o.delivery_address || 'Delivery address') : `Pickup: ${o.pickup_time}`}
-                            </span>
-                            {isDelivery && (
-                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem', flexWrap: 'wrap' }}>
-                                {o.store_lat != null && (
-                                  <a
-                                    href={`https://www.google.com/maps/dir/?api=1&destination=${o.store_lat},${o.store_lng}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1D4ED8', textDecoration: 'none' }}
-                                  >
-                                    Restaurant on map
-                                  </a>
+                            <div style={{ padding: '1rem', background: '#F9FAFB', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <strong style={{ fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                                  {o.quantity}x {o.item_name}
+                                </strong>
+                                <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                                  {o.type === 'bag' ? 'Surprise Bag' : 'Food Item'}
+                                </span>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '800', color: 'var(--success)' }}>
+                                  {currencySymbol}{(o.price * o.quantity).toFixed(2)}
+                                </span>
+                                <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                                  {isDelivery ? (o.delivery_address || 'Delivery address') : `Pickup: ${o.pickup_time}`}
+                                </span>
+                                {isDelivery && (
+                                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem', flexWrap: 'wrap' }}>
+                                    {o.store_lat != null && (
+                                      <a
+                                        href={`https://www.google.com/maps/dir/?api=1&destination=${o.store_lat},${o.store_lng}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1D4ED8', textDecoration: 'none' }}
+                                      >
+                                        Restaurant on map
+                                      </a>
+                                    )}
+                                    {o.delivery_lat != null && (
+                                      <a
+                                        href={`https://www.google.com/maps/dir/?api=1&destination=${o.delivery_lat},${o.delivery_lng}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1D4ED8', textDecoration: 'none' }}
+                                      >
+                                        Customer on map
+                                      </a>
+                                    )}
+                                  </div>
                                 )}
-                                {o.delivery_lat != null && (
-                                  <a
-                                    href={`https://www.google.com/maps/dir/?api=1&destination=${o.delivery_lat},${o.delivery_lng}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1D4ED8', textDecoration: 'none' }}
-                                  >
-                                    Customer on map
-                                  </a>
-                                )}
+                              </div>
+                            </div>
+
+                            {showTriad && (
+                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                                <button type="button" className="btn btn-success" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'confirm')}>Confirm</button>
+                                <button type="button" className="btn btn-secondary" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'convert_to_pickup')}>To Pickup</button>
+                                <button type="button" className="btn btn-danger" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'reject')}>Reject</button>
+                              </div>
+                            )}
+
+                            {showCompleteActions && (
+                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                                <button type="button" className="btn btn-primary" style={{ flex: 1, minWidth: '140px' }} onClick={() => runSellerOrderAction(o.id, 'mark_picked_up')}>{completeLabel}</button>
+                                <button type="button" className="btn btn-danger" style={{ minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'cancel')}>Cancel</button>
                               </div>
                             )}
                           </div>
                         </div>
-
-                        {showTriad && (
-                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-                            <button type="button" className="btn btn-success" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'confirm')}>Confirm</button>
-                            <button type="button" className="btn btn-secondary" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'convert_to_pickup')}>To Pickup</button>
-                            <button type="button" className="btn btn-danger" style={{ flex: 1, minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'reject')}>Reject</button>
-                          </div>
-                        )}
-
-                        {showCompleteActions && (
-                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-                            <button type="button" className="btn btn-primary" style={{ flex: 1, minWidth: '140px' }} onClick={() => runSellerOrderAction(o.id, 'mark_picked_up')}>{completeLabel}</button>
-                            <button type="button" className="btn btn-danger" style={{ minWidth: '100px' }} onClick={() => runSellerOrderAction(o.id, 'cancel')}>Cancel</button>
-                          </div>
-                        )}
                       </div>
-                      </div>
-                    </div>
-                  );})
+                    );
+                  })
               )}
             </div>
           </div>

@@ -1855,9 +1855,20 @@ async function notifyCustomerOfOrderUpdate(order, messageKey) {
       message: body,
     },
   });
-  const customer = await db.prepare('SELECT push_token FROM users WHERE id = ?').get(order.customer_id);
+  const customer = await db.prepare('SELECT email, push_token FROM users WHERE id = ?').get(order.customer_id);
   if (customer?.push_token) {
     await sendPushNotification(customer.push_token, template.title, body, { type: 'order_status', orderId: order.id });
+  }
+  if (customer?.email) {
+    const html = emailSimpleLayout({
+      title: template.title,
+      bodyHtml: `<p>Hi,</p><p>${body}</p><p>You can view more details in the Grabengo app.</p>`
+    });
+    sendEmail({
+      to: customer.email,
+      subject: `Order Update: ${template.title}`,
+      html,
+    }).catch(e => console.error('Failed to send order status email', e));
   }
 }
 
