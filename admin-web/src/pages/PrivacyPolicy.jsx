@@ -9,9 +9,9 @@ export default function PrivacyPolicy({ onBack }) {
 
       <Section title="Who We Are">
         <p>
-          Grabengo ("we", "us", "our") operates the Grabengo platform — a food-rescue marketplace
-          that connects consumers with businesses to reduce food waste. This Privacy Policy explains how
-          we handle your personal data when you use our services.
+          Grabengo ("we", "us", "our") operates the Grabengo platform — a food ordering and marketplace
+          app that connects consumers with businesses for everyday ordering and surplus food deals. This
+          Privacy Policy explains how we handle your personal data when you use our services.
         </p>
       </Section>
 

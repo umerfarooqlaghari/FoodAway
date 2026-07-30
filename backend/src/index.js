@@ -13,7 +13,7 @@ function resolveStoreDeliverySettings(user, { delivery_enabled, delivery_mode } 
 }
 
 const { initDB, db } = require('./db');
-const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
+const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key, captureRequestHost } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
 const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl, delivery: DELIVERY_CFG, customerDeliveryLive } = require('./config');
 const { extractPrimaryColor } = require('./colorExtractor');
@@ -25,10 +25,12 @@ const {
 } = require('./subdomain');
 const {
   parseFloatParam,
+  parsePagination,
   resolveTenantFilter,
   sortByNearest,
   attachDistance,
   haversineKm,
+  nearestOrderExpr,
 } = require('./publicCatalog');
 const {
   getTenantById,
@@ -239,6 +241,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
+app.use(captureRequestHost);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -3464,6 +3467,7 @@ app.get('/api/public/stores', async (req, res) => {
     const lat = parseFloatParam(req.query.lat);
     const lng = parseFloatParam(req.query.lng);
     const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+    const { limit, offset } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 200 });
 
     let query = `
       SELECT s.id, s.name, s.address, s.lat, s.lng, s.image, s.tenant_id, s.category,
@@ -3482,12 +3486,20 @@ app.get('/api/public/stores', async (req, res) => {
       query += ' AND s.id = ?';
       params.push(storeId);
     }
-    query += ' ORDER BY s.name ASC';
+    // Sort-by-distance has to happen in SQL before LIMIT — sorting the already-fetched
+    // page in JS (the old behavior) silently misses the true nearest rows once a
+    // tenant's store count exceeds the page size.
+    if (lat != null && lng != null && req.query.sort === 'nearest') {
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC LIMIT ? OFFSET ?`;
+      params.push(lat, lat, lng, limit, offset);
+    } else {
+      query += ' ORDER BY s.name ASC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+    }
 
     let stores = await db.prepare(query).all(...params);
     if (lat != null && lng != null) {
       stores = attachDistance(stores, lat, lng);
-      if (req.query.sort === 'nearest') stores = sortByNearest(stores, lat, lng);
     }
 
     const signed = await Promise.all(stores.map(async (s) => ({
@@ -3508,6 +3520,7 @@ app.get('/api/public/bags', async (req, res) => {
     const lat = parseFloatParam(req.query.lat);
     const lng = parseFloatParam(req.query.lng);
     const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+    const { limit, offset } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 200 });
 
     let query = `
       SELECT b.id, b.price, b.original_price, b.description, b.images,
@@ -3528,12 +3541,17 @@ app.get('/api/public/bags', async (req, res) => {
       query += ' AND s.id = ?';
       params.push(storeId);
     }
-    query += ' ORDER BY b.id DESC';
+    if (lat != null && lng != null && req.query.sort === 'nearest') {
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC LIMIT ? OFFSET ?`;
+      params.push(lat, lat, lng, limit, offset);
+    } else {
+      query += ' ORDER BY b.id DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+    }
 
     let bags = await db.prepare(query).all(...params);
     if (lat != null && lng != null) {
       bags = attachDistance(bags, lat, lng);
-      if (req.query.sort === 'nearest') bags = sortByNearest(bags, lat, lng);
     }
 
     const signed = await Promise.all(bags.map(async (bag) => ({
@@ -3555,6 +3573,7 @@ app.get('/api/public/food-items', async (req, res) => {
     const lat = parseFloatParam(req.query.lat);
     const lng = parseFloatParam(req.query.lng);
     const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+    const { limit, offset } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 200 });
 
     let query = `
       SELECT f.id, f.name, f.description, f.price, f.original_price,
@@ -3575,12 +3594,17 @@ app.get('/api/public/food-items', async (req, res) => {
       query += ' AND s.id = ?';
       params.push(storeId);
     }
-    query += ' ORDER BY f.created_at DESC';
+    if (lat != null && lng != null && req.query.sort === 'nearest') {
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC LIMIT ? OFFSET ?`;
+      params.push(lat, lat, lng, limit, offset);
+    } else {
+      query += ' ORDER BY f.created_at DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+    }
 
     let items = await db.prepare(query).all(...params);
     if (lat != null && lng != null) {
       items = attachDistance(items, lat, lng);
-      if (req.query.sort === 'nearest') items = sortByNearest(items, lat, lng);
     }
 
     const signed = await Promise.all(items.map(async (item) => ({

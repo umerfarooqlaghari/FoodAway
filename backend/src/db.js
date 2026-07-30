@@ -394,6 +394,24 @@ const initDB = async () => {
 
   await migrateToTenantsTable(db);
 
+  // Indexes on foreign keys hit by hot-path WHERE/JOIN clauses (stores/food-items/bags
+  // by tenant or store, orders by customer/store, reviews/chat by store, deliveries by
+  // partner/status). These tables had no indexes beyond primary keys, so these queries
+  // were sequential-scanning as the catalog grows.
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_stores_tenant_id ON stores (tenant_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_surprise_bags_store_id ON surprise_bags (store_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_food_items_store_id ON food_items (store_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_menu_items_store_id ON menu_items (store_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders (customer_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_orders_store_id ON orders (store_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_orders_delivery_id ON orders (delivery_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_reviews_store_id ON reviews (store_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_chat_messages_store_customer ON chat_messages (store_id, customer_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_favorites_store_id ON favorites (store_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_deliveries_partner_id ON deliveries (partner_id)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries (status)'); } catch (e) {}
+  try { await db.exec('CREATE INDEX IF NOT EXISTS idx_deliveries_customer_id ON deliveries (customer_id)'); } catch (e) {}
+
   // Pre-populate random locations for stores missing coordinates
   await db.exec(`
     UPDATE stores

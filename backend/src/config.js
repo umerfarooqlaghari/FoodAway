@@ -34,7 +34,7 @@ module.exports = {
   brandName,
   delivery,
   customerDeliveryLive,
-  tagline: process.env.APP_TAGLINE || 'Reducing food waste, one meal at a time.',
+  tagline: process.env.APP_TAGLINE || 'Order fresh. Save on surplus.',
   siteUrl,
   siteHost: process.env.APP_SITE_HOST || siteHostFromUrl(siteUrl),
   supportEmail: process.env.APP_SUPPORT_EMAIL || 'support@grabengo.store',

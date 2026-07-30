@@ -1,9 +1,9 @@
 import 'react-native-gesture-handler';
 import { enableScreens } from 'react-native-screens';
 enableScreens(false);
-import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, createContext, useContext, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Pressable, ActivityIndicator, TextInput, Alert, ScrollView, Modal, Platform, Linking, Animated, TouchableWithoutFeedback, Switch, useWindowDimensions, Easing, Share, KeyboardAvoidingView } from 'react-native';
+import { StyleSheet, Text, View, FlatList, SectionList, TouchableOpacity, Pressable, ActivityIndicator, TextInput, Alert, ScrollView, Modal, Platform, Linking, Animated, TouchableWithoutFeedback, Switch, useWindowDimensions, Easing, Share, KeyboardAvoidingView } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, TouchableOpacity as GHTouchableOpacity, Pressable as GHPressable, ScrollView as GHScrollView } from 'react-native-gesture-handler';
@@ -492,6 +492,65 @@ const AuthContext = createContext();
 const CartContext = createContext();
 const ChatContext = createContext();
 const LandingBrandsContext = createContext({ tenants: [], ready: false });
+const LocationContext = createContext();
+
+// Shared GPS location for the customer app. Fetched once when the home screen
+// mounts (via ensureLocation) and cached for every screen that needs it for
+// distance sorting/filtering — screens no longer each call getCurrentPositionAsync
+// on their own. A manual refresh (e.g. tapping the location pill) calls refreshLocation.
+function LocationProvider({ children }) {
+  const [coords, setCoords] = useState(null);
+  const [locationLabel, setLocationLabel] = useState('Tap to enable location');
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [hasFetchedLocation, setHasFetchedLocation] = useState(false);
+
+  const fetchLocation = useCallback(async () => {
+    setLocationLoading(true);
+    try {
+      const { status } = await getLocationModule().requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setCoords(null);
+        setLocationLabel('Location off — enable for distance filters');
+        return;
+      }
+      const loc = await getLocationModule().getCurrentPositionAsync({});
+      setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      try {
+        const [place] = await getLocationModule().reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        if (place) {
+          setLocationLabel([place.city || place.region, place.country].filter(Boolean).join(', ') || 'Near you');
+        } else {
+          setLocationLabel('Current Location');
+        }
+      } catch (_) {
+        setLocationLabel('Current Location');
+      }
+    } catch (_) {
+      setCoords(null);
+      setLocationLabel('Location unavailable');
+    } finally {
+      setLocationLoading(false);
+      setHasFetchedLocation(true);
+    }
+  }, []);
+
+  const ensureLocation = useCallback(() => {
+    if (!hasFetchedLocation && !locationLoading) {
+      fetchLocation();
+    }
+  }, [hasFetchedLocation, locationLoading, fetchLocation]);
+
+  const value = useMemo(() => ({
+    coords,
+    locationLabel,
+    locationLoading,
+    hasFetchedLocation,
+    ensureLocation,
+    refreshLocation: fetchLocation,
+  }), [coords, locationLabel, locationLoading, hasFetchedLocation, ensureLocation, fetchLocation]);
+
+  return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
+}
 
 async function prefetchLandingBrands() {
   try {
@@ -1541,17 +1600,17 @@ function LandingScreen({ navigation }) {
                   Supermarkets on Grabengo
                 </Text>
                 <Text style={{ fontSize: 15, color: '#4B5563', lineHeight: 23, marginTop: 14 }}>
-                  We are expanding beyond surplus meals to bring leading supermarkets onto the platform. Premium discounts on fast-moving consumer goods, household essentials, and fresh groceries.
+                  We're bringing leading supermarkets onto the platform next — everyday grocery orders plus discounted deals on fast-moving consumer goods, household essentials, and fresh groceries.
                 </Text>
-                
+
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
                   <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.15)', borderRadius: 14, padding: 14 }}>
-                    <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 16 }}>Up to 50%</Text>
-                    <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 12, marginTop: 4 }}>off surplus stock</Text>
+                    <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 16 }}>Everyday</Text>
+                    <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 12, marginTop: 4 }}>grocery orders</Text>
                   </View>
                   <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.15)', borderRadius: 14, padding: 14 }}>
                     <Text style={{ color: LANDING_ORANGE, fontWeight: '800', fontSize: 16 }}>One app</Text>
-                    <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 12, marginTop: 4 }}>food + FMCG rescue</Text>
+                    <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 12, marginTop: 4 }}>orders + surplus deals</Text>
                   </View>
                 </View>
                 <View style={{ alignItems: 'center', marginTop: 24, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.15)', borderRadius: 20, padding: 12 }}>
@@ -1582,13 +1641,13 @@ function LandingScreen({ navigation }) {
             </View>
             <View style={{ paddingTop: 32, paddingRight: 108, zIndex: 2, elevation: 4 }} pointerEvents="box-none">
               <Text style={{ fontSize: 38, fontWeight: '800', color: '#FFFFFF', lineHeight: 46, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
-                Delicious Treats
+                Order Fresh.
               </Text>
               <Text style={{ fontSize: 38, fontWeight: '800', color: '#FFFFFF', lineHeight: 46, textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 }}>
-                Waiting For You
+                Save on Surplus.
               </Text>
               <Text style={{ fontSize: 15, color: 'rgba(255,255,255,0.92)', marginTop: 14, lineHeight: 22 }}>
-                Rescue surplus pastries, donuts, and meals from top local spots before they go to waste.
+                Order everyday meals and essentials from local spots, or grab surplus and near-expiry finds at a discount before they go to waste.
               </Text>
               <View style={{ flexDirection: 'row', marginTop: 24, gap: 12, zIndex: 10 }}>
                 <GHPressable
@@ -1704,24 +1763,24 @@ function LandingScreen({ navigation }) {
 
 const INTRO_SLIDES = [
   {
-    icon: 'leaf-outline',
-    title: 'Good food.\nSaved together.',
-    body: 'Grabengo connects you with local cafés, bakeries, and restaurants selling surplus food at great prices — before it goes to waste.',
+    icon: 'restaurant-outline',
+    title: 'Order from\nlocal favourites.',
+    body: 'Grabengo connects you with local cafés, bakeries, and restaurants — order menus and everyday essentials for pickup or delivery, where available.',
   },
   {
     icon: 'pricetag-outline',
-    title: 'Amazing deals\non top brands',
-    body: 'Browse surprise bags and same-day deals from your favourite spots — often up to 50% off retail prices.',
+    title: 'Amazing deals\non surplus stock',
+    body: 'Browse surprise bags and near-expiry deals from your favourite spots — often up to 50% off retail prices, before it goes to waste.',
   },
   {
     icon: 'bag-handle-outline',
-    title: 'Reserve.\nPick up. Enjoy.',
-    body: 'Order in seconds, collect from the store, or choose delivery where available. Fresh food rescued on your schedule.',
+    title: 'Order.\nPick up. Enjoy.',
+    body: 'Order in seconds, collect from the store, or choose delivery where available — for both everyday orders and surplus deals.',
   },
   {
     icon: 'heart-outline',
-    title: 'Ready to\nmake a difference?',
-    body: 'Create a free account to start saving food and money. Businesses can list surplus stock and reach new customers.',
+    title: 'Ready to\nget started?',
+    body: 'Create a free account to start ordering and saving. Businesses can list their everyday menu and surplus stock to reach new customers.',
   },
 ];
 
@@ -2111,7 +2170,7 @@ function RegisterScreen({ navigation }) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: '800', fontSize: 17, color: '#111827' }}>Business / Seller</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 4, lineHeight: 18 }}>List surplus food, manage stores, and reach new customers.</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 4, lineHeight: 18 }}>List your everyday menu and surplus deals, manage stores, and reach new customers.</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -2562,8 +2621,8 @@ function ExploreTenantsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [coords, setCoords] = useState(null);
-  const [locationLabel, setLocationLabel] = useState('Tap to enable location');
+  const { coords: sharedCoords, locationLabel, locationLoading, refreshLocation } = useContext(LocationContext);
+  const coords = sharedCoords ? { lat: sharedCoords.latitude, lng: sharedCoords.longitude } : null;
   const [maxDistance, setMaxDistance] = useState(null);
   const [customDistanceMode, setCustomDistanceMode] = useState(false);
   const [customDistanceValue, setCustomDistanceValue] = useState('');
@@ -2585,30 +2644,6 @@ function ExploreTenantsScreen({ navigation }) {
       setStores([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const enableLocationForStores = async () => {
-    try {
-      const { status } = await getLocationModule().requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await getLocationModule().getCurrentPositionAsync({});
-        setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-        try {
-          const [place] = await getLocationModule().reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-          if (place) {
-            setLocationLabel([place.city, place.region].filter(Boolean).join(', ') || 'Near you');
-          }
-        } catch (_) {
-          setLocationLabel('Near you');
-        }
-      } else {
-        setCoords(null);
-        setLocationLabel('Location off — enable for distance filters');
-      }
-    } catch (_) {
-      setCoords(null);
-      setLocationLabel('Location unavailable');
     }
   };
 
@@ -2687,14 +2722,14 @@ function ExploreTenantsScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Location row */}
-          <TouchableOpacity onPress={enableLocationForStores} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12 }}>
+          {/* Location row — shared with the home screen's cached GPS fix; tap to refresh */}
+          <TouchableOpacity onPress={refreshLocation} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12 }}>
             <Ionicons name="location" size={20} color="#FF5C00" />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={{ fontSize: 11, fontWeight: '700', color: '#FF5C00', textTransform: 'uppercase' }}>Your location</Text>
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }} numberOfLines={1}>{locationLabel}</Text>
             </View>
-            <Ionicons name="refresh" size={18} color="#FF5C00" />
+            {locationLoading ? <ActivityIndicator size="small" color="#FF5C00" /> : <Ionicons name="refresh" size={18} color="#FF5C00" />}
           </TouchableOpacity>
 
           {/* Search */}
@@ -3273,6 +3308,347 @@ function ProductThumb({ uri, style, fallback }) {
   );
 }
 
+// Memoized store-detail menu row components — used by StoreDetailsScreen's
+// virtualized FlatList so unrelated rows don't re-render on every state change.
+const BagMenuCard = React.memo(function BagMenuCard({ bag, currencySymbol, onAdd }) {
+  return (
+    <View style={{
+      marginHorizontal: 20,
+      marginTop: 16,
+      backgroundColor: '#FFFFFF',
+      borderRadius: 24,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: '#E2E8F0',
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.04,
+      shadowRadius: 12,
+      elevation: 3
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{
+          width: 72,
+          height: 72,
+          borderRadius: 16,
+          marginRight: 14,
+          position: 'relative',
+          overflow: 'hidden',
+          shadowColor: '#FF5C00',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          elevation: 3
+        }}>
+          <LinearGradient
+            colors={['#FF7E40', '#FF5C00']}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name="gift" size={32} color="white" />
+          </View>
+        </View>
+
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>Surprise Bag</Text>
+              <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 }} numberOfLines={2}>
+                {bag.description || 'Assortment of fresh surplus bakery treats, daily specials, or meals.'}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
+              <Text style={storeProductUi.price}>{formatProductPrice(bag.price, currencySymbol)}</Text>
+              {bag.original_price && (
+                <Text style={storeProductUi.priceOld}>
+                  {formatProductPrice(bag.original_price, currencySymbol)}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ backgroundColor: '#FBE2DC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+            <Text style={{ fontSize: 11, color: '#E64A33', fontWeight: '800' }}>
+              {bag.quantity} remaining
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+            <Ionicons name="time-outline" size={12} color="#64748B" style={{ marginRight: 4 }} />
+            <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>{bag.pickup_time || '18:00 - 19:30'}</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity onPress={onAdd} style={storeProductUi.addBtn}>
+          <Ionicons name="add" size={14} color="#C2410C" />
+          <Text style={storeProductUi.addBtnText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+const DealMenuCard = React.memo(function DealMenuCard({ item, currencySymbol, onAdd, countdownText }) {
+  const dealImage = firstProductImage(item);
+  const thumbStyle = {
+    width: 72, height: 72, borderRadius: 16, marginRight: 14,
+    position: 'relative', overflow: 'hidden',
+    backgroundColor: '#FFF7ED',
+  };
+  const fallback = (
+    <View style={thumbStyle}>
+      <LinearGradient colors={['#FF7E40', '#FF5C00']} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Ionicons name="flash" size={28} color="white" />
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={{
+      marginHorizontal: 20,
+      marginTop: 16,
+      backgroundColor: '#FFFFFF',
+      borderRadius: 24,
+      padding: 16,
+      borderWidth: 1.5,
+      borderColor: '#FBE2DC',
+      shadowColor: '#FF5C00',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 3
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <ProductThumb uri={dealImage} style={thumbStyle} fallback={fallback} />
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#1E40AF', letterSpacing: 0.5 }}>{item.category?.toUpperCase()}</Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>{item.name}</Text>
+              <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 }} numberOfLines={2}>
+                {item.description || 'Discounted item, limited quantity.'}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
+              <Text style={storeProductUi.price}>{formatProductPrice(item.price, currencySymbol)}</Text>
+              {item.original_price && (
+                <Text style={storeProductUi.priceOld}>
+                  {formatProductPrice(item.original_price, currencySymbol)}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ backgroundColor: '#FBE2DC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+            <Text style={{ fontSize: 11, color: '#E64A33', fontWeight: '800' }}>
+              {item.quantity} left
+            </Text>
+          </View>
+          {item.sale_ends_at && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+              <Ionicons name="time-outline" size={11} color="#FF5C00" />
+              <Text style={{ fontSize: 11, color: '#FF5C00', fontWeight: '800', marginLeft: 3 }}>
+                {countdownText}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <TouchableOpacity onPress={onAdd} style={storeProductUi.addBtn}>
+          <Ionicons name="add" size={14} color="#C2410C" />
+          <Text style={storeProductUi.addBtnText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+const MENU_CATEGORY_STYLE = {
+  Drinks: { gradColors: ['#3B82F6', '#1D4ED8'], catIcon: 'cafe' },
+  'Coffee & Tea': { gradColors: ['#3B82F6', '#1D4ED8'], catIcon: 'cafe' },
+  Meals: { gradColors: ['#10B981', '#059669'], catIcon: 'restaurant' },
+  'Fresh Food': { gradColors: ['#10B981', '#059669'], catIcon: 'restaurant' },
+  Groceries: { gradColors: ['#6366F1', '#4F46E5'], catIcon: 'basket' },
+  Household: { gradColors: ['#6366F1', '#4F46E5'], catIcon: 'basket' },
+  'Household & Cleaning': { gradColors: ['#6366F1', '#4F46E5'], catIcon: 'basket' },
+  'Canned & Packaged': { gradColors: ['#6366F1', '#4F46E5'], catIcon: 'basket' },
+  'Personal Care': { gradColors: ['#EC4899', '#DB2777'], catIcon: 'sparkles' },
+  'Baby & Kids': { gradColors: ['#EC4899', '#DB2777'], catIcon: 'sparkles' },
+  Frozen: { gradColors: ['#0EA5E9', '#0284C7'], catIcon: 'snow' },
+};
+const MENU_CATEGORY_DEFAULT = { gradColors: ['#F59E0B', '#D97706'], catIcon: 'cart' };
+
+const MenuItemMenuCard = React.memo(function MenuItemMenuCard({ item, currencySymbol, onAdd }) {
+  const { gradColors, catIcon } = MENU_CATEGORY_STYLE[item.category] || MENU_CATEGORY_DEFAULT;
+  const menuImage = firstProductImage(item);
+  const thumbStyle = {
+    width: 72,
+    height: 72,
+    borderRadius: 16,
+    marginRight: 14,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#F8FAFC',
+  };
+  const fallback = (
+    <View style={thumbStyle}>
+      <LinearGradient
+        colors={gradColors}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Ionicons name={catIcon} size={28} color="white" />
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={{
+      marginHorizontal: 20,
+      marginTop: 16,
+      backgroundColor: '#FFFFFF',
+      borderRadius: 24,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: '#E2E8F0',
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.04,
+      shadowRadius: 12,
+      elevation: 3
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <ProductThumb uri={menuImage} style={thumbStyle} fallback={fallback} />
+
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#1E40AF', letterSpacing: 0.5 }}>{item.category?.toUpperCase()}</Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>{item.name}</Text>
+              <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 }} numberOfLines={2}>
+                {item.description || 'Freshly prepared menu item.'}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
+              <Text style={storeProductUi.price}>{formatProductPrice(item.price, currencySymbol)}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
+
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <TouchableOpacity onPress={onAdd} style={storeProductUi.addBtn}>
+          <Ionicons name="add" size={14} color="#C2410C" />
+          <Text style={storeProductUi.addBtnText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+const MenuSectionHeader = React.memo(function MenuSectionHeader({ title }) {
+  return (
+    <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginHorizontal: 20, marginTop: 20, marginBottom: 4 }}>{title}</Text>
+  );
+});
+
+// Memoized "All Stores" horizontal card — used by DiscoverScreen's FlatList so
+// only the store whose favorite/selection state actually changed re-renders.
+const AllStoresCard = React.memo(function AllStoresCard({ store, isSelected, bagCount, hasUnread, onPress, onToggleFavorite, onOpenChat }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        width: 150,
+        marginRight: 14,
+        borderRadius: 20,
+        overflow: 'hidden',
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 4,
+        borderWidth: 2,
+        borderColor: isSelected ? '#FF5C00' : 'transparent',
+      }}
+    >
+      <View style={{ position: 'relative' }}>
+        {store.image ? (
+          <Image source={{ uri: store.image }} style={{ width: '100%', height: 100 }} contentFit="cover" />
+        ) : (
+          <View style={{ width: '100%', height: 100, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ fontSize: 40 }}>🏪</Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            backgroundColor: 'rgba(255,255,255,0.9)',
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10
+          }}
+          onPress={onToggleFavorite}
+        >
+          <Ionicons name={store.is_favorited === 1 ? "heart" : "heart-outline"} size={14} color={store.is_favorited === 1 ? "#EF4444" : "#6B7280"} />
+        </TouchableOpacity>
+      </View>
+      <View style={{ padding: 10 }}>
+        <Text numberOfLines={1} style={{ fontWeight: '700', fontSize: 13, color: '#111827' }}>{store.name}</Text>
+        <Text numberOfLines={1} style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{store.address}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+          <View style={{ backgroundColor: '#FF5C00', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>
+              {bagCount} bag{bagCount !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onOpenChat}
+            style={{ padding: 4, borderRadius: 12, backgroundColor: '#EFF6FF', position: 'relative' }}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color="#1D4ED8" />
+            {hasUnread && (
+              <View style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: '#EF4444'
+              }} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 // --- App Screens ---
 function DiscoverScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -3284,8 +3660,7 @@ function DiscoverScreen({ navigation, route }) {
   const [activeTab, setActiveTab] = useState('bags'); // 'bags' | 'food'
   const [productCategoryFilter, setProductCategoryFilter] = useState('All');
   const [loading, setLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState(null);
-  const [addressName, setAddressName] = useState('Locating...');
+  const { coords: userLocation, locationLabel: addressName, locationLoading, ensureLocation, refreshLocation } = useContext(LocationContext);
   const [mapVisible, setMapVisible] = useState(false);
   const [reviewsVisible, setReviewsVisible] = useState(false);
   const [reviewsList, setReviewsList] = useState([]);
@@ -3451,25 +3826,9 @@ function DiscoverScreen({ navigation, route }) {
     fetchFoodItems();
     fetchStores();
     fetchReviews();
-    (async () => {
-      let { status } = await getLocationModule().requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setAddressName('Location Denied');
-        return;
-      }
-      let location = await getLocationModule().getCurrentPositionAsync({});
-      setUserLocation(location.coords);
-      try {
-        let address = await getLocationModule().reverseGeocodeAsync(location.coords);
-        if (address && address.length > 0) {
-          setAddressName(`${address[0].city || address[0].region || 'Current Area'}, ${address[0].country}`);
-        } else {
-          setAddressName('Current Location');
-        }
-      } catch (e) {
-        setAddressName('Current Location');
-      }
-    })();
+    // Only fetches GPS once per app session (cached in LocationContext) — a manual
+    // refresh happens via the location pill's onPress calling refreshLocation.
+    ensureLocation();
   }, [selectedTenant?.id]);
 
   useEffect(() => {
@@ -3518,7 +3877,7 @@ function DiscoverScreen({ navigation, route }) {
     }
   };
 
-  const renderItem = ({ item }) => {
+  const renderItem = useCallback(({ item }) => {
     let distanceText = "Near you";
     if (userLocation && item.lat && item.lng) {
       const distMeters = getDistance(
@@ -3579,11 +3938,7 @@ function DiscoverScreen({ navigation, route }) {
           <Ionicons name="bag-outline" size={10} color="#FF5C00" />
           <Text style={{ fontSize: 10, fontWeight: '700', color: '#FF5C00' }}>SURPRISE BAG</Text>
         </View>
-        <Text numberOfLines={1} style={styles.gridTitle}>{item.store_name}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-          <Ionicons name="star" size={11} color="#F59E0B" />
-          <Text style={{ fontSize: 12, color: '#111827', fontWeight: '600', marginLeft: 3 }}>4.8 <Text style={{ color: '#9CA3AF', fontWeight: '400' }}>(120)</Text></Text>
-        </View>
+        <Text numberOfLines={1} style={[styles.gridTitle, { marginBottom: 8 }]}>{item.store_name}</Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
           <View style={styles.gridPriceTag}>
             <Text style={styles.gridPriceText}>{currencySymbol}{item.price.toFixed(2)}</Text>
@@ -3594,10 +3949,10 @@ function DiscoverScreen({ navigation, route }) {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [userLocation, currencySymbol, toggleFavoriteStore, addToCart]);
 
 
-  const renderFoodItem = ({ item }) => {
+  const renderFoodItem = useCallback(({ item }) => {
     let distanceText = "Near you";
     if (userLocation && item.lat && item.lng) {
       const distMeters = getDistance(
@@ -3683,9 +4038,25 @@ function DiscoverScreen({ navigation, route }) {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [userLocation, currencySymbol, stores, navigation, toggleFavoriteStore, addToCart]);
 
-  const filteredBags = bags.filter(bag => {
+  const storeKeyExtractor = useCallback((store) => String(store.id), []);
+  const renderAllStoresItem = useCallback(({ item: store }) => {
+    const storeBags = bags.filter(b => b.store_id === store.id);
+    return (
+      <AllStoresCard
+        store={store}
+        isSelected={selectedStoreId === store.id}
+        bagCount={storeBags.length}
+        hasUnread={!!(unreadStores && unreadStores[store.id])}
+        onPress={() => navigation.navigate('StoreDetails', { store, userLocation })}
+        onToggleFavorite={() => toggleFavoriteStore(store.id)}
+        onOpenChat={() => openChatWithStore(store)}
+      />
+    );
+  }, [bags, selectedStoreId, unreadStores, navigation, userLocation, toggleFavoriteStore, openChatWithStore]);
+
+  const filteredBags = useMemo(() => bags.filter(bag => {
     const matchesStore = selectedStoreId ? bag.store_id === selectedStoreId : true;
     const matchesFavorite = favoritesOnly ? bag.is_favorited === 1 : true;
     const matchesSearch = searchQuery
@@ -3693,9 +4064,9 @@ function DiscoverScreen({ navigation, route }) {
       bag.description?.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
     return matchesStore && matchesFavorite && matchesSearch;
-  });
+  }), [bags, selectedStoreId, favoritesOnly, searchQuery]);
 
-  const filteredFoodItems = foodItems.filter(item => {
+  const filteredFoodItems = useMemo(() => foodItems.filter(item => {
     const matchesStore = selectedStoreId ? item.store_id === selectedStoreId : true;
     const matchesFavorite = favoritesOnly ? item.is_favorited === 1 : true;
     const matchesCategory = categoriesMatch(productCategoryFilter, item.category);
@@ -3706,16 +4077,16 @@ function DiscoverScreen({ navigation, route }) {
       item.category?.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
     return matchesStore && matchesFavorite && matchesCategory && matchesSearch;
-  });
+  }), [foodItems, selectedStoreId, favoritesOnly, productCategoryFilter, searchQuery]);
 
-  const filteredStores = stores.filter(store => {
+  const filteredStores = useMemo(() => stores.filter(store => {
     const matchesFavorite = favoritesOnly ? store.is_favorited === 1 : true;
     const matchesSearch = searchQuery
       ? store.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       store.address?.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
     return matchesFavorite && matchesSearch;
-  });
+  }), [stores, favoritesOnly, searchQuery]);
 
   const activeItems = activeTab === 'bags' ? filteredBags : filteredFoodItems;
   const activeCount = activeItems.length;
@@ -3796,87 +4167,18 @@ function DiscoverScreen({ navigation, route }) {
             </Text>
           </View>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
-            {filteredStores.map(store => {
-              const isSelected = selectedStoreId === store.id;
-              const storeBags = bags.filter(b => b.store_id === store.id);
-              return (
-                <TouchableOpacity
-                  key={store.id}
-                  onPress={() => navigation.navigate('StoreDetails', { store, userLocation })}
-                  style={{
-                    width: 150,
-                    marginRight: 14,
-                    borderRadius: 20,
-                    overflow: 'hidden',
-                    backgroundColor: '#FFFFFF',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 10,
-                    elevation: 4,
-                    borderWidth: 2,
-                    borderColor: isSelected ? '#FF5C00' : 'transparent',
-                  }}
-                >
-                  <View style={{ position: 'relative' }}>
-                    {store.image ? (
-                      <Image source={{ uri: store.image }} style={{ width: '100%', height: 100 }} contentFit="cover" />
-                    ) : (
-                      <View style={{ width: '100%', height: 100, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 40 }}>🏪</Text>
-                      </View>
-                    )}
-                    <TouchableOpacity 
-                      style={{ 
-                        position: 'absolute', 
-                        top: 8, 
-                        right: 8, 
-                        backgroundColor: 'rgba(255,255,255,0.9)', 
-                        width: 28, 
-                        height: 28, 
-                        borderRadius: 14, 
-                        justifyContent: 'center', 
-                        alignItems: 'center',
-                        zIndex: 10
-                      }} 
-                      onPress={() => toggleFavoriteStore(store.id)}
-                    >
-                      <Ionicons name={store.is_favorited === 1 ? "heart" : "heart-outline"} size={14} color={store.is_favorited === 1 ? "#EF4444" : "#6B7280"} />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={{ padding: 10 }}>
-                    <Text numberOfLines={1} style={{ fontWeight: '700', fontSize: 13, color: '#111827' }}>{store.name}</Text>
-                    <Text numberOfLines={1} style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{store.address}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                      <View style={{ backgroundColor: '#FF5C00', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>
-                          {storeBags.length} bag{storeBags.length !== 1 ? 's' : ''}
-                        </Text>
-                      </View>
-                      <TouchableOpacity 
-                        onPress={() => openChatWithStore(store)}
-                        style={{ padding: 4, borderRadius: 12, backgroundColor: '#EFF6FF', position: 'relative' }}
-                      >
-                        <Ionicons name="chatbubble-ellipses-outline" size={16} color="#1D4ED8" />
-                        {unreadStores && unreadStores[store.id] && (
-                          <View style={{ 
-                            position: 'absolute', 
-                            top: -2, 
-                            right: -2, 
-                            width: 8, 
-                            height: 8, 
-                            borderRadius: 4, 
-                            backgroundColor: '#EF4444' 
-                          }} />
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginHorizontal: -20 }}
+            contentContainerStyle={{ paddingHorizontal: 20 }}
+            data={filteredStores}
+            keyExtractor={storeKeyExtractor}
+            renderItem={renderAllStoresItem}
+            initialNumToRender={4}
+            windowSize={5}
+            removeClippedSubviews
+          />
         )}
       </View>
 
@@ -3922,17 +4224,21 @@ function DiscoverScreen({ navigation, route }) {
               <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827', flex: 1 }} numberOfLines={1}>{selectedTenant.name}</Text>
             ) : null}
           </View>
-          {/* Location row */}
+          {/* Location row — tap to manually refresh the cached GPS fix */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <TouchableOpacity onPress={refreshLocation} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                <Ionicons name="location" size={22} color="#FF5C00" />
+                {locationLoading ? (
+                  <ActivityIndicator size="small" color="#FF5C00" />
+                ) : (
+                  <Ionicons name="location" size={22} color="#FF5C00" />
+                )}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: '#6B7280', fontSize: 12, fontWeight: '600' }}>Current Location</Text>
+                <Text style={{ color: '#6B7280', fontSize: 12, fontWeight: '600' }}>Current Location · tap to refresh</Text>
                 <Text style={{ color: '#111827', fontWeight: '800', fontSize: 16 }} numberOfLines={1}>{addressName}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => {
               setEditName(user?.name || '');
               setEditAvatar(user?.logo || null);
@@ -4457,7 +4763,11 @@ function DiscoverScreen({ navigation, route }) {
 // --- Store Details Screen ---
 function StoreDetailsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { store, userLocation } = route.params;
+  const { store, userLocation: routeUserLocation } = route.params;
+  // Prefer the live shared location over the value captured at navigation time —
+  // GPS may still have been resolving when the user tapped into this store.
+  const { coords: sharedCoords } = useContext(LocationContext);
+  const userLocation = sharedCoords || routeUserLocation;
   const { token, user, currencySymbol } = useContext(AuthContext);
   const { addToCart, cartTotalCount } = useContext(CartContext);
   const { openChatWithStore } = useContext(ChatContext);
@@ -4512,7 +4822,66 @@ function StoreDetailsScreen({ navigation, route }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Recomputed on every render (dealsTick forces one every second) so expired deals drop off live.
   const liveDeals = deals.filter(d => !d.sale_ends_at || new Date(d.sale_ends_at).getTime() > Date.now());
+
+  // Flattened, typed row list for the menu tab so the FlatList below can virtualize
+  // surprise bags + deals + full menu items as one scrolling list instead of an
+  // eagerly-rendered ScrollView (which used to mount every row up front).
+  const menuRows = useMemo(() => {
+    if (loading) return [];
+    const rows = [];
+    if (bags.length === 0 && menuItems.length === 0 && liveDeals.length === 0) {
+      rows.push({ type: 'empty', key: 'empty' });
+    }
+    if (bags.length > 0) {
+      rows.push({ type: 'sectionHeader', key: 'header-bags', title: '🎁 Surprise Bags' });
+      bags.forEach(bag => rows.push({ type: 'bag', key: `bag-${bag.id}`, bag }));
+    }
+    if (liveDeals.length > 0) {
+      rows.push({ type: 'sectionHeader', key: 'header-deals', title: 'Grabengo Deals' });
+      liveDeals.forEach(item => rows.push({ type: 'deal', key: `deal-${item.id}`, item }));
+    }
+    if (menuItems.length > 0) {
+      rows.push({ type: 'sectionHeader', key: 'header-menu', title: '🍽️ Full Menu' });
+      menuItems.forEach(item => rows.push({ type: 'menuItem', key: `menu-${item.id}`, item }));
+    }
+    return rows;
+  }, [loading, bags, liveDeals, menuItems]);
+
+  const handleAddBag = useCallback((bag) => addToCart(bag, 'bag'), [addToCart]);
+  const handleAddDeal = useCallback((item) => addToCart(item, 'food'), [addToCart]);
+  const handleAddMenuItem = useCallback((item) => addToCart({ ...item, quantity: 9999 }, 'menu'), [addToCart]);
+
+  const renderMenuRow = useCallback(({ item: row }) => {
+    switch (row.type) {
+      case 'sectionHeader':
+        return <MenuSectionHeader title={row.title} />;
+      case 'bag':
+        return <BagMenuCard bag={row.bag} currencySymbol={currencySymbol} onAdd={() => handleAddBag(row.bag)} />;
+      case 'deal':
+        return (
+          <DealMenuCard
+            item={row.item}
+            currencySymbol={currencySymbol}
+            onAdd={() => handleAddDeal(row.item)}
+            countdownText={row.item.sale_ends_at ? formatDealCountdown(row.item.sale_ends_at) : null}
+          />
+        );
+      case 'menuItem':
+        return <MenuItemMenuCard item={row.item} currencySymbol={currencySymbol} onAdd={() => handleAddMenuItem(row.item)} />;
+      case 'empty':
+      default:
+        return (
+          <View style={{ marginHorizontal: 20, marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <Text style={{ fontSize: 40, marginBottom: 8 }}>🍽️</Text>
+            <Text style={{ color: '#64748B', fontWeight: '600', textAlign: 'center' }}>Nothing listed by this store right now.</Text>
+          </View>
+        );
+    }
+  }, [currencySymbol, handleAddBag, handleAddDeal, handleAddMenuItem]);
+
+  const menuKeyExtractor = useCallback((row) => row.key, []);
 
   const toggleFavorite = async () => {
     if (!token) {
@@ -4732,7 +5101,15 @@ function StoreDetailsScreen({ navigation, route }) {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
+      <FlatList
+        data={activeTab === 'menu' ? menuRows : []}
+        keyExtractor={menuKeyExtractor}
+        renderItem={renderMenuRow}
+        extraData={dealsTick}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 140 }}
+        ListHeaderComponent={(
+          <View>
         {/* Visual Cover Photo with Gradient Overlay */}
         <View style={{ height: 260, position: 'relative' }}>
           <Image source={{ uri: coverUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
@@ -4831,9 +5208,9 @@ function StoreDetailsScreen({ navigation, route }) {
                 <Ionicons name="star" size={14} color="white" />
               </View>
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E293B' }}>
-                {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : '4.8'}
+                {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : 'New'}
               </Text>
-              <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B', marginTop: 2 }}>({reviews.length} ratings)</Text>
+              <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B', marginTop: 2 }}>{reviews.length > 0 ? `(${reviews.length} ratings)` : 'No ratings yet'}</Text>
             </View>
 
             {/* Distance Box */}
@@ -4873,45 +5250,6 @@ function StoreDetailsScreen({ navigation, route }) {
                 {distanceText}
               </Text>
               <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B', marginTop: 2 }}>Distance</Text>
-            </View>
-
-            {/* Time Box */}
-            <View style={{ 
-              flex: 1, 
-              backgroundColor: '#FFFFFF', 
-              borderRadius: 20, 
-              paddingVertical: 14,
-              paddingHorizontal: 6,
-              alignItems: 'center', 
-              justifyContent: 'center',
-              borderWidth: 1,
-              borderColor: '#E2E8F0',
-              shadowColor: '#0F172A',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.02,
-              shadowRadius: 8,
-              elevation: 2
-            }}>
-              <View style={{ 
-                width: 32, 
-                height: 32, 
-                borderRadius: 16, 
-                backgroundColor: '#FF5C00', 
-                justifyContent: 'center', 
-                alignItems: 'center',
-                marginBottom: 6,
-                shadowColor: '#FF5C00',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.15,
-                shadowRadius: 4,
-                elevation: 1
-              }}>
-                <Ionicons name="time" size={15} color="white" />
-              </View>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#1E293B' }}>
-                17:30 - 19:00
-              </Text>
-              <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B', marginTop: 2 }}>Pickup Window</Text>
             </View>
           </View>
         </View>
@@ -4972,320 +5310,17 @@ function StoreDetailsScreen({ navigation, route }) {
         </View>
 
         {/* Loading Spinner */}
-        {loading ? (
+        {loading && (
           <View style={{ padding: 60, alignItems: 'center' }}>
             <ActivityIndicator size="small" color="#FF5C00" />
           </View>
-        ) : (
-          <View style={{ paddingBottom: 10 }}>
-            {/* MENU: Surprise Bags + Products, merged with section headers */}
-            {activeTab === 'menu' && (
-              <View>
-                {bags.length === 0 && menuItems.length === 0 && liveDeals.length === 0 && (
-                  <View style={{ marginHorizontal: 20, marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontSize: 40, marginBottom: 8 }}>🍽️</Text>
-                    <Text style={{ color: '#64748B', fontWeight: '600', textAlign: 'center' }}>Nothing listed by this store right now.</Text>
-                  </View>
-                )}
-
-                {bags.length > 0 && (
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginHorizontal: 20, marginTop: 4, marginBottom: 4 }}>🎁 Surprise Bags</Text>
-                )}
-                {bags.length > 0 && (
-                  bags.map(bag => (
-                    <View key={bag.id} style={{ 
-                      marginHorizontal: 20, 
-                      marginTop: 16, 
-                      backgroundColor: '#FFFFFF', 
-                      borderRadius: 24, 
-                      padding: 16, 
-                      borderWidth: 1, 
-                      borderColor: '#E2E8F0', 
-                      shadowColor: '#0F172A', 
-                      shadowOffset: { width: 0, height: 6 }, 
-                      shadowOpacity: 0.04, 
-                      shadowRadius: 12, 
-                      elevation: 3
-                    }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {/* Left: Thumbnail Graphic */}
-                        <View style={{ 
-                          width: 72, 
-                          height: 72, 
-                          borderRadius: 16, 
-                          marginRight: 14,
-                          position: 'relative',
-                          overflow: 'hidden',
-                          shadowColor: '#FF5C00',
-                          shadowOffset: { width: 0, height: 4 },
-                          shadowOpacity: 0.15,
-                          shadowRadius: 8,
-                          elevation: 3
-                        }}>
-                          <LinearGradient
-                            colors={['#FF7E40', '#FF5C00']}
-                            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-                          />
-                          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                            <Ionicons name="gift" size={32} color="white" />
-                          </View>
-                        </View>
-
-                        {/* Middle & Right Top Section */}
-                        <View style={{ flex: 1, justifyContent: 'center' }}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <View style={{ flex: 1, marginRight: 8 }}>
-                              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>Surprise Bag</Text>
-                              <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 }} numberOfLines={2}>
-                                {bag.description || 'Assortment of fresh surplus bakery treats, daily specials, or meals.'}
-                              </Text>
-                            </View>
-                            
-                            {/* Price Column */}
-                            <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                              <Text style={storeProductUi.price}>{formatProductPrice(bag.price, currencySymbol)}</Text>
-                              {bag.original_price && (
-                                <Text style={storeProductUi.priceOld}>
-                                  {formatProductPrice(bag.original_price, currencySymbol)}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                        </View>
-                      </View>
-
-                      {/* Divider */}
-                      <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
-
-                      {/* Bottom row: badges and CTA Add button (No overlaps!) */}
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <View style={{ backgroundColor: '#FBE2DC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                            <Text style={{ fontSize: 11, color: '#E64A33', fontWeight: '800' }}>
-                              {bag.quantity} remaining
-                            </Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                            <Ionicons name="time-outline" size={12} color="#64748B" style={{ marginRight: 4 }} />
-                            <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>{bag.pickup_time || '18:00 - 19:30'}</Text>
-                          </View>
-                        </View>
-
-                        <TouchableOpacity 
-                          onPress={() => addToCart(bag, 'bag')}
-                          style={storeProductUi.addBtn}
-                        >
-                          <Ionicons name="add" size={14} color="#C2410C" />
-                          <Text style={storeProductUi.addBtnText}>Add</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ))
-                )}
-
-                {liveDeals.length > 0 && (
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginHorizontal: 20, marginTop: 20, marginBottom: 4 }}>Grabengo Deals</Text>
-                )}
-                {liveDeals.length > 0 && (
-                  liveDeals.map(item => (
-                    <View key={`deal-${item.id}-${dealsTick}`} style={{
-                      marginHorizontal: 20,
-                      marginTop: 16,
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: 24,
-                      padding: 16,
-                      borderWidth: 1.5,
-                      borderColor: '#FBE2DC',
-                      shadowColor: '#FF5C00',
-                      shadowOffset: { width: 0, height: 6 },
-                      shadowOpacity: 0.08,
-                      shadowRadius: 12,
-                      elevation: 3
-                    }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {(() => {
-                          const dealImage = firstProductImage(item);
-                          const thumbStyle = {
-                            width: 72, height: 72, borderRadius: 16, marginRight: 14,
-                            position: 'relative', overflow: 'hidden',
-                            backgroundColor: '#FFF7ED',
-                          };
-                          const fallback = (
-                            <View style={thumbStyle}>
-                              <LinearGradient colors={['#FF7E40', '#FF5C00']} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-                              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                <Ionicons name="flash" size={28} color="white" />
-                              </View>
-                            </View>
-                          );
-                          return (
-                            <ProductThumb uri={dealImage} style={thumbStyle} fallback={fallback} />
-                          );
-                        })()}
-                        <View style={{ flex: 1, justifyContent: 'center' }}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <View style={{ flex: 1, marginRight: 8 }}>
-                              <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 4 }}>
-                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#1E40AF', letterSpacing: 0.5 }}>{item.category?.toUpperCase()}</Text>
-                              </View>
-                              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>{item.name}</Text>
-                              <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 }} numberOfLines={2}>
-                                {item.description || 'Discounted item, limited quantity.'}
-                              </Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                              <Text style={storeProductUi.price}>{formatProductPrice(item.price, currencySymbol)}</Text>
-                              {item.original_price && (
-                                <Text style={storeProductUi.priceOld}>
-                                  {formatProductPrice(item.original_price, currencySymbol)}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                        </View>
-                      </View>
-
-                      <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
-
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <View style={{ backgroundColor: '#FBE2DC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                            <Text style={{ fontSize: 11, color: '#E64A33', fontWeight: '800' }}>
-                              {item.quantity} left
-                            </Text>
-                          </View>
-                          {item.sale_ends_at && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                              <Ionicons name="time-outline" size={11} color="#FF5C00" />
-                              <Text style={{ fontSize: 11, color: '#FF5C00', fontWeight: '800', marginLeft: 3 }}>
-                                {formatDealCountdown(item.sale_ends_at)}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-
-                        <TouchableOpacity
-                          onPress={() => addToCart(item, 'food')}
-                          style={storeProductUi.addBtn}
-                        >
-                          <Ionicons name="add" size={14} color="#C2410C" />
-                          <Text style={storeProductUi.addBtnText}>Add</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ))
-                )}
-
-                {menuItems.length > 0 && (
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginHorizontal: 20, marginTop: 20, marginBottom: 4 }}>🍽️ Full Menu</Text>
-                )}
-                {menuItems.length > 0 && (
-                  menuItems.map(item => {
-                    let gradColors = ['#F59E0B', '#D97706'];
-                    let catIcon = 'cart';
-                    if (item.category === 'Drinks' || item.category === 'Coffee & Tea') {
-                      gradColors = ['#3B82F6', '#1D4ED8'];
-                      catIcon = 'cafe';
-                    } else if (item.category === 'Meals' || item.category === 'Fresh Food') {
-                      gradColors = ['#10B981', '#059669'];
-                      catIcon = 'restaurant';
-                    } else if (item.category === 'Groceries' || item.category === 'Household' || item.category === 'Household & Cleaning' || item.category === 'Canned & Packaged') {
-                      gradColors = ['#6366F1', '#4F46E5'];
-                      catIcon = 'basket';
-                    } else if (item.category === 'Personal Care' || item.category === 'Baby & Kids') {
-                      gradColors = ['#EC4899', '#DB2777'];
-                      catIcon = 'sparkles';
-                    } else if (item.category === 'Frozen') {
-                      gradColors = ['#0EA5E9', '#0284C7'];
-                      catIcon = 'snow';
-                    }
-
-                    return (
-                      <View key={item.id} style={{
-                        marginHorizontal: 20,
-                        marginTop: 16,
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: 24,
-                        padding: 16,
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
-                        shadowColor: '#0F172A',
-                        shadowOffset: { width: 0, height: 6 },
-                        shadowOpacity: 0.04,
-                        shadowRadius: 12,
-                        elevation: 3
-                      }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          {(() => {
-                            const menuImage = firstProductImage(item);
-                            const thumbStyle = {
-                              width: 72,
-                              height: 72,
-                              borderRadius: 16,
-                              marginRight: 14,
-                              position: 'relative',
-                              overflow: 'hidden',
-                              backgroundColor: '#F8FAFC',
-                            };
-                            const fallback = (
-                              <View style={thumbStyle}>
-                                <LinearGradient
-                                  colors={gradColors}
-                                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-                                />
-                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                  <Ionicons name={catIcon} size={28} color="white" />
-                                </View>
-                              </View>
-                            );
-                            return (
-                              <ProductThumb uri={menuImage} style={thumbStyle} fallback={fallback} />
-                            );
-                          })()}
-
-                          {/* Middle & Right Top Section */}
-                          <View style={{ flex: 1, justifyContent: 'center' }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                              <View style={{ flex: 1, marginRight: 8 }}>
-                                <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 4 }}>
-                                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#1E40AF', letterSpacing: 0.5 }}>{item.category?.toUpperCase()}</Text>
-                                </View>
-                                <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>{item.name}</Text>
-                                <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 }} numberOfLines={2}>
-                                  {item.description || 'Freshly prepared menu item.'}
-                                </Text>
-                              </View>
-
-                              {/* Price Column */}
-                              <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
-                                <Text style={storeProductUi.price}>{formatProductPrice(item.price, currencySymbol)}</Text>
-                              </View>
-                            </View>
-                          </View>
-                        </View>
-
-                        {/* Divider */}
-                        <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
-
-                        {/* Bottom row: CTA Add button */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <TouchableOpacity
-                            onPress={() => addToCart({ ...item, quantity: 9999 }, 'menu')}
-                            style={storeProductUi.addBtn}
-                          >
-                            <Ionicons name="add" size={14} color="#C2410C" />
-                            <Text style={storeProductUi.addBtnText}>Add</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  })
-                )}
-              </View>
-            )}
-
+        )}
+          </View>
+        )}
+        ListFooterComponent={(
+          <View>
             {/* CUSTOMER REVIEWS PORTAL */}
-            {activeTab === 'reviews' && (
+            {!loading && activeTab === 'reviews' && (
               <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
                 {/* Rating Distribution Panel */}
                 <View style={{ 
@@ -5304,11 +5339,11 @@ function StoreDetailsScreen({ navigation, route }) {
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <View style={{ alignItems: 'center', paddingRight: 24, borderRightWidth: 1, borderRightColor: '#E2E8F0', minWidth: 100 }}>
                       <Text style={{ fontSize: 44, fontWeight: '900', color: '#0F172A' }}>
-                        {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : '4.8'}
+                        {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : 'New'}
                       </Text>
                       <View style={{ flexDirection: 'row', marginVertical: 4 }}>
                         {[...Array(5)].map((_, idx) => {
-                          const avg = reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length) : 4.8;
+                          const avg = reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length) : 0;
                           return (
                             <Ionicons key={idx} name={idx < Math.round(avg) ? "star" : "star-outline"} size={14} color="#F59E0B" />
                           );
@@ -5320,7 +5355,7 @@ function StoreDetailsScreen({ navigation, route }) {
                     <View style={{ flex: 1, paddingLeft: 20, gap: 4 }}>
                       {[5, 4, 3, 2, 1].map(stars => {
                         const count = reviews.filter(r => r.rating === stars).length;
-                        const percent = reviews.length > 0 ? (count / reviews.length) * 100 : (stars === 5 ? 80 : stars === 4 ? 15 : 5);
+                        const percent = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
                         return (
                           <View key={stars} style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', width: 12 }}>{stars}</Text>
@@ -5344,23 +5379,18 @@ function StoreDetailsScreen({ navigation, route }) {
                     const counts = {};
                     allTags.forEach(t => { counts[t] = (counts[t] || 0) + 1; });
                     const sortedTags = Object.keys(counts).sort((a,b) => counts[b] - counts[a]).slice(0, 4);
+                    if (sortedTags.length === 0) return null;
 
                     return (
                       <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }}>
                         <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>Highlights from Customers</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                          {sortedTags.length > 0 ? sortedTags.map(tag => (
+                          {sortedTags.map(tag => (
                             <View key={tag} style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: '#DCFCE7', flexDirection: 'row', alignItems: 'center' }}>
                               <Ionicons name="checkmark-circle" size={12} color="#15803D" style={{ marginRight: 4 }} />
                               <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>{tag} ({counts[tag]})</Text>
                             </View>
-                          )) : (
-                            ['Friendly Staff', 'Great Value', 'Fresh Quality'].map(tag => (
-                              <View key={tag} style={{ backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' }}>
-                                <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700' }}>{tag}</Text>
-                              </View>
-                            ))
-                          )}
+                          ))}
                         </View>
                       </View>
                     );
@@ -5462,10 +5492,8 @@ function StoreDetailsScreen({ navigation, route }) {
                 </View>
               </View>
             )}
-          </View>
-        )}
 
-        {/* Dynamic Directions & Map Card */}
+            {/* Dynamic Directions & Map Card */}
         <View style={{ marginHorizontal: 20, marginTop: 24, marginBottom: 40 }}>
           <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 12 }}>Location & Info</Text>
           <View style={{ 
@@ -5527,7 +5555,9 @@ function StoreDetailsScreen({ navigation, route }) {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+          </View>
+        )}
+      />
 
       {/* Local Modal for Writing Review */}
       <Modal visible={localAddReviewVisible} animationType="slide" transparent>
@@ -6225,7 +6255,7 @@ function BookingsScreen({ navigation }) {
     }
   };
 
-  const renderOrderItem = ({ item }) => {
+  const renderOrderItem = useCallback(({ item }) => {
     const imageUrl = item.store_image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&auto=format&fit=crop';
     const date = new Date(item.created_at).toLocaleDateString();
     const isDelivery = item.fulfillment_type === 'delivery';
@@ -6361,7 +6391,28 @@ function BookingsScreen({ navigation }) {
         ) : null}
       </View>
     );
-  };
+  }, [currencySymbol, user, openReceipt, openChatWithStore, unreadStores]);
+
+  const orderSections = useMemo(() => {
+    const ACTIVE = ['pending', 'confirmed'];
+    const sorted = [...orders].sort((a, b) => {
+      const aActive = ACTIVE.includes(a.status) ? 0 : 1;
+      const bActive = ACTIVE.includes(b.status) ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+    const activeOrders = sorted.filter((o) => ACTIVE.includes(o.status));
+    const pastOrders = sorted.filter((o) => !ACTIVE.includes(o.status));
+    const sections = [];
+    if (activeOrders.length > 0) sections.push({ title: 'ACTIVE', data: activeOrders });
+    if (pastOrders.length > 0) sections.push({ title: 'PAST', data: pastOrders });
+    return sections;
+  }, [orders]);
+
+  const orderKeyExtractor = useCallback((item) => String(item.id), []);
+  const renderOrderSectionHeader = useCallback(({ section }) => (
+    <Text style={{ fontSize: 13, fontWeight: '800', color: '#6B7280', marginBottom: 12, marginTop: section.title === 'PAST' ? 8 : 0, letterSpacing: 0.5 }}>{section.title}</Text>
+  ), []);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -6382,39 +6433,15 @@ function BookingsScreen({ navigation }) {
           <Text style={{ fontSize: 20, fontWeight: '700', color: '#374151', marginTop: 16 }}>No bookings yet</Text>
         </View>
       ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-          {(() => {
-            const ACTIVE = ['pending', 'confirmed'];
-            const sorted = [...orders].sort((a, b) => {
-              const aActive = ACTIVE.includes(a.status) ? 0 : 1;
-              const bActive = ACTIVE.includes(b.status) ? 0 : 1;
-              if (aActive !== bActive) return aActive - bActive;
-              return new Date(b.created_at) - new Date(a.created_at);
-            });
-            const activeOrders = sorted.filter((o) => ACTIVE.includes(o.status));
-            const pastOrders = sorted.filter((o) => !ACTIVE.includes(o.status));
-            return (
-              <>
-                {activeOrders.length > 0 && (
-                  <>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#6B7280', marginBottom: 12, letterSpacing: 0.5 }}>ACTIVE</Text>
-                    {activeOrders.map((item) => (
-                      <View key={`active-${item.id}`}>{renderOrderItem({ item })}</View>
-                    ))}
-                  </>
-                )}
-                {pastOrders.length > 0 && (
-                  <>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#6B7280', marginTop: activeOrders.length ? 8 : 0, marginBottom: 12, letterSpacing: 0.5 }}>PAST</Text>
-                    {pastOrders.map((item) => (
-                      <View key={`past-${item.id}`}>{renderOrderItem({ item })}</View>
-                    ))}
-                  </>
-                )}
-              </>
-            );
-          })()}
-        </ScrollView>
+        <SectionList
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+          sections={orderSections}
+          keyExtractor={orderKeyExtractor}
+          renderItem={renderOrderItem}
+          renderSectionHeader={renderOrderSectionHeader}
+        />
       )}
       <SharedBottomNav navigation={navigation} activeTab="Bookings" cartTotalCount={cartTotalCount} />
     </SafeAreaView>
@@ -8758,6 +8785,7 @@ export default function App() {
         <AuthContext.Provider value={authContext}>
           <LandingBrandsContext.Provider value={landingBrandsContext}>
             <CartContext.Provider value={cartContext}>
+              <LocationProvider>
               <ChatProvider>
                 <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
                   <Stack.Navigator
@@ -8796,6 +8824,7 @@ export default function App() {
                 <GlobalReceiptModal />
                 <GlobalProfileModal />
               </ChatProvider>
+              </LocationProvider>
             </CartContext.Provider>
           </LandingBrandsContext.Provider>
         </AuthContext.Provider>
