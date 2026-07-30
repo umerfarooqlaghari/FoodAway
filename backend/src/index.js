@@ -716,6 +716,21 @@ app.post('/api/auth/reset-password', async (req, res) => {
     // Delete used OTP
     await db.prepare('DELETE FROM otps WHERE email = ?').run(email);
 
+    // Send password reset confirmation email
+    sendEmail({
+      to: email,
+      subject: `Password Reset Successful - ${brandName} 🔐`,
+      html: emailSimpleLayout({
+        title: 'Password Reset Successful',
+        bodyHtml: `
+          <p>Hi there,</p>
+          <p>Your password for your <strong>${brandName}</strong> account has been successfully reset.</p>
+          <p>If you did not perform this action, please secure your account or contact support immediately.</p>
+        `
+      }),
+      text: `Your ${brandName} password was successfully reset.`
+    }).catch(e => console.error('Failed to send password reset success email:', e.message));
+
     res.json({ message: 'Password reset successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -919,6 +934,10 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
       : (tenant?.logo || null);
     const { deliveryEnabled: deliveryEnabledBool, deliveryMode } = resolveStoreDeliverySettings(req.user, { delivery_enabled, delivery_mode });
     const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category, delivery_mode) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category, deliveryMode);
+    
+    // Broadcast email to registered customers about the new store
+    broadcastNewStoreEmail({ storeName: name, address });
+
     res.json({ id: info.lastInsertRowid, tenant_id: targetTenantId, name, address, lat, lng, is_active: true, image: imageUrl, delivery_enabled: deliveryEnabledBool, delivery_fee_note: delivery_fee_note || null, category, delivery_mode: deliveryMode, customer_delivery_live: customerDeliveryLive });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1001,6 +1020,9 @@ app.post('/api/bags', verifyToken, requireRole('bags', 'write'), async (req, res
     // Notify users who have favorited this store
     const store = await db.prepare('SELECT name FROM stores WHERE id = ?').get(store_id);
     if (store) {
+      // Broadcast new item email to customers
+      broadcastNewItemEmail({ storeName: store.name, itemName: description || 'Surprise Bag', price, itemType: 'bag' });
+
       const isFlashDeal = original_price && price && ((original_price - price) / original_price) >= 0.70;
       const favoritedUsers = await db.prepare('SELECT user_id FROM favorites WHERE store_id = ?').all(store_id);
       for (const fav of favoritedUsers) {
@@ -1156,6 +1178,13 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
     const info = await db.prepare(
       'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category, sale_ends_at, starts_at, menu_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(resolvedStoreId, resolvedName, resolvedDescription, price, resolvedOriginalPrice || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null, starts_at || null, menu_item_id || null);
+    
+    // Broadcast new food item deal email to customers
+    const store = await db.prepare('SELECT name FROM stores WHERE id = ?').get(resolvedStoreId);
+    if (store) {
+      broadcastNewItemEmail({ storeName: store.name, itemName: resolvedName, price, itemType: 'food' });
+    }
+
     res.json({ id: info.lastInsertRowid, store_id: resolvedStoreId, name: resolvedName, price, quantity, category: normalizedCategory });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -1539,7 +1568,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     const placedOrders = [];
     for (const orderId of orderIds) {
       const order = await db.prepare(`
-        SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+        SELECT o.id, o.store_id, o.customer_id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
                o.fulfillment_type, o.delivery_address, o.delivery_phone,
                s.name as store_name, s.tenant_id,
                t.name as tenant_name,
@@ -1781,7 +1810,7 @@ app.get('/api/seller/orders', verifyToken, async (req, res) => {
     }
 
     const orders = await db.prepare(`
-      SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
+      SELECT o.id, o.store_id, o.customer_id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
              o.fulfillment_type, o.delivery_address, o.status,
              o.delivery_lat, o.delivery_lng, o.delivery_id,
              COALESCE(o.delivery_phone, u.phone) as customer_phone,
@@ -3039,7 +3068,7 @@ const initWebSockets = (httpServer) => {
               if (senderRole === 'Customer') {
                 const store = await db.prepare('SELECT tenant_id, name FROM stores WHERE id = ?').get(storeId);
                 if (store) {
-                  const sellers = await db.prepare("SELECT id, push_token FROM users WHERE tenant_id = ? AND role IN ('SellersAdmin', 'SellersStaff')").all(store.tenant_id);
+                  const sellers = await db.prepare("SELECT id, email, name, push_token FROM users WHERE tenant_id = ? AND role IN ('SellersAdmin', 'SellersStaff')").all(store.tenant_id);
                   for (const seller of sellers) {
                     if (seller.push_token) {
                       await sendPushNotification(
@@ -3049,18 +3078,57 @@ const initWebSockets = (httpServer) => {
                         { type: 'chat', storeId: Number(storeId), customerId: Number(resolvedCustomerId), storeName: store.name }
                       );
                     }
+                    if (seller.email) {
+                      const emailHtml = emailSimpleLayout({
+                        title: `New Message for ${store.name}`,
+                        bodyHtml: `
+                          <p>Hi <strong>${seller.name || 'Store Manager'}</strong>,</p>
+                          <p>You received a new message from customer <strong>${currentUser.name || 'Customer'}</strong> regarding an order at <strong>${store.name}</strong>:</p>
+                          <blockquote style="border-left: 4px solid #FF5C00; margin: 16px 0; padding-left: 16px; font-style: italic; color: #555;">
+                            "${text}"
+                          </blockquote>
+                          <p>Log in to your Grabengo Seller Dashboard to view and reply.</p>
+                        `
+                      });
+                      sendEmail({
+                        to: seller.email,
+                        subject: `New Customer Message - ${store.name}`,
+                        html: emailHtml,
+                        text: `Hi ${seller.name || 'Store Manager'},\n\nNew message from ${currentUser.name || 'Customer'}:\n"${text}"\n\nOpen your Seller Dashboard to reply.`
+                      }).catch(e => console.error("Failed to send seller chat email:", e));
+                    }
                   }
                 }
               } else {
-                const customer = await db.prepare('SELECT push_token FROM users WHERE id = ?').get(resolvedCustomerId);
+                const customer = await db.prepare('SELECT push_token, email, name FROM users WHERE id = ?').get(resolvedCustomerId);
                 const store = await db.prepare('SELECT name FROM stores WHERE id = ?').get(storeId);
+                const storeName = store ? store.name : 'Store Support';
                 if (customer && customer.push_token) {
                   await sendPushNotification(
                     customer.push_token,
-                    store ? store.name : 'Store Support',
+                    storeName,
                     text,
-                    { type: 'chat', storeId: Number(storeId), storeName: store ? store.name : 'Store Support' }
+                    { type: 'chat', storeId: Number(storeId), storeName }
                   );
+                }
+                if (customer && customer.email) {
+                  const emailHtml = emailSimpleLayout({
+                    title: 'New Message',
+                    bodyHtml: `
+                      <p>Hi ${customer.name || 'there'},</p>
+                      <p>You have a new message from <strong>${storeName}</strong> regarding your recent order:</p>
+                      <blockquote style="border-left: 4px solid #FF5C00; margin: 16px 0; padding-left: 16px; font-style: italic; color: #555;">
+                        "${text}"
+                      </blockquote>
+                      <p>Open the Grabengo app to reply to this message.</p>
+                    `
+                  });
+                  sendEmail({
+                    to: customer.email,
+                    subject: `New Message from ${storeName}`,
+                    html: emailHtml,
+                    text: `Hi ${customer.name || 'there'},\n\nYou have a new message from ${storeName}:\n"${text}"\n\nOpen the app to reply.`
+                  }).catch(e => console.error("Failed to send chat email:", e));
                 }
               }
             } catch (pushErr) {
@@ -3869,6 +3937,104 @@ async function sendCheckoutOtpEmail({ to, name, otp }) {
     }),
     text: `Your ${brandName} order verification code is ${otp}. Valid for 5 minutes.`
   });
+}
+
+async function broadcastNewItemEmail({ storeName, itemName, price, itemType }) {
+  try {
+    const customers = await db.prepare("SELECT email, name FROM users WHERE role = 'Customers' AND email IS NOT NULL").all();
+    if (!customers || customers.length === 0) return;
+
+    const subject = `🔥 New ${itemType === 'bag' ? 'Surprise Bag' : 'Food Deal'} at ${storeName}!`;
+    for (const customer of customers) {
+      const emailHtml = emailSimpleLayout({
+        title: `New Surplus Deal Available!`,
+        bodyHtml: `
+          <p>Hi <strong>${customer.name || 'Food Rescuer'}</strong>,</p>
+          <p><strong>${storeName}</strong> just added a new ${itemType === 'bag' ? 'Surprise Bag' : 'item'} to Grabengo!</p>
+          <div style="background:#fff8f5;border:1px solid #ffe0cc;border-radius:8px;padding:16px;margin:16px 0;">
+            <h3 style="margin:0 0 8px 0;color:#FF5C00;">${itemName}</h3>
+            <p style="margin:0;font-size:16px;font-weight:bold;color:#333;">Price: Rs${Number(price).toFixed(2)}</p>
+          </div>
+          <p>Open the Grabengo app now to rescue this deal before it runs out!</p>
+        `
+      });
+      sendEmail({
+        to: customer.email,
+        subject,
+        html: emailHtml,
+        text: `Hi ${customer.name || 'there'}, ${storeName} just listed ${itemName} for Rs${Number(price).toFixed(2)} on Grabengo! Open the app to check it out.`
+      }).catch(e => console.error(`Failed to send broadcast email to ${customer.email}:`, e.message));
+    }
+  } catch (err) {
+    console.error('Error broadcasting new item email:', err.message);
+  }
+}
+
+async function broadcastNewStoreEmail({ storeName, address }) {
+  try {
+    const customers = await db.prepare("SELECT email, name FROM users WHERE role = 'Customers' AND email IS NOT NULL").all();
+    if (!customers || customers.length === 0) return;
+
+    const subject = `🎉 New Store Alert: ${storeName} is now live on Grabengo!`;
+    for (const customer of customers) {
+      const emailHtml = emailSimpleLayout({
+        title: `New Partner Joined Grabengo!`,
+        bodyHtml: `
+          <p>Hi <strong>${customer.name || 'Food Rescuer'}</strong>,</p>
+          <p>We're excited to announce that <strong>${storeName}</strong> is now live on Grabengo!</p>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:16px 0;">
+            <h3 style="margin:0 0 4px 0;color:#16a34a;">🏪 ${storeName}</h3>
+            <p style="margin:0;color:#555;font-size:14px;">${address || 'Check in app for location'}</p>
+          </div>
+          <p>Open the app to explore their surplus items and rescue food at discounted prices!</p>
+        `
+      });
+      sendEmail({
+        to: customer.email,
+        subject,
+        html: emailHtml,
+        text: `Hi ${customer.name || 'there'}, ${storeName} is now live on Grabengo! Open the app to rescue food.`
+      }).catch(e => console.error(`Failed to send store broadcast email to ${customer.email}:`, e.message));
+    }
+  } catch (err) {
+    console.error('Error broadcasting new store email:', err.message);
+  }
+}
+
+async function sendStoreNewOrderEmail({ storeId, placedOrders, customerName, customerPhone }) {
+  try {
+    const store = await db.prepare('SELECT name, tenant_id FROM stores WHERE id = ?').get(storeId);
+    if (!store?.tenant_id) return;
+    const sellers = await db.prepare("SELECT email, name FROM users WHERE tenant_id = ? AND role IN ('SellersAdmin', 'SellersStaff') AND email IS NOT NULL").all(store.tenant_id);
+    if (!sellers || sellers.length === 0) return;
+
+    const itemsHtml = placedOrders.map(o => `<li>${o.quantity}x <strong>${o.item_name}</strong> — Rs${(o.price * o.quantity).toFixed(2)}</li>`).join('');
+    const total = placedOrders.reduce((sum, o) => sum + (o.price * o.quantity), 0);
+
+    for (const seller of sellers) {
+      const html = emailSimpleLayout({
+        title: `New Order Received! 🛒`,
+        bodyHtml: `
+          <p>Hi <strong>${seller.name || 'Store Manager'}</strong>,</p>
+          <p>You received a new order for <strong>${store.name}</strong>!</p>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:16px;margin:16px 0;">
+            <p style="margin:0 0 8px 0;font-size:14px;color:#64748b;"><strong>Customer:</strong> ${customerName} (${customerPhone || 'No phone'})</p>
+            <ul style="margin:0;padding-left:20px;color:#334155;">${itemsHtml}</ul>
+            <p style="margin:12px 0 0 0;font-weight:bold;font-size:16px;color:#0f172a;border-top:1px solid #cbd5e1;padding-top:8px;">Total: Rs${total.toFixed(2)}</p>
+          </div>
+          <p>Please log in to your Seller Dashboard to view and accept this order.</p>
+        `
+      });
+      sendEmail({
+        to: seller.email,
+        subject: `New Order Alert - ${store.name} 🛒`,
+        html,
+        text: `New Order for ${store.name} from ${customerName}! Total: Rs${total.toFixed(2)}. Open dashboard to accept.`
+      }).catch(e => console.error(`Failed to send order alert to ${seller.email}:`, e.message));
+    }
+  } catch (err) {
+    console.error('Error sending store new order email:', err.message);
+  }
 }
 
 async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders }) {
