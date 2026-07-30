@@ -3,7 +3,7 @@ import { enableScreens } from 'react-native-screens';
 enableScreens(false);
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Pressable, ActivityIndicator, TextInput, Alert, ScrollView, Modal, Platform, Linking, Animated, TouchableWithoutFeedback, Switch, useWindowDimensions, Easing } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Pressable, ActivityIndicator, TextInput, Alert, ScrollView, Modal, Platform, Linking, Animated, TouchableWithoutFeedback, Switch, useWindowDimensions, Easing, Share, KeyboardAvoidingView } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, TouchableOpacity as GHTouchableOpacity, Pressable as GHPressable, ScrollView as GHScrollView } from 'react-native-gesture-handler';
@@ -1032,6 +1032,7 @@ function GlobalChatModal() {
 
   return (
     <Modal visible={chatVisible} animationType="slide" onRequestClose={() => setChatVisible(false)}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: insets.top }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', height: 60 }}>
@@ -1151,6 +1152,7 @@ function GlobalChatModal() {
           </TouchableOpacity>
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1466,7 +1468,8 @@ function LandingScreen({ navigation }) {
   const screenWidth = Dimensions.get('window').width;
   const illustrationWidth = screenWidth - 48;
   const illustrationHeight = illustrationWidth * (360 / 480);
-  const CARD_STEP = 156;
+  const CARD_STEP = 112; // 96 width + 16 marginRight
+  const topTenants = carouselTenants.slice(0, 10);
 
   useEffect(() => {
     setCarouselTenants(contextTenants);
@@ -1486,25 +1489,25 @@ function LandingScreen({ navigation }) {
 
   // Smooth carousel loop — Animated avoids ScrollView scrollTo stealing touches on device.
   useEffect(() => {
-    if (carouselTenants.length === 0) return undefined;
-    const loopWidth = carouselTenants.length * CARD_STEP;
+    if (topTenants.length === 0) return undefined;
+    const loopWidth = topTenants.length * CARD_STEP;
     carouselAnim.setValue(0);
     const loop = Animated.loop(
       Animated.timing(carouselAnim, {
         toValue: -loopWidth,
-        duration: loopWidth * 25,
+        duration: loopWidth * 30, // Slightly slower for smoothness
         easing: Easing.linear,
         useNativeDriver: true,
       })
     );
     loop.start();
     return () => loop.stop();
-  }, [carouselTenants, carouselAnim]);
+  }, [topTenants.length, carouselAnim]);
 
   const renderHeader = () => (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 10, alignItems: 'center' }}>
       <View style={{ backgroundColor: 'rgba(255,255,255,0.96)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 }}>
-        <Image source={require('./assets/images/grabengo-logo.png')} style={{ width: 100, height: 28 }} resizeMode="contain" />
+        <Image source={require('./assets/images/grabengo-logo.png')} style={{ width: 100, height: 28 }} contentFit="contain" />
       </View>
       <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' }}>
         <Ionicons name="menu" size={22} color="#FFFFFF" />
@@ -1627,7 +1630,7 @@ function LandingScreen({ navigation }) {
                   transform: [{ translateX: carouselAnim }],
                 }}
               >
-                {[...carouselTenants, ...carouselTenants].map((tenant, idx) => (
+                {[...topTenants, ...topTenants].map((tenant, idx) => (
                   <View key={`${tenant.id}-${idx}`} style={{ width: 96, marginRight: 16, alignItems: 'center' }}>
                     <View style={{
                       width: 88,
@@ -1644,7 +1647,7 @@ function LandingScreen({ navigation }) {
                       elevation: 4,
                     }}>
                       {tenant.logo ? (
-                        <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                        <Image source={{ uri: tenant.logo }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
                       ) : (
                         <Text style={{ color: LANDING_ORANGE, fontSize: 28, fontWeight: '900' }}>
                           {tenantInitials(tenant.name)}
@@ -3818,7 +3821,7 @@ function DiscoverScreen({ navigation, route }) {
                 >
                   <View style={{ position: 'relative' }}>
                     {store.image ? (
-                      <Image source={{ uri: store.image }} style={{ width: '100%', height: 100, resizeMode: 'cover' }} />
+                      <Image source={{ uri: store.image }} style={{ width: '100%', height: 100 }} contentFit="cover" />
                     ) : (
                       <View style={{ width: '100%', height: 100, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
                         <Text style={{ fontSize: 40 }}>🏪</Text>
@@ -4732,7 +4735,7 @@ function StoreDetailsScreen({ navigation, route }) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
         {/* Visual Cover Photo with Gradient Overlay */}
         <View style={{ height: 260, position: 'relative' }}>
-          <Image source={{ uri: coverUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+          <Image source={{ uri: coverUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
           <LinearGradient
             colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(15,23,42,0.85)']}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -7054,7 +7057,7 @@ function SellerDashboardScreen() {
           const active = activeSellerChatRef.current;
           if (active && data.message.store_id === active.store_id && data.message.customer_id === active.customer_id) {
             setSellerChatMessages(prev => {
-              if (prev.some(m => m.id === data.message.id)) return prev;
+              if (prev.some(m => m.id === data.message.id || (m.id.toString().startsWith('temp-') && m.message === data.message.message))) return prev;
               return [...prev, data.message];
             });
           }
@@ -7083,14 +7086,26 @@ function SellerDashboardScreen() {
   const sendSellerChatMessage = () => {
     if (!sellerChatInput.trim() || !activeSellerChat) return;
     connectSellerWs();
+    
+    const text = sellerChatInput.trim();
+    const optimistic = {
+      id: `temp-${Date.now()}`,
+      store_id: activeSellerChat.store_id,
+      customer_id: activeSellerChat.customer_id,
+      sender_role: 'Seller',
+      message: text,
+      created_at: new Date().toISOString()
+    };
+    setSellerChatMessages(prev => [...prev, optimistic]);
+    setSellerChatInput('');
+
     if (sellerWsRef.current?.readyState === WebSocket.OPEN) {
       sellerWsRef.current.send(JSON.stringify({
         type: 'message',
         storeId: activeSellerChat.store_id,
         customerId: activeSellerChat.customer_id,
-        text: sellerChatInput.trim()
+        text: text
       }));
-      setSellerChatInput('');
     } else {
       Alert.alert('Offline', 'Chat connection is not ready. Please try again.');
       connectSellerWs();
@@ -7834,32 +7849,44 @@ function SellerDashboardScreen() {
                 <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{isDelivery ? '' : (order.pickup_time || 'Pickup window TBC')}</Text>
               </View>
 
-              {order.customer_phone ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                {order.customer_phone ? (
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(`tel:${order.customer_phone}`)}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#F0FDF4', borderRadius: 10 }}
+                  >
+                    <Ionicons name="call-outline" size={14} color="#15803D" />
+                    <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13 }}>Call</Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
-                  onPress={() => Linking.openURL(`tel:${order.customer_phone}`)}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 8, backgroundColor: '#F0FDF4', borderRadius: 10 }}
+                  onPress={() => openSellerChat({ store_id: order.store_id, customer_id: order.customer_id, customer_name: order.customer_name || order.customer_email || 'Customer', store_name: order.store_name })}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
                 >
-                  <Ionicons name="call-outline" size={14} color="#15803D" />
-                  <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13 }}>{order.customer_phone}</Text>
+                  <Ionicons name="chatbubble-outline" size={14} color="#1D4ED8" />
+                  <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Chat</Text>
                 </TouchableOpacity>
-              ) : null}
-              {order.fulfillment_type === 'delivery' && order.store_lat != null ? (
-                <TouchableOpacity
-                  onPress={() => openMapDirections(order.store_lat, order.store_lng, 'Store Location')}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
-                >
-                  <Ionicons name="storefront-outline" size={14} color="#1D4ED8" />
-                  <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Open Restaurant in Maps</Text>
-                </TouchableOpacity>
-              ) : null}
+              </View>
+
               {order.fulfillment_type === 'delivery' && order.delivery_lat != null ? (
-                <TouchableOpacity
-                  onPress={() => openMapDirections(order.delivery_lat, order.delivery_lng, 'Delivery Location')}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
-                >
-                  <Ionicons name="navigate-outline" size={14} color="#1D4ED8" />
-                  <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Open Customer Location in Maps</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => openMapDirections(order.delivery_lat, order.delivery_lng, 'Delivery Location')}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
+                  >
+                    <Ionicons name="navigate-outline" size={14} color="#1D4ED8" />
+                    <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Customer Location</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const url = `https://www.google.com/maps/search/?api=1&query=${order.delivery_lat},${order.delivery_lng}`;
+                      Share.share({ message: `Customer Delivery Location: ${url}` });
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
+                  >
+                    <Ionicons name="share-outline" size={16} color="#1D4ED8" />
+                  </TouchableOpacity>
+                </View>
               ) : null}
               {order.delivery_id ? (
                 <View style={{ marginTop: 8, backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.15)' }}>
@@ -8071,7 +8098,7 @@ function SellerDashboardScreen() {
 
               {storeImage ? (
                 <View style={{ position: 'relative', width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
-                  <Image source={{ uri: storeImage }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image source={{ uri: storeImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                   <TouchableOpacity onPress={() => setStoreImage(null)} style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }}>
                     <Ionicons name="close" size={16} color="white" />
                   </TouchableOpacity>
@@ -8235,7 +8262,7 @@ function SellerDashboardScreen() {
                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
                    {bagImages.map((img, idx) => (
                      <View key={idx} style={{ position: 'relative', width: 60, height: 60, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
-                       <Image source={{ uri: img }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                       <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                        <TouchableOpacity onPress={() => setBagImages(prev => prev.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(239, 68, 68, 0.9)', borderRadius: 10, width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
                          <Ionicons name="close" size={12} color="white" />
                        </TouchableOpacity>
@@ -8414,7 +8441,7 @@ function SellerDashboardScreen() {
               {menuItemImage ? (
                 <View style={{ marginBottom: 20 }}>
                   <View style={{ position: 'relative', width: 70, height: 70, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
-                    <Image source={{ uri: menuItemImage }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <Image source={{ uri: menuItemImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                     <TouchableOpacity onPress={() => setMenuItemImage(null)} style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(239, 68, 68, 0.9)', borderRadius: 10, width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
                       <Ionicons name="close" size={12} color="white" />
                     </TouchableOpacity>
@@ -8431,6 +8458,7 @@ function SellerDashboardScreen() {
 
       {/* ── SELLER CHAT MODAL ── */}
       <Modal visible={showSellerChatModal} animationType="slide" onRequestClose={() => setShowSellerChatModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
             <TouchableOpacity onPress={() => setShowSellerChatModal(false)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}>
@@ -8479,6 +8507,7 @@ function SellerDashboardScreen() {
             </TouchableOpacity>
           </View>
         </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── STAFF MODAL ── */}
