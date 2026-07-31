@@ -46,6 +46,42 @@ function getFileSystemModule() {
   return fileSystemModule;
 }
 
+function groupOrders(flatOrders) {
+  if (!Array.isArray(flatOrders)) return [];
+  const groups = {};
+  flatOrders.forEach((o) => {
+    const timeKey = o.created_at ? new Date(o.created_at).getTime() : 0;
+    const key = `${timeKey}_${o.customer_id || o.customer_email || 'cust'}_${o.store_id}`;
+    if (!groups[key]) {
+      groups[key] = {
+        ...o,
+        orderIds: [o.id],
+        items: [{
+          id: o.id,
+          name: o.item_name,
+          quantity: o.quantity || 1,
+          price: Number(o.price) || 0,
+          type: o.type,
+        }],
+        total: (Number(o.price) || 0) * (o.quantity || 1),
+      };
+    } else {
+      groups[key].orderIds.push(o.id);
+      // Avoid duplicate items inside the array if they are the same item (e.g. if we want to combine them, though they should be distinct)
+      groups[key].items.push({
+        id: o.id,
+        name: o.item_name,
+        quantity: o.quantity || 1,
+        price: Number(o.price) || 0,
+        type: o.type,
+      });
+      groups[key].total += (Number(o.price) || 0) * (o.quantity || 1);
+    }
+  });
+  return Object.values(groups);
+}
+
+
 function LazyDateTimePicker(props) {
   const Picker = require('@react-native-community/datetimepicker').default;
   return <Picker {...props} />;
@@ -6300,15 +6336,24 @@ function BookingsScreen({ navigation }) {
           )}
         </View>
 
-        <View style={{ flexDirection: 'row', marginBottom: 12 }}>
-          <Image source={{ uri: imageUrl }} style={{ width: 52, height: 52, borderRadius: 10 }} />
-          <View style={{ flex: 1, marginLeft: 12, justifyContent: 'center' }}>
-            <Text style={{ fontSize: 13, color: '#4B5563', fontWeight: '600' }}>{item.quantity}x {item.item_name}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-              <Text style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '500' }}>{item.type === 'bag' ? 'Surprise Bag' : 'Food Item'}</Text>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: '#10B981' }}>{currencySymbol}{(item.price * item.quantity).toFixed(2)}</Text>
+        <View style={{ marginBottom: 12 }}>
+          {(item.items || []).map((subItem, index) => (
+            <View key={subItem.id || index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: index === (item.items || []).length - 1 ? 0 : 8 }}>
+              <Image source={{ uri: imageUrl }} style={{ width: 44, height: 44, borderRadius: 10 }} />
+              <View style={{ flex: 1, marginLeft: 12, justifyContent: 'center' }}>
+                <Text style={{ fontSize: 13, color: '#4B5563', fontWeight: '600' }}>{subItem.quantity}x {subItem.name}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                  <Text style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '500' }}>{subItem.type === 'bag' ? 'Surprise Bag' : 'Food Item'}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#10B981' }}>{currencySymbol}{(subItem.price * subItem.quantity).toFixed(2)}</Text>
+                </View>
+              </View>
             </View>
-          </View>
+          ))}
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6', marginBottom: 12 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151' }}>Order Total</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>{currencySymbol}{item.total.toFixed(2)}</Text>
         </View>
 
         <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12, backgroundColor: '#F9FAFB', padding: 10, borderRadius: 10 }}>
@@ -6337,11 +6382,11 @@ function BookingsScreen({ navigation }) {
           <TouchableOpacity
             onPress={() => {
               const receiptData = {
-                orderIds: [item.id],
+                orderIds: item.orderIds,
                 storeName: item.store_name,
-                items: [{ name: item.item_name, quantity: item.quantity, price: item.price, type: item.type }],
-                total: item.price * item.quantity,
-                pickupTime: null,
+                items: item.items,
+                total: item.total,
+                pickupTime: item.pickup_time === 'N/A' ? null : item.pickup_time,
                 fulfillmentType: item.fulfillment_type,
                 deliveryAddress: item.delivery_address,
                 deliveryPhone: item.delivery_phone,
@@ -6413,8 +6458,9 @@ function BookingsScreen({ navigation }) {
   }, [currencySymbol, user, openReceipt, openChatWithStore, unreadStores]);
 
   const orderSections = useMemo(() => {
+    const grouped = groupOrders(orders);
     const ACTIVE = ['pending', 'confirmed'];
-    const sorted = [...orders].sort((a, b) => {
+    const sorted = grouped.sort((a, b) => {
       const aActive = ACTIVE.includes(a.status) ? 0 : 1;
       const bActive = ACTIVE.includes(b.status) ? 0 : 1;
       if (aActive !== bActive) return aActive - bActive;
@@ -7019,9 +7065,12 @@ function SellerDashboardScreen() {
     }
   };
 
-  const runOrderAction = async (orderId, action) => {
+  const runOrderAction = async (orderIds, action) => {
+    const ids = Array.isArray(orderIds) ? orderIds : [orderIds];
     try {
-      await axios.patch(`${API_URL}/seller/orders/${orderId}/status`, { action }, { headers: { Authorization: `Bearer ${token}` } });
+      await Promise.all(ids.map(id =>
+        axios.patch(`${API_URL}/seller/orders/${id}/status`, { action }, { headers: { Authorization: `Bearer ${token}` } })
+      ));
       fetchSellerOrders();
       fetchStats();
     } catch (e) {
@@ -7036,15 +7085,15 @@ function SellerDashboardScreen() {
     mark_picked_up: { title: "Mark as picked up?", message: "The customer will be notified that this order is complete." },
   };
 
-  const handleOrderAction = (orderId, action) => {
+  const handleOrderAction = (orderIds, action) => {
     const confirmCopy = ORDER_ACTION_CONFIRMATIONS[action];
     if (confirmCopy) {
       Alert.alert(confirmCopy.title, confirmCopy.message, [
         { text: "Cancel", style: "cancel" },
-        { text: "Yes, Continue", style: "destructive", onPress: () => runOrderAction(orderId, action) },
+        { text: "Yes, Continue", style: "destructive", onPress: () => runOrderAction(orderIds, action) },
       ]);
     } else {
-      runOrderAction(orderId, action);
+      runOrderAction(orderIds, action);
     }
   };
 
@@ -7837,7 +7886,8 @@ function SellerDashboardScreen() {
               if (sellerOrderFilter === 'completed') return settled;
               return true;
             });
-            if (filteredOrders.length === 0) {
+            const grouped = groupOrders(filteredOrders);
+            if (grouped.length === 0) {
               return (
                 <SellerEmptyState
                   icon="receipt-outline"
@@ -7846,7 +7896,7 @@ function SellerDashboardScreen() {
                 />
               );
             }
-            return filteredOrders.map((order) => {
+            return grouped.map((order) => {
             const isDelivery = order.fulfillment_type === 'delivery';
             const status = order.status || 'pending';
             const isSettled = ['paid', 'rejected', 'cancelled'].includes(status);
@@ -7876,11 +7926,17 @@ function SellerDashboardScreen() {
                       </View>
                     )}
                   </View>
-                  <Text style={{ fontWeight: '800', fontSize: 15, color: '#111827' }}>{order.item_name || 'Order Item'}</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{order.store_name} · Ref #{order.id}</Text>
+                  <View style={{ marginTop: 4, marginBottom: 6 }}>
+                    {(order.items || []).map((subItem, idx) => (
+                      <Text key={idx} style={{ fontWeight: '800', fontSize: 14.5, color: '#111827', marginVertical: 2 }}>
+                        • {subItem.quantity}x {subItem.name}
+                      </Text>
+                    ))}
+                  </View>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{order.store_name} · Ref #{order.orderIds.join(', ')}</Text>
                   <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>{order.customer_name || order.customer_email || 'Customer'}</Text>
                 </View>
-                <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 17 }}>{formatMoney(Number(order.price) * (order.quantity || 1), currencySymbol)}</Text>
+                <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 17 }}>{formatMoney(order.total, currencySymbol)}</Text>
               </View>
 
               {isDelivery && (
@@ -7891,7 +7947,7 @@ function SellerDashboardScreen() {
               )}
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                <Text style={{ color: '#6B7280', fontSize: 12 }}>Qty: {order.quantity || 1} · {order.payment_method || 'Cash at Pickup'}</Text>
+                <Text style={{ color: '#6B7280', fontSize: 12 }}>{order.items.reduce((s, i) => s + i.quantity, 0)} items · {order.payment_method || 'Cash at Pickup'}</Text>
                 <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{isDelivery ? '' : (order.pickup_time || 'Pickup window TBC')}</Text>
               </View>
 
@@ -7957,13 +8013,13 @@ function SellerDashboardScreen() {
 
               {showTriad && (
                 <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
-                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'confirm')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DCFCE7', borderRadius: 10, alignItems: 'center' }}>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'confirm')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DCFCE7', borderRadius: 10, alignItems: 'center' }}>
                     <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 11.5 }}>Confirm</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'convert_to_pickup')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DBEAFE', borderRadius: 10, alignItems: 'center' }}>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'convert_to_pickup')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DBEAFE', borderRadius: 10, alignItems: 'center' }}>
                     <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 11.5 }}>To Pickup</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'reject')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center' }}>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'reject')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center' }}>
                     <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 11.5 }}>Reject</Text>
                   </TouchableOpacity>
                 </View>
@@ -7971,11 +8027,11 @@ function SellerDashboardScreen() {
 
               {showPaymentActions && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'mark_picked_up')} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: SELLER_BRAND, borderRadius: 10 }}>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'mark_picked_up')} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: SELLER_BRAND, borderRadius: 10 }}>
                     <Ionicons name={isDelivery ? 'checkmark-done-outline' : 'bag-check-outline'} size={13} color="#fff" />
                     <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12.5 }}>{completeLabel}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleOrderAction(order.id, 'cancel')} style={{ paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+                  <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'cancel')} style={{ paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12.5 }}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
