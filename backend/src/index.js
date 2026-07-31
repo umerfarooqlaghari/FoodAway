@@ -206,10 +206,10 @@ function groupOrdersByTenant(orders) {
   return [...groups.values()];
 }
 
-function assertSingleTenantCart(items) {
-  const tenantIds = new Set(items.map((i) => i.tenant_id).filter(Boolean));
-  if (tenantIds.size > 1) {
-    const err = new Error('Your cart contains items from different brands. Please checkout one brand at a time.');
+function assertSingleStoreCart(items) {
+  const storeIds = new Set(items.map((i) => i.store_id).filter(Boolean));
+  if (storeIds.size > 1) {
+    const err = new Error('Your cart contains items from different stores. Please checkout one store at a time.');
     err.status = 400;
     throw err;
   }
@@ -961,13 +961,8 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
       imageUrl = image ? await uploadImageToS3(image) : null;
     }
     const isActiveBool = is_active !== undefined && is_active !== null ? Boolean(is_active) : null;
-    const isSeller = req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff';
-    let deliveryEnabledBool = delivery_enabled !== undefined && delivery_enabled !== null ? Boolean(delivery_enabled) : null;
-    let deliveryModeValue = delivery_mode !== undefined ? (delivery_mode === 'partner' ? 'partner' : (delivery_mode === 'self' ? 'self' : null)) : null;
-    if (isSeller) {
-      deliveryEnabledBool = true;
-      deliveryModeValue = 'partner';
-    }
+    const deliveryEnabledBool = delivery_enabled !== undefined && delivery_enabled !== null ? Boolean(delivery_enabled) : null;
+    const deliveryModeValue = delivery_mode !== undefined ? (delivery_mode === 'partner' ? 'partner' : (delivery_mode === 'self' ? 'self' : null)) : null;
     await db.prepare(
       `UPDATE stores SET
         lat = COALESCE(?, lat),
@@ -984,9 +979,6 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
     ).run(lat, lng, isActiveBool, name, address, imageUrl, deliveryEnabledBool,
       delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category,
       deliveryModeValue !== undefined, deliveryModeValue, id);
-    if (isSeller) {
-      await db.prepare("UPDATE stores SET delivery_enabled = TRUE, delivery_mode = 'partner' WHERE id = ?").run(id);
-    }
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -1454,10 +1446,6 @@ app.post('/api/orders', verifyToken, async (req, res) => {
   const method = paymentMethod || 'Card';
   const isDelivery = fulfillmentType === 'delivery';
 
-  if (isDelivery && !customerDeliveryLive) {
-    return res.status(400).json({ error: 'Delivery is coming soon. Please choose pickup for now.' });
-  }
-
   if (isDelivery && (!deliveryAddress || !deliveryAddress.trim() || !deliveryPhone || !deliveryPhone.trim())) {
     return res.status(400).json({ error: 'Delivery address and phone number are required for delivery orders.' });
   }
@@ -1472,6 +1460,9 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     }
     if (isDelivery && preview.some((p) => !p.delivery_enabled)) {
       return res.status(400).json({ error: 'One or more stores in your cart do not offer delivery. Please switch to pickup or remove those items.' });
+    }
+    if (isDelivery && preview.some((p) => p.delivery_mode === 'partner')) {
+      return res.status(400).json({ error: 'Grabengo Partner Delivery is coming soon. Please choose pickup for now.' });
     }
 
     // Delivery orders need a pinned location so riders (store or partner) can navigate,
@@ -3704,7 +3695,7 @@ async function previewCheckoutItems(items) {
       });
     }
   }
-  assertSingleTenantCart(preview);
+  assertSingleStoreCart(preview);
   return preview;
 }
 
@@ -3772,6 +3763,7 @@ async function placeCheckoutOrders(user, items) {
         pickup_time: bag.pickup_time || 'During opening hours',
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
+        store_id: store.id,
       });
     } else if (type === 'food') {
       const food = await db.prepare(
@@ -3799,6 +3791,7 @@ async function placeCheckoutOrders(user, items) {
         pickup_time: food.pickup_time || 'During opening hours',
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
+        store_id: store.id,
       });
     } else if (type === 'menu') {
       const menuItem = await db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
@@ -3825,13 +3818,14 @@ async function placeCheckoutOrders(user, items) {
         pickup_time: 'During opening hours',
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
+        store_id: store.id,
       });
     }
   }
   if (placedOrders.length === 0) {
     throw new Error('No valid items could be ordered');
   }
-  assertSingleTenantCart(placedOrders);
+  assertSingleStoreCart(placedOrders);
   return placedOrders;
 }
 

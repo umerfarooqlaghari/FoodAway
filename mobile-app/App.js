@@ -40,6 +40,12 @@ function getSharingModule() {
   return sharingModule;
 }
 
+let fileSystemModule = null;
+function getFileSystemModule() {
+  if (!fileSystemModule) fileSystemModule = require('expo-file-system/legacy');
+  return fileSystemModule;
+}
+
 function LazyDateTimePicker(props) {
   const Picker = require('@react-native-community/datetimepicker').default;
   return <Picker {...props} />;
@@ -198,8 +204,8 @@ const generateReceiptHTML = (receiptData, currencySymbol) => {
         <div style="font-size:13px;font-weight:600;color:#111827;">${item.name || 'Item'}</div>
         <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">${item.type === 'bag' ? 'Surprise Bag' : 'Food Item'}</div>
       </td>
-      <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;text-align:center;color:#9CA3AF;font-size:12px;">×${item.quantity}</td>
-      <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;text-align:right;font-weight:700;font-size:13px;color:#111827;">${currencySymbol}${(item.price * item.quantity).toFixed(2)}</td>
+      <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;text-align:center;color:#9CA3AF;font-size:12px;">×${Number(item.quantity) || 1}</td>
+      <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;text-align:right;font-weight:700;font-size:13px;color:#111827;">${currencySymbol}${((Number(item.price) || 0) * (Number(item.quantity) || 1)).toFixed(2)}</td>
     </tr>
   `).join('');
 
@@ -1229,14 +1235,29 @@ function GlobalReceiptModal() {
       const html = generateReceiptHTML(receiptModalData, currencySymbol);
       const Print = getPrintModule();
       const Sharing = getSharingModule();
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      
+      // Generate PDF with base64: true to bypass sandboxed directory read restrictions in Expo Go on Android
+      const { base64 } = await Print.printToFileAsync({ html, base64: true });
+      
+      const FileSystem = getFileSystemModule();
+      const orderRef = receiptModalData.orderIds 
+        ? (Array.isArray(receiptModalData.orderIds) ? receiptModalData.orderIds.join('-') : receiptModalData.orderIds)
+        : 'order';
+      const filename = `receipt-${orderRef}.pdf`;
+      const localUri = `${FileSystem.cacheDirectory}${filename}`;
+      
+      await FileSystem.writeAsStringAsync(localUri, base64, {
+        encoding: 'base64',
+      });
+
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save Grabengo Receipt', UTI: 'com.adobe.pdf' });
+        await Sharing.shareAsync(localUri, { mimeType: 'application/pdf', dialogTitle: 'Save Grabengo Receipt', UTI: 'com.adobe.pdf' });
       } else {
         Alert.alert('Receipt Saved', 'Your receipt has been saved to your device.');
       }
     } catch (e) {
-      Alert.alert('Error', 'Could not generate PDF. Please try again.');
+      console.log('Receipt PDF generation failed:', e.message);
+      Alert.alert('Error', `Could not generate PDF: ${e.message || 'Please try again.'}`);
     } finally {
       setGenerating(false);
     }
@@ -5138,17 +5159,15 @@ function StoreDetailsScreen({ navigation, route }) {
             <View style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#FF5C00', letterSpacing: 0.5 }}>MERCHANT PARTNER</Text>
             </View>
-            {CUSTOMER_DELIVERY_LIVE && store.delivery_enabled && store.delivery_mode !== 'partner' ? (
+            {store.delivery_enabled && store.delivery_mode === 'self' ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
                 <Ionicons name="bicycle-outline" size={13} color="#1D4ED8" />
                 <Text style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8' }}>Delivery Available</Text>
               </View>
-            ) : (!CUSTOMER_DELIVERY_LIVE || (store.delivery_enabled && store.delivery_mode === 'partner')) ? (
+            ) : store.delivery_enabled && store.delivery_mode === 'partner' ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF7ED', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
                 <Ionicons name="time-outline" size={13} color="#C2410C" />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#C2410C' }}>
-                  {store.delivery_mode === 'partner' ? 'Partner delivery coming soon' : 'Delivery coming soon'}
-                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#C2410C' }}>Partner delivery coming soon</Text>
               </View>
             ) : null}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
@@ -5158,7 +5177,7 @@ function StoreDetailsScreen({ navigation, route }) {
           </View>
 
           <Text style={{ fontSize: 26, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }} numberOfLines={2}>{store.name}</Text>
-          {CUSTOMER_DELIVERY_LIVE && store.delivery_enabled && store.delivery_fee_note ? (
+          {store.delivery_enabled && store.delivery_mode === 'self' && store.delivery_fee_note ? (
             <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>🛵 {store.delivery_fee_note}</Text>
           ) : null}
           
@@ -5915,7 +5934,7 @@ function CartScreen({ navigation, route }) {
 
   const isDelivery = deliveryInfo.fulfillmentType === 'delivery';
   const hasPartnerDelivery = cartItems.some(item => item.delivery_mode === 'partner');
-  const deliveryEligible = CUSTOMER_DELIVERY_LIVE && cartItems.length > 0 && cartItems.every(item => item.delivery_enabled) && !hasPartnerDelivery;
+  const deliveryEligible = cartItems.length > 0 && cartItems.every(item => item.delivery_enabled) && !hasPartnerDelivery;
   const feeNotes = [...new Set(cartItems.map(i => i.delivery_fee_note).filter(Boolean))];
   const storeNames = [...new Set(cartItems.map(i => i.store_name).filter(Boolean))];
   const partnerDelivery = false; // Locked
@@ -6128,6 +6147,10 @@ function CartScreen({ navigation, route }) {
             shadowRadius: 12, 
             elevation: 10 
           }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 10 }}>
+              <Ionicons name="storefront-outline" size={16} color="#FF5C00" />
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#111827' }}>Ordering from: {cartItems[0]?.store_name || 'Store'}</Text>
+            </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
               <Text style={{ fontSize: 16, color: '#6B7280' }}>Items ({cartTotalCount})</Text>
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>{currencySymbol}{cartTotalPrice.toFixed(2)}</Text>
@@ -6147,21 +6170,17 @@ function CartScreen({ navigation, route }) {
                   <Text style={{ fontWeight: '700', fontSize: 13, color: !isDelivery ? '#FF5C00' : '#6B7280' }}>Pickup</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  disabled={!CUSTOMER_DELIVERY_LIVE || !deliveryEligible || hasPartnerDelivery}
-                  onPress={() => CUSTOMER_DELIVERY_LIVE && deliveryEligible && !hasPartnerDelivery && goToDeliveryAddress()}
-                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isDelivery ? '#FF5C00' : '#E5E7EB', backgroundColor: isDelivery ? '#FFFFFF' : (CUSTOMER_DELIVERY_LIVE && deliveryEligible ? '#F9FAFB' : '#F3F4F6'), opacity: CUSTOMER_DELIVERY_LIVE && deliveryEligible ? 1 : 0.85 }}
+                  disabled={!deliveryEligible || hasPartnerDelivery}
+                  onPress={() => deliveryEligible && !hasPartnerDelivery && goToDeliveryAddress()}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isDelivery ? '#FF5C00' : '#E5E7EB', backgroundColor: isDelivery ? '#FFFFFF' : (deliveryEligible ? '#F9FAFB' : '#F3F4F6'), opacity: deliveryEligible ? 1 : 0.85 }}
                 >
-                  <Ionicons name={CUSTOMER_DELIVERY_LIVE && !hasPartnerDelivery ? 'bicycle-outline' : 'time-outline'} size={16} color={isDelivery ? '#FF5C00' : '#C2410C'} />
+                  <Ionicons name={!hasPartnerDelivery ? 'bicycle-outline' : 'time-outline'} size={16} color={isDelivery ? '#FF5C00' : '#C2410C'} />
                   <Text style={{ fontWeight: '700', fontSize: 13, color: isDelivery ? '#FF5C00' : '#C2410C', flexShrink: 1, textAlign: 'center' }} numberOfLines={2}>
-                    {hasPartnerDelivery ? 'Partner delivery coming soon' : CUSTOMER_DELIVERY_LIVE ? 'Delivery' : 'Delivery coming soon'}
+                    {hasPartnerDelivery ? 'Partner delivery coming soon' : 'Delivery'}
                   </Text>
                 </TouchableOpacity>
               </View>
-              {!CUSTOMER_DELIVERY_LIVE ? (
-                <Text style={{ fontSize: 11, color: '#C2410C', marginTop: 6, fontWeight: '600' }}>
-                  Home delivery is launching soon. Pickup is available now.
-                </Text>
-              ) : hasPartnerDelivery ? (
+              {hasPartnerDelivery ? (
                 <Text style={{ fontSize: 11, color: '#C2410C', marginTop: 6, fontWeight: '600' }}>
                   Grabengo Partner Delivery is launching soon. Pickup is available now.
                 </Text>
@@ -8591,10 +8610,10 @@ export default function App() {
       promptSignIn('Sign in to add items to your cart and place an order.');
       return;
     }
-    if (cartItems.length > 0 && item.tenant_id && cartItems[0].tenant_id && cartItems[0].tenant_id !== item.tenant_id) {
+    if (cartItems.length > 0 && item.store_id && cartItems[0].store_id && cartItems[0].store_id !== item.store_id) {
       Alert.alert(
-        "Different Brand",
-        "Your cart contains items from another brand. Clear your cart to shop from this brand.",
+        "Different Store",
+        "Your cart contains items from another store. Clear your cart to shop from this store.",
         [
           { text: "Cancel", style: "cancel" },
           { text: "Clear Cart & Add", onPress: () => {
