@@ -1133,8 +1133,7 @@ function GlobalChatModal() {
 
   return (
     <Modal visible={chatVisible} animationType="slide" onRequestClose={() => setChatVisible(false)}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: insets.top }}>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Math.max(insets.top, 16) }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', height: 60 }}>
           <TouchableOpacity onPress={() => setChatVisible(false)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}>
@@ -1159,101 +1158,106 @@ function GlobalChatModal() {
           </View>
         </View>
 
-        {/* Message History list */}
-        <ScrollView
-          ref={flatListRef}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12, flexGrow: 1 }}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 + Math.max(insets.top, 16) : 0}
         >
-          {chatMessages.length === 0 ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
-              <Ionicons name="chatbubble-ellipses-outline" size={40} color="#D1D5DB" />
-              <Text style={{ marginTop: 12, color: '#9CA3AF', fontSize: 14, fontWeight: '500' }}>No messages yet — say hello!</Text>
-            </View>
-          ) : null}
-          {chatMessages.map((item) => {
-            const isMe = item.sender_role === 'Customer';
-            return (
-              <View key={String(item.id)} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
-                <View style={{
-                  backgroundColor: isMe ? '#FF5C00' : '#F3F4F6',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 18,
-                  borderBottomRightRadius: isMe ? 2 : 18,
-                  borderBottomLeftRadius: isMe ? 18 : 2
-                }}>
-                  <Text style={{ color: isMe ? '#FFFFFF' : '#111827', fontSize: 15, lineHeight: 20 }}>
-                    {item.message}
+          {/* Message History list */}
+          <ScrollView
+            ref={flatListRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12, flexGrow: 1 }}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          >
+            {chatMessages.length === 0 ? (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
+                <Ionicons name="chatbubble-ellipses-outline" size={40} color="#D1D5DB" />
+                <Text style={{ marginTop: 12, color: '#9CA3AF', fontSize: 14, fontWeight: '500' }}>No messages yet — say hello!</Text>
+              </View>
+            ) : null}
+            {chatMessages.map((item) => {
+              const isMe = item.sender_role === 'Customer';
+              return (
+                <View key={String(item.id)} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                  <View style={{
+                    backgroundColor: isMe ? '#FF5C00' : '#F3F4F6',
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 18,
+                    borderBottomRightRadius: isMe ? 2 : 18,
+                    borderBottomLeftRadius: isMe ? 18 : 2
+                  }}>
+                    <Text style={{ color: isMe ? '#FFFFFF' : '#111827', fontSize: 15, lineHeight: 20 }}>
+                      {item.message}
+                    </Text>
+                  </View>
+                  <Text style={{ color: '#9CA3AF', fontSize: 10, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: 4, paddingHorizontal: 4 }}>
+                    {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
-                <Text style={{ color: '#9CA3AF', fontSize: 10, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: 4, paddingHorizontal: 4 }}>
-                  {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </View>
-            );
-          })}
-        </ScrollView>
+              );
+            })}
+          </ScrollView>
 
-        {/* Typing indicator message */}
-        {isStoreTyping && (
-          <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' }}>
-              Store is typing...
-            </Text>
+          {/* Typing indicator message */}
+          {isStoreTyping && (
+            <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' }}>
+                Store is typing...
+              </Text>
+            </View>
+          )}
+
+          {/* Typing Area */}
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            paddingHorizontal: 16, 
+            paddingTop: 10,
+            paddingBottom: Platform.OS === 'ios' ? 12 : 16,
+            borderTopWidth: 1, 
+            borderTopColor: '#F3F4F6',
+            backgroundColor: '#FFFFFF'
+          }}>
+            <TextInput
+              style={{
+                flex: 1,
+                backgroundColor: '#F3F4F6',
+                borderRadius: 24,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                fontSize: 15,
+                color: '#111827',
+                maxHeight: 100
+              }}
+              placeholder="Type your message..."
+              placeholderTextColor="#9CA3AF"
+              value={chatInput}
+              onChangeText={(text) => {
+                setChatInput(text);
+                sendTypingStatus(text.length > 0);
+              }}
+              multiline
+            />
+            <TouchableOpacity 
+              onPress={handleSendChatMessage} 
+              disabled={!chatInput.trim()}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: chatInput.trim() ? '#FF5C00' : '#E5E7EB',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginLeft: 12
+              }}
+            >
+              <Ionicons name="send" size={18} color="white" />
+            </TouchableOpacity>
           </View>
-        )}
-
-        {/* Typing Area */}
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          paddingHorizontal: 16, 
-          paddingTop: 10,
-          paddingBottom: Math.max(insets.bottom, 12),
-          borderTopWidth: 1, 
-          borderTopColor: '#F3F4F6',
-          backgroundColor: '#FFFFFF'
-        }}>
-          <TextInput
-            style={{
-              flex: 1,
-              backgroundColor: '#F3F4F6',
-              borderRadius: 24,
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              fontSize: 15,
-              color: '#111827',
-              maxHeight: 100
-            }}
-            placeholder="Type your message..."
-            placeholderTextColor="#9CA3AF"
-            value={chatInput}
-            onChangeText={(text) => {
-              setChatInput(text);
-              sendTypingStatus(text.length > 0);
-            }}
-            multiline
-          />
-          <TouchableOpacity 
-            onPress={handleSendChatMessage} 
-            disabled={!chatInput.trim()}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: chatInput.trim() ? '#FF5C00' : '#E5E7EB',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginLeft: 12
-            }}
-          >
-            <Ionicons name="send" size={18} color="white" />
-          </TouchableOpacity>
-        </View>
+        </KeyboardAvoidingView>
       </View>
-      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -6844,6 +6848,7 @@ function PartnerDashboardScreen() {
 
 function SellerDashboardScreen() {
   const { token, logout, user } = useContext(AuthContext);
+  const insets = useSafeAreaInsets();
   const [stores, setStores] = useState([]);
   const [storeName, setStoreName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
@@ -7157,6 +7162,9 @@ function SellerDashboardScreen() {
             });
           }
           fetchSellerChats();
+        } else if (data.type === 'new_order' || data.type === 'delivery_update') {
+          fetchSellerOrders();
+          fetchStats();
         }
       } catch (_) {}
     };
@@ -8560,9 +8568,9 @@ function SellerDashboardScreen() {
 
       {/* ── SELLER CHAT MODAL ── */}
       <Modal visible={showSellerChatModal} animationType="slide" onRequestClose={() => setShowSellerChatModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Math.max(insets.top, 16) }}>
+          {/* Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', height: 60 }}>
             <TouchableOpacity onPress={() => setShowSellerChatModal(false)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}>
               <Ionicons name="arrow-back" size={20} color="#111827" />
             </TouchableOpacity>
@@ -8571,45 +8579,51 @@ function SellerDashboardScreen() {
               <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }} numberOfLines={1}>{activeSellerChat?.store_name}</Text>
             </View>
           </View>
-          <ScrollView
-            ref={sellerChatListRef}
+          
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
             style={{ flex: 1 }}
-            contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12 }}
-            onContentSizeChange={() => sellerChatListRef.current?.scrollToEnd({ animated: true })}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 60 + Math.max(insets.top, 16) : 0}
           >
-            {sellerChatMessages.map((item) => {
-              const isMe = item.sender_role === 'Seller';
-              return (
-                <View key={String(item.id)} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
-                  <View style={{
-                    backgroundColor: isMe ? SELLER_BRAND : '#F3F4F6',
-                    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18,
-                    borderBottomRightRadius: isMe ? 2 : 18, borderBottomLeftRadius: isMe ? 18 : 2,
-                  }}>
-                    <Text style={{ color: isMe ? '#FFFFFF' : '#111827', fontSize: 15, lineHeight: 20 }}>{item.message}</Text>
+            <ScrollView
+              ref={sellerChatListRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 20, paddingBottom: 30, gap: 12 }}
+              onContentSizeChange={() => sellerChatListRef.current?.scrollToEnd({ animated: true })}
+            >
+              {sellerChatMessages.map((item) => {
+                const isMe = item.sender_role === 'Seller';
+                return (
+                  <View key={String(item.id)} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                    <View style={{
+                      backgroundColor: isMe ? SELLER_BRAND : '#F3F4F6',
+                      paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18,
+                      borderBottomRightRadius: isMe ? 2 : 18, borderBottomLeftRadius: isMe ? 18 : 2,
+                    }}>
+                      <Text style={{ color: isMe ? '#FFFFFF' : '#111827', fontSize: 15, lineHeight: 20 }}>{item.message}</Text>
+                    </View>
+                    <Text style={{ color: '#9CA3AF', fontSize: 10, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: 4, paddingHorizontal: 4 }}>
+                      {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
                   </View>
-                  <Text style={{ color: '#9CA3AF', fontSize: 10, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: 4, paddingHorizontal: 4 }}>
-                    {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </View>
-              );
-            })}
-          </ScrollView>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-            <TextInput
-              style={{ flex: 1, backgroundColor: '#F3F4F6', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#111827', maxHeight: 100 }}
-              placeholder="Reply to customer..."
-              placeholderTextColor="#9CA3AF"
-              value={sellerChatInput}
-              onChangeText={setSellerChatInput}
-              multiline
-            />
-            <TouchableOpacity onPress={sendSellerChatMessage} style={{ marginLeft: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: SELLER_BRAND, justifyContent: 'center', alignItems: 'center' }}>
-              <Ionicons name="send" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-        </KeyboardAvoidingView>
+                );
+              })}
+            </ScrollView>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: Platform.OS === 'ios' ? 12 : 16, borderTopWidth: 1, borderTopColor: '#F3F4F6', backgroundColor: '#FFFFFF' }}>
+              <TextInput
+                style={{ flex: 1, backgroundColor: '#F3F4F6', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#111827', maxHeight: 100 }}
+                placeholder="Reply to customer..."
+                placeholderTextColor="#9CA3AF"
+                value={sellerChatInput}
+                onChangeText={setSellerChatInput}
+                multiline
+              />
+              <TouchableOpacity onPress={sendSellerChatMessage} style={{ marginLeft: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: SELLER_BRAND, justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="send" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* ── STAFF MODAL ── */}
