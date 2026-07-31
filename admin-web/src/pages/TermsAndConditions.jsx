@@ -18,9 +18,10 @@ export default function TermsAndConditions({ onBack }) {
 
       <Section title="2. The Platform">
         <p>
-          Grabengo is a digital marketplace that connects consumers with food businesses to reduce food
-          waste by offering surplus food at reduced prices. Grabengo acts solely as an intermediary
-          and is not the seller of any food items listed on the platform.
+          Grabengo is a digital marketplace that connects consumers with food businesses. Businesses can
+          list their everyday menu or products for pickup or delivery at normal prices, and/or list surplus
+          and near-expiry food at discounted prices. Grabengo acts solely as an intermediary and is not the
+          seller of any food items listed on the platform.
         </p>
       </Section>
 
@@ -49,8 +50,8 @@ export default function TermsAndConditions({ onBack }) {
         </p>
         <br />
         <p>
-          Payment is processed at the time of booking. Prices displayed include applicable taxes unless
-          otherwise stated. We reserve the right to cancel orders in cases of fraud or suspected misuse.
+          Payment is settled in cash directly at the time of pickup or delivery. Prices displayed include applicable taxes unless
+          otherwise stated. We reserve the right to cancel orders in cases of fraud, non-collection, or suspected misuse.
         </p>
       </Section>
 
@@ -73,9 +74,7 @@ export default function TermsAndConditions({ onBack }) {
 
       <Section title="6. Cancellations & Refunds">
         <p>
-          Due to the nature of surplus food, all purchases are generally non-refundable once confirmed.
-          In cases where a business fails to fulfil an order, you may be entitled to a refund. Please
-          contact our support team within 24 hours of the scheduled pickup time.
+          Orders confirmed on the platform are commitments to pay in cash upon pickup or delivery. If you need to cancel an order, please do so via the app or contact support before the scheduled time. If a business fails to fulfil a confirmed order, you are not obligated to pay. Repeat failures to collect confirmed cash orders may result in account suspension.
         </p>
       </Section>
 

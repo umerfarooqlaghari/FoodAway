@@ -1251,14 +1251,14 @@ function App() {
                   <div className="landing-hero-content">
                     <div className="section-eyebrow" style={fi(0)}>
                       <span className="section-dot"></span>
-                      <span>Food waste reduction</span>
+                      <span>Order fresh, save on surplus</span>
                     </div>
                     <h1 className="landing-hero-title" style={fi(100)}>
-                      Rescue<br />good food.<br />
-                      <span className="hero-title-accent">Save the planet.</span>
+                      Order fresh.<br />
+                      <span className="hero-title-accent">Save on surplus.</span>
                     </h1>
                     <p className="landing-hero-subtitle" style={fi(240)}>
-                      Grabengo connects you with local stores, cafes, and bakeries offering surplus food at unbeatable prices. Rescue meals. Help protect the planet.
+                      Grabengo connects you with local stores, cafes, and bakeries — order everyday menus for pickup or delivery, or grab surplus food at unbeatable prices before it goes to waste.
                     </p>
                     <div className="landing-hero-btns" style={fi(380)}>
                       <button type="button" className="btn-hero-primary" onClick={() => setShowAppDownloadModal(true)}>
@@ -1333,7 +1333,7 @@ function App() {
                       <span className="hero-announcement-badge">Coming Soon</span>
                       <h2 className="hero-announcement-title">Supermarkets<br />on Grabengo</h2>
                       <p className="hero-announcement-lead">
-                        We&apos;re expanding beyond surplus meals to bring leading supermarkets onto the platform — premium discounts on FMCG, groceries, and household essentials.
+                        We&apos;re bringing leading supermarkets onto the platform next — everyday grocery orders plus premium discounts on FMCG and household essentials.
                       </p>
                       <div className="hero-announcement-tags">
                         <span>FMCG</span>
@@ -1399,12 +1399,12 @@ function App() {
             </div>
             <div className="why-feat-grid">
               <div className="why-feat-cell">
-                <div className="why-feat-num">½ price<br /><span>or less</span></div>
-                <p className="why-feat-desc">Rescue fresh, high-quality food from your favourite local spots at a fraction of the cost.</p>
+                <div className="why-feat-num">Order<br /><span>anytime</span></div>
+                <p className="why-feat-desc">Order everyday menus and essentials from your favourite local spots, for pickup or delivery.</p>
               </div>
               <div className="why-feat-cell">
-                <div className="why-feat-num">1 in 3<br /><span>meals wasted</span></div>
-                <p className="why-feat-desc">Around 1 in 3 meals produced globally are never eaten. Every rescue bag fights this directly.</p>
+                <div className="why-feat-num">½ price<br /><span>or less</span></div>
+                <p className="why-feat-desc">Grab fresh, high-quality surplus food from local spots at a fraction of the cost before it goes to waste.</p>
               </div>
               <div className="why-feat-cell">
                 <div className="why-feat-num">Near you<br /><span>always</span></div>
@@ -1413,24 +1413,6 @@ function App() {
               <div className="why-feat-cell">
                 <div className="why-feat-num">Surprise<br /><span>every time</span></div>
                 <p className="why-feat-desc">Unpack mystery bags from sushi spots, bakeries, or cafes you&apos;ve never tried before.</p>
-              </div>
-            </div>
-            <div className="why-stat-strip">
-              <div className="why-stat-cell">
-                <div className="why-stat-num why-stat-num--orange">50+</div>
-                <div className="why-stat-label">Partner stores</div>
-              </div>
-              <div className="why-stat-cell">
-                <div className="why-stat-num">Daily</div>
-                <div className="why-stat-label">Bags rescued</div>
-              </div>
-              <div className="why-stat-cell">
-                <div className="why-stat-num why-stat-num--green">70%</div>
-                <div className="why-stat-label">Saved on food</div>
-              </div>
-              <div className="why-stat-cell why-stat-cell--last">
-                <div className="why-stat-num">4.8★</div>
-                <div className="why-stat-label">Top rated</div>
               </div>
             </div>
           </div>
@@ -1457,9 +1439,9 @@ function App() {
                   <span className="section-dot"></span>
                   <span>Business Solutions</span>
                 </div>
-                <h2 className="section-title section-title--solutions">Empowering<br />Food Sellers</h2>
+                <h2 className="section-title section-title--solutions">Built for<br />Every Seller</h2>
               </div>
-              <p className="solutions-lead">Three products built around one mission — radically reducing food waste at every step of the supply chain.</p>
+              <p className="solutions-lead">Restaurants, grocery stores, and FMCG brands — sell everyday stock at normal prices, and surplus or near-expiry stock at a discount. All on one platform.</p>
             </div>
             <div className="solutions-grid">
               <div className="solution-item">
@@ -1471,9 +1453,9 @@ function App() {
                   </svg>
                 </div>
                 <div>
-                  <span className="solution-tag">Food Retail, Service, Catering</span>
-                  <h3 className="solution-title">Surprise Bags</h3>
-                  <p className="solution-desc">Unlock extra revenue from surplus ingredients. Sell unsold food in Surprise Bags for customers to collect.</p>
+                  <span className="solution-tag">Restaurants, Cafes, Bakeries</span>
+                  <h3 className="solution-title">Everyday Ordering &amp; Deals</h3>
+                  <p className="solution-desc">List your menu at normal prices for pickup or delivery, plus surplus stock at a discount — bundled in Surprise Bags or listed individually and sold down by remaining quantity.</p>
                 </div>
               </div>
               <div className="solution-item solution-item--dark">
@@ -1486,9 +1468,9 @@ function App() {
                   </svg>
                 </div>
                 <div>
-                  <span className="solution-tag solution-tag--light">Grocery Retail</span>
-                  <h3 className="solution-title solution-title--light">Grabengo Platform</h3>
-                  <p className="solution-desc solution-desc--light">End-to-end surplus food management suite. Track, manage, and redistribute surplus intelligently.</p>
+                  <span className="solution-tag solution-tag--light">Grocery Stores, Supermarkets</span>
+                  <h3 className="solution-title solution-title--light">Grocery Orders &amp; Deals</h3>
+                  <p className="solution-desc solution-desc--light">Sell everyday grocery items at normal prices, plus surplus and near-expiry stock — bundled in Surprise Bags or listed individually and sold down by remaining quantity.</p>
                 </div>
               </div>
               <div className="solution-item">
@@ -1498,9 +1480,9 @@ function App() {
                   </svg>
                 </div>
                 <div>
-                  <span className="solution-tag solution-tag--green">FMCGs, Wholesalers</span>
-                  <h3 className="solution-title">Date Labeling Initiative</h3>
-                  <p className="solution-desc">Add our &quot;Look, Smell, Taste&quot; label to Best Before products to guide household consumption.</p>
+                  <span className="solution-tag solution-tag--green">FMCGs, Wholesalers, Factories</span>
+                  <h3 className="solution-title">New &amp; Surplus Stock</h3>
+                  <p className="solution-desc">List new products at normal prices, and move surplus or near-expiry inventory before it goes to waste.</p>
                 </div>
               </div>
             </div>
@@ -1514,8 +1496,8 @@ function App() {
               <span className="join-dot"></span>
               <span>Join the movement</span>
             </div>
-            <h2 className="join-title">Join over 180,000 businesses fighting food waste with us</h2>
-            <p className="join-subtitle">Download the Grabengo app and start saving food or listing your surplus today.</p>
+            <h2 className="join-title">Join the businesses ordering and saving with Grabengo</h2>
+            <p className="join-subtitle">Download the Grabengo app to start ordering and saving, or list your menu and surplus stock today.</p>
             <div className="join-btns">
               <button type="button" className="btn-hero-orange" onClick={() => setShowAppDownloadModal(true)}>Get the App</button>
               <Link to={ROUTES.register} className="btn-hero-outline" onClick={() => { setRegisterError(''); setRegisterComplete(null); }}>Register as Seller</Link>
@@ -1529,12 +1511,6 @@ function App() {
             <div className="footer-col footer-col--brand">
               <div className="footer-logo">
                 <GrabengoLogoMark size={24} textClassName="footer-logo-text" />
-              </div>
-              <div className="footer-badges">
-                <div className="bcorp-badge">
-                  <div className="bcorp-circle">B</div>
-                  <span>Certified B Corp</span>
-                </div>
               </div>
             </div>
             <div className="footer-col">
@@ -1856,7 +1832,7 @@ function App() {
           <GrabengoLogoMark size={70} showText={false} />
         </div>
         <h2 style={{ marginBottom: '0.5rem', fontSize: '2rem', fontWeight: '800', color: '#111827' }}>Register as Seller</h2>
-        <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on Grabengo and start selling surplus food</p>
+        <p style={{ color: '#6B7280', marginBottom: '2rem' }}>List your business on Grabengo and start taking everyday orders, plus surplus deals</p>
 
         {registerError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerError}</div>}
 

@@ -111,7 +111,7 @@ function downloadReceipt(orders, contactInfo, tenantName) {
       </div>
     </div>
     <div class="footer">
-      <p>© ${new Date().getFullYear()} Grabengo — Reducing food waste, one meal at a time.</p>
+      <p>© ${new Date().getFullYear()} Grabengo — Order fresh. Save on surplus.</p>
     </div>
   </div>
   <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>

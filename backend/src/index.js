@@ -13,7 +13,7 @@ function resolveStoreDeliverySettings(user, { delivery_enabled, delivery_mode } 
 }
 
 const { initDB, db } = require('./db');
-const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key } = require('./aws');
+const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Object, extractS3Key, captureRequestHost } = require('./aws');
 const { generateReceiptBuffer } = require('./receipt');
 const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl, delivery: DELIVERY_CFG, customerDeliveryLive } = require('./config');
 const { extractPrimaryColor } = require('./colorExtractor');
@@ -25,10 +25,12 @@ const {
 } = require('./subdomain');
 const {
   parseFloatParam,
+  parsePagination,
   resolveTenantFilter,
   sortByNearest,
   attachDistance,
   haversineKm,
+  nearestOrderExpr,
 } = require('./publicCatalog');
 const {
   getTenantById,
@@ -204,10 +206,10 @@ function groupOrdersByTenant(orders) {
   return [...groups.values()];
 }
 
-function assertSingleTenantCart(items) {
-  const tenantIds = new Set(items.map((i) => i.tenant_id).filter(Boolean));
-  if (tenantIds.size > 1) {
-    const err = new Error('Your cart contains items from different brands. Please checkout one brand at a time.');
+function assertSingleStoreCart(items) {
+  const storeIds = new Set(items.map((i) => i.store_id).filter(Boolean));
+  if (storeIds.size > 1) {
+    const err = new Error('Your cart contains items from different stores. Please checkout one store at a time.');
     err.status = 400;
     throw err;
   }
@@ -239,6 +241,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
+app.use(captureRequestHost);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -958,13 +961,8 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
       imageUrl = image ? await uploadImageToS3(image) : null;
     }
     const isActiveBool = is_active !== undefined && is_active !== null ? Boolean(is_active) : null;
-    const isSeller = req.user.role === 'SellersAdmin' || req.user.role === 'SellersStaff';
-    let deliveryEnabledBool = delivery_enabled !== undefined && delivery_enabled !== null ? Boolean(delivery_enabled) : null;
-    let deliveryModeValue = delivery_mode !== undefined ? (delivery_mode === 'partner' ? 'partner' : (delivery_mode === 'self' ? 'self' : null)) : null;
-    if (isSeller) {
-      deliveryEnabledBool = true;
-      deliveryModeValue = 'partner';
-    }
+    const deliveryEnabledBool = delivery_enabled !== undefined && delivery_enabled !== null ? Boolean(delivery_enabled) : null;
+    const deliveryModeValue = delivery_mode !== undefined ? (delivery_mode === 'partner' ? 'partner' : (delivery_mode === 'self' ? 'self' : null)) : null;
     await db.prepare(
       `UPDATE stores SET
         lat = COALESCE(?, lat),
@@ -981,9 +979,6 @@ app.put('/api/stores/:id', verifyToken, requireRole('stores', 'write'), async (r
     ).run(lat, lng, isActiveBool, name, address, imageUrl, deliveryEnabledBool,
       delivery_fee_note !== undefined, delivery_fee_note !== undefined ? (delivery_fee_note || null) : null, category,
       deliveryModeValue !== undefined, deliveryModeValue, id);
-    if (isSeller) {
-      await db.prepare("UPDATE stores SET delivery_enabled = TRUE, delivery_mode = 'partner' WHERE id = ?").run(id);
-    }
     res.json({ message: 'Store updated successfully' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -1451,10 +1446,6 @@ app.post('/api/orders', verifyToken, async (req, res) => {
   const method = paymentMethod || 'Card';
   const isDelivery = fulfillmentType === 'delivery';
 
-  if (isDelivery && !customerDeliveryLive) {
-    return res.status(400).json({ error: 'Delivery is coming soon. Please choose pickup for now.' });
-  }
-
   if (isDelivery && (!deliveryAddress || !deliveryAddress.trim() || !deliveryPhone || !deliveryPhone.trim())) {
     return res.status(400).json({ error: 'Delivery address and phone number are required for delivery orders.' });
   }
@@ -1469,6 +1460,9 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     }
     if (isDelivery && preview.some((p) => !p.delivery_enabled)) {
       return res.status(400).json({ error: 'One or more stores in your cart do not offer delivery. Please switch to pickup or remove those items.' });
+    }
+    if (isDelivery && preview.some((p) => p.delivery_mode === 'partner')) {
+      return res.status(400).json({ error: 'Grabengo Partner Delivery is coming soon. Please choose pickup for now.' });
     }
 
     // Delivery orders need a pinned location so riders (store or partner) can navigate,
@@ -3464,6 +3458,7 @@ app.get('/api/public/stores', async (req, res) => {
     const lat = parseFloatParam(req.query.lat);
     const lng = parseFloatParam(req.query.lng);
     const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+    const { limit, offset } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 200 });
 
     let query = `
       SELECT s.id, s.name, s.address, s.lat, s.lng, s.image, s.tenant_id, s.category,
@@ -3482,12 +3477,20 @@ app.get('/api/public/stores', async (req, res) => {
       query += ' AND s.id = ?';
       params.push(storeId);
     }
-    query += ' ORDER BY s.name ASC';
+    // Sort-by-distance has to happen in SQL before LIMIT — sorting the already-fetched
+    // page in JS (the old behavior) silently misses the true nearest rows once a
+    // tenant's store count exceeds the page size.
+    if (lat != null && lng != null && req.query.sort === 'nearest') {
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC, s.id ASC LIMIT ? OFFSET ?`;
+      params.push(lat, lat, lng, limit, offset);
+    } else {
+      query += ' ORDER BY s.name ASC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+    }
 
     let stores = await db.prepare(query).all(...params);
     if (lat != null && lng != null) {
       stores = attachDistance(stores, lat, lng);
-      if (req.query.sort === 'nearest') stores = sortByNearest(stores, lat, lng);
     }
 
     const signed = await Promise.all(stores.map(async (s) => ({
@@ -3508,6 +3511,7 @@ app.get('/api/public/bags', async (req, res) => {
     const lat = parseFloatParam(req.query.lat);
     const lng = parseFloatParam(req.query.lng);
     const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+    const { limit, offset } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 200 });
 
     let query = `
       SELECT b.id, b.price, b.original_price, b.description, b.images,
@@ -3528,12 +3532,17 @@ app.get('/api/public/bags', async (req, res) => {
       query += ' AND s.id = ?';
       params.push(storeId);
     }
-    query += ' ORDER BY b.id DESC';
+    if (lat != null && lng != null && req.query.sort === 'nearest') {
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC, b.id ASC LIMIT ? OFFSET ?`;
+      params.push(lat, lat, lng, limit, offset);
+    } else {
+      query += ' ORDER BY b.id DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+    }
 
     let bags = await db.prepare(query).all(...params);
     if (lat != null && lng != null) {
       bags = attachDistance(bags, lat, lng);
-      if (req.query.sort === 'nearest') bags = sortByNearest(bags, lat, lng);
     }
 
     const signed = await Promise.all(bags.map(async (bag) => ({
@@ -3555,6 +3564,7 @@ app.get('/api/public/food-items', async (req, res) => {
     const lat = parseFloatParam(req.query.lat);
     const lng = parseFloatParam(req.query.lng);
     const storeId = req.query.store_id ? parseInt(req.query.store_id, 10) : null;
+    const { limit, offset } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 200 });
 
     let query = `
       SELECT f.id, f.name, f.description, f.price, f.original_price,
@@ -3575,12 +3585,17 @@ app.get('/api/public/food-items', async (req, res) => {
       query += ' AND s.id = ?';
       params.push(storeId);
     }
-    query += ' ORDER BY f.created_at DESC';
+    if (lat != null && lng != null && req.query.sort === 'nearest') {
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC, f.id ASC LIMIT ? OFFSET ?`;
+      params.push(lat, lat, lng, limit, offset);
+    } else {
+      query += ' ORDER BY f.created_at DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+    }
 
     let items = await db.prepare(query).all(...params);
     if (lat != null && lng != null) {
       items = attachDistance(items, lat, lng);
-      if (req.query.sort === 'nearest') items = sortByNearest(items, lat, lng);
     }
 
     const signed = await Promise.all(items.map(async (item) => ({
@@ -3680,7 +3695,7 @@ async function previewCheckoutItems(items) {
       });
     }
   }
-  assertSingleTenantCart(preview);
+  assertSingleStoreCart(preview);
   return preview;
 }
 
@@ -3748,6 +3763,7 @@ async function placeCheckoutOrders(user, items) {
         pickup_time: bag.pickup_time || 'During opening hours',
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
+        store_id: store.id,
       });
     } else if (type === 'food') {
       const food = await db.prepare(
@@ -3775,6 +3791,7 @@ async function placeCheckoutOrders(user, items) {
         pickup_time: food.pickup_time || 'During opening hours',
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
+        store_id: store.id,
       });
     } else if (type === 'menu') {
       const menuItem = await db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
@@ -3801,13 +3818,14 @@ async function placeCheckoutOrders(user, items) {
         pickup_time: 'During opening hours',
         tenant_id: store.tenant_id,
         tenant_name: tenant?.name || store.name,
+        store_id: store.id,
       });
     }
   }
   if (placedOrders.length === 0) {
     throw new Error('No valid items could be ordered');
   }
-  assertSingleTenantCart(placedOrders);
+  assertSingleStoreCart(placedOrders);
   return placedOrders;
 }
 

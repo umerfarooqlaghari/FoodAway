@@ -32,16 +32,6 @@ function tenantCategory(tenant) {
   return 'all';
 }
 
-function Stars({ rating = 4.8 }) {
-  return (
-    <span className="explore-stars" aria-label={`${rating} stars`}>
-      {'★'.repeat(Math.floor(rating))}
-      {rating % 1 >= 0.5 ? '½' : ''}
-      <span className="explore-stars-num">{rating.toFixed(1)}</span>
-    </span>
-  );
-}
-
 function TenantCard({ tenant, size = 'default', onOpen }) {
   const logoSize = size === 'featured' ? 120 : 88;
   return (
@@ -52,7 +42,6 @@ function TenantCard({ tenant, size = 'default', onOpen }) {
         </div>
         <div className="explore-card-body">
           <h3 className="explore-card-title">{tenant.name}</h3>
-          <Stars />
           <p className="explore-card-meta">
             {tenant.store_count} store{tenant.store_count !== 1 ? 's' : ''}
             {tenant.distance_km != null && (
@@ -180,10 +169,10 @@ export default function TenantExplorePage({ onBack }) {
       <section className="explore-hero">
         <div className="explore-hero-inner">
           <div className="explore-hero-copy">
-            <span className="explore-hero-badge">Rescue food · Save money</span>
+            <span className="explore-hero-badge">Order fresh · Save on surplus</span>
             <h1>Shop your favourite brands</h1>
             <p>
-              Browse surprise bags and fresh deals from top restaurants and stores near you.
+              Order everyday menus for pickup or delivery, or browse surprise bags and surplus deals from top restaurants and stores near you.
               {coords ? ' Sorted by distance.' : ''}
             </p>
             <button type="button" className="explore-hero-btn" onClick={() => document.getElementById('explore-grid')?.scrollIntoView({ behavior: 'smooth' })}>
@@ -290,7 +279,7 @@ export default function TenantExplorePage({ onBack }) {
         <div className="explore-footer-inner">
           <div className="explore-footer-brand">
             <GrabengoLogoMark size={24} textClassName="explore-footer-logo-text" />
-            <p>Rescue surplus food from brands you love.</p>
+            <p>Order fresh, or save on surplus, from brands you love.</p>
           </div>
           <div className="explore-footer-col">
             <h4>Explore</h4>

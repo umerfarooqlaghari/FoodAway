@@ -2,6 +2,7 @@ const { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand, GetO
 const { SESv2Client, SendEmailCommand } = require('@aws-sdk/client-sesv2');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const { AsyncLocalStorage } = require('async_hooks');
 const { fromEmail } = require('./config');
 
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -14,11 +15,22 @@ function publicS3Url(key) {
 const hasCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
 const isTestEnv = process.env.NODE_ENV === 'test';
 
+// Captures the host each request actually came in on (LAN IP, 10.0.2.2, localhost —
+// whatever the client used) so image URLs built during that request resolve back to
+// the same place, without a hardcoded IP that breaks every time the dev machine's
+// network changes. Production still prefers RENDER_EXTERNAL_URL/API_PUBLIC_URL.
+const requestHostStorage = new AsyncLocalStorage();
+
+function captureRequestHost(req, res, next) {
+  requestHostStorage.run(`${req.protocol}://${req.get('host')}`, next);
+}
+
 function getApiPublicBase() {
   return (
     process.env.API_PUBLIC_URL ||
     process.env.RENDER_EXTERNAL_URL ||
     process.env.APP_URL ||
+    requestHostStorage.getStore() ||
     'http://localhost:3000'
   ).replace(/\/$/, '');
 }
@@ -291,5 +303,6 @@ module.exports = {
   getClientImageUrl,
   streamS3Object,
   extractS3Key,
-  presignImages
+  presignImages,
+  captureRequestHost
 };

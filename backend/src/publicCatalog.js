@@ -5,6 +5,18 @@ function parseFloatParam(val) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Bounds unauthenticated catalog list endpoints so they can't return an
+// unbounded (and ever-growing) result set. Callers who don't pass limit/offset
+// get defaultLimit rows — generous enough to match current catalog size, but
+// no longer literally unlimited as stores/bags/items accumulate over time.
+function parsePagination(query, { defaultLimit = 200, maxLimit = 200 } = {}) {
+  const rawLimit = parseInt(query.limit, 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, maxLimit) : defaultLimit;
+  const rawOffset = parseInt(query.offset, 10);
+  const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+  return { limit, offset };
+}
+
 function haversineKm(lat1, lng1, lat2, lng2) {
   if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return Infinity;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -33,6 +45,17 @@ async function resolveTenantFilter(db, { tenant_id, subdomain }) {
   return { tenantId: null, tenant: null };
 }
 
+// SQL equivalent of haversineKm above, for ORDER BY when sort=nearest — sorting
+// in JS only works on rows already fetched, which breaks once a tenant's row
+// count exceeds the page LIMIT (the true nearest row could be past the cutoff).
+// Placeholders must be filled with [lat, lat, lng] in that order.
+function nearestOrderExpr(latCol, lngCol) {
+  return `(2 * 6371 * asin(sqrt(
+    power(sin(radians(${latCol} - ?) / 2), 2) +
+    cos(radians(?)) * cos(radians(${latCol})) * power(sin(radians(${lngCol} - ?) / 2), 2)
+  )))`;
+}
+
 function sortByNearest(items, lat, lng, latKey = 'lat', lngKey = 'lng') {
   if (lat == null || lng == null) return items;
   return [...items].sort((a, b) => {
@@ -52,7 +75,9 @@ function attachDistance(items, lat, lng, latKey = 'lat', lngKey = 'lng') {
 
 module.exports = {
   parseFloatParam,
+  parsePagination,
   haversineKm,
+  nearestOrderExpr,
   resolveTenantFilter,
   sortByNearest,
   attachDistance,
