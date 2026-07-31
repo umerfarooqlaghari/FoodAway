@@ -4154,7 +4154,7 @@ function DiscoverScreen({ navigation, route }) {
 
   const avatarUri = user?.logo || `https://i.pravatar.cc/100?img=${user?.id || 12}`;
 
-  const ListHeader = () => (
+  const listHeader = useMemo(() => (
     <View style={{ paddingHorizontal: 20 }}>
 
       {/* Categories */}
@@ -4265,7 +4265,7 @@ function DiscoverScreen({ navigation, route }) {
         </View>
       )}
     </View>
-  );
+  ), [selectedStoreId, favoritesOnly, filteredStores, activeTab, activeCount, loading, stores]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -4379,7 +4379,7 @@ function DiscoverScreen({ navigation, route }) {
               renderItem={activeTab === 'bags' ? renderItem : renderFoodItem}
               numColumns={2}
               key={activeTab}
-              ListHeaderComponent={ListHeader}
+              ListHeaderComponent={listHeader}
               contentContainerStyle={{ paddingBottom: 120 }}
               columnWrapperStyle={{ paddingHorizontal: 16, justifyContent: 'space-between' }}
               showsVerticalScrollIndicator={false}
@@ -6480,7 +6480,9 @@ function BookingsScreen({ navigation }) {
 
   const orderKeyExtractor = useCallback((item) => String(item.id), []);
   const renderOrderSectionHeader = useCallback(({ section }) => (
-    <Text style={{ fontSize: 13, fontWeight: '800', color: '#6B7280', marginBottom: 12, marginTop: section.title === 'PAST' ? 8 : 0, letterSpacing: 0.5 }}>{section.title}</Text>
+    <View style={{ backgroundColor: '#FFFFFF', paddingVertical: 10, marginTop: section.title === 'PAST' ? 8 : 0, marginBottom: 12 }}>
+      <Text style={{ fontSize: 13, fontWeight: '800', color: '#6B7280', letterSpacing: 0.5 }}>{section.title}</Text>
+    </View>
   ), []);
 
   return (

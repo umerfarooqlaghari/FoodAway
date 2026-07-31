@@ -3481,7 +3481,7 @@ app.get('/api/public/stores', async (req, res) => {
     // page in JS (the old behavior) silently misses the true nearest rows once a
     // tenant's store count exceeds the page size.
     if (lat != null && lng != null && req.query.sort === 'nearest') {
-      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC LIMIT ? OFFSET ?`;
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC, s.id ASC LIMIT ? OFFSET ?`;
       params.push(lat, lat, lng, limit, offset);
     } else {
       query += ' ORDER BY s.name ASC LIMIT ? OFFSET ?';
@@ -3533,7 +3533,7 @@ app.get('/api/public/bags', async (req, res) => {
       params.push(storeId);
     }
     if (lat != null && lng != null && req.query.sort === 'nearest') {
-      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC LIMIT ? OFFSET ?`;
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC, b.id ASC LIMIT ? OFFSET ?`;
       params.push(lat, lat, lng, limit, offset);
     } else {
       query += ' ORDER BY b.id DESC LIMIT ? OFFSET ?';
@@ -3586,7 +3586,7 @@ app.get('/api/public/food-items', async (req, res) => {
       params.push(storeId);
     }
     if (lat != null && lng != null && req.query.sort === 'nearest') {
-      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC LIMIT ? OFFSET ?`;
+      query += ` ORDER BY ${nearestOrderExpr('s.lat', 's.lng')} ASC, f.id ASC LIMIT ? OFFSET ?`;
       params.push(lat, lat, lng, limit, offset);
     } else {
       query += ' ORDER BY f.created_at DESC LIMIT ? OFFSET ?';
