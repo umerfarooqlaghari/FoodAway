@@ -1,6 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const { PostHog } = require('posthog-node');
+const posthog = new PostHog(
+  process.env.POSTHOG_API_KEY,
+  { host: process.env.POSTHOG_HOST || 'https://eu.i.posthog.com' }
+);
 
 const STORE_CATEGORIES = ['Restaurants', 'Bakeries', 'Cafes', 'Grocery Store'];
 
@@ -618,6 +623,15 @@ app.post('/api/auth/login', async (req, res) => {
       }),
       text: `Welcome Back, ${user.name}! Welcome back to ${brandName}. Let's get you some amazing deals waiting near you!`
     }).catch(err => console.error('Failed to send welcome back email:', err.message));
+
+    // Capture backend login event
+    try {
+      posthog.capture({
+        distinctId: String(user.id),
+        event: 'user_logged_in',
+        properties: { email: user.email, role: user.role, name: user.name }
+      });
+    } catch (_) { }
 
     res.json({ token, refreshToken, user: await formatUserForClient(user) });
   } catch (err) {
@@ -1604,6 +1618,18 @@ app.post('/api/orders', verifyToken, async (req, res) => {
         }
       });
     }
+
+    // Capture backend order_placed event in PostHog
+    try {
+      posthog.capture({
+        distinctId: String(req.user.id),
+        event: 'order_placed',
+        properties: {
+          order_count: placedOrders.length,
+          total_amount: placedOrders.reduce((sum, o) => sum + (Number(o.price) * (o.quantity || 1)), 0),
+        }
+      });
+    } catch (_) { }
 
     // Send order confirmation email with PDF receipt asynchronously
     const customer = await db.prepare('SELECT email, name, phone FROM users WHERE id = ?').get(req.user.id);

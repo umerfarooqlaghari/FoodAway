@@ -8,6 +8,10 @@ import { Image } from 'expo-image';
 import { SafeAreaView, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, TouchableOpacity as GHTouchableOpacity, Pressable as GHPressable, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import axios from 'axios';
+import { PostHogProvider, usePostHog } from 'posthog-react-native';
+
+const POSTHOG_API_KEY = process.env.EXPO_PUBLIC_POSTHOG_API_KEY;
+const POSTHOG_HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com';
 
 let imagePickerModule = null;
 let locationModule = null;
@@ -2825,8 +2829,10 @@ function ExploreTenantsScreen({ navigation }) {
     }
   };
 
+  const posthog = usePostHog();
   useEffect(() => {
     fetchStores();
+    try { posthog?.capture('store_list_viewed'); } catch (_) { }
   }, []);
 
   const storesWithDistance = stores.map((s) => {
@@ -4857,7 +4863,12 @@ function DiscoverScreen({ navigation, route }) {
 
 // --- Store Details Screen ---
 function StoreDetailsScreen({ navigation, route }) {
-  const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
+  useEffect(() => {
+    try {
+      posthog?.capture('store_details_opened', { store_id: store?.id, store_name: store?.name, category: store?.category });
+    } catch (_) { }
+  }, [posthog, store]);
   const { store, userLocation: routeUserLocation } = route.params;
   // Prefer the live shared location over the value captured at navigation time —
   // GPS may still have been resolving when the user tapped into this store.
@@ -6022,11 +6033,16 @@ function CartScreen({ navigation, route }) {
   const [checkingOut, setCheckingOut] = useState(false);
   const insets = useSafeAreaInsets();
 
+  const posthog = usePostHog();
   useEffect(() => {
     if (!token) {
       navigation.replace('ExploreTenants');
+      return;
     }
-  }, [token, navigation]);
+    try {
+      posthog?.capture('checkout_started', { item_count: cartItems?.length, total_price: cartTotalPrice });
+    } catch (_) { }
+  }, [token, navigation, posthog]);
 
   const isDelivery = deliveryInfo.fulfillmentType === 'delivery';
   const hasPartnerDelivery = cartItems.some(item => item.delivery_mode === 'partner');
@@ -7611,7 +7627,7 @@ function SellerDashboardScreen() {
       await Promise.all(menuItemStoreIds.map(async (stId) => {
         const existingInStore = sellerMenuItems.find(
           m => Number(m.store_id) === Number(stId) &&
-               (m.id === editingMenuItemId || (m.name || '').toLowerCase() === nameTrimmed.toLowerCase())
+            (m.id === editingMenuItemId || (m.name || '').toLowerCase() === nameTrimmed.toLowerCase())
         );
         const payload = {
           store_id: stId,
@@ -7760,684 +7776,684 @@ function SellerDashboardScreen() {
       ) : (
         <>
           {/* ── STORES TAB ── */}
-      {sellerTab === 'stores' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          {/* KPI Strip */}
-          <View style={{ gap: 10, marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <SellerStatCard label="Revenue" value={formatMoney(stats.totalRevenue, currencySymbol)} />
-              <SellerStatCard label="Stores" value={String(stores.length)} />
-            </View>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <SellerStatCard label="Bags Sold" value={String(stats.bagsSold)} />
-              <SellerStatCard label="Products Sold" value={String(stats.productsSold)} />
-            </View>
-          </View>
-
-          {stores.length === 0 ? (
-            <SellerEmptyState icon="storefront-outline" title="No stores yet" subtitle="Tap + to add your first store location" />
-          ) : (stores.map((store) => (
-            <View key={store.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                {store.image ? (
-                  <Image source={{ uri: store.image }} style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0 }} />
-                ) : (
-                  <View style={{ width: 52, height: 52, borderRadius: 10, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-                    <Ionicons name="storefront-outline" size={24} color={SELLER_BRAND} />
-                  </View>
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{store.name}</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{store.address}</Text>
-                  {store.category && (
-                    <View style={{ alignSelf: 'flex-start', backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginTop: 4 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: SELLER_BRAND }}>{store.category}</Text>
-                    </View>
-                  )}
+          {sellerTab === 'stores' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              {/* KPI Strip */}
+              <View style={{ gap: 10, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <SellerStatCard label="Revenue" value={formatMoney(stats.totalRevenue, currencySymbol)} />
+                  <SellerStatCard label="Stores" value={String(stores.length)} />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <SellerStatCard label="Bags Sold" value={String(stats.bagsSold)} />
+                  <SellerStatCard label="Products Sold" value={String(stats.productsSold)} />
                 </View>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                  {store.delivery_enabled && store.delivery_mode !== 'partner' ? (
-                    <>
-                      <Ionicons name="bicycle-outline" size={18} color="#10B981" />
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#10B981' }}>Delivery Enabled</Text>
-                    </>
-                  ) : store.delivery_enabled && store.delivery_mode === 'partner' ? (
-                    <>
-                      <Ionicons name="time-outline" size={18} color="#C2410C" />
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#9A3412' }}>Partner delivery coming soon</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Ionicons name="close-circle-outline" size={18} color="#6B7280" />
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#6B7280' }}>Delivery Disabled</Text>
-                    </>
-                  )}
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                <TouchableOpacity
-                  onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setStoreDeliveryEnabled(!!store.delivery_enabled); setStoreDeliveryMode('self'); setStoreDeliveryFeeNote(store.delivery_fee_note || ''); setStoreCategory(store.category || null); setEditingStoreId(store.id); setShowStoreModal(true); }}
-                  style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FFFFFF', borderRadius: 10, alignItems: 'center' }}>
-                  <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 13 }}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleDeleteStore(store.id)}
-                  style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center' }}>
-                  <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )))}
-        </ScrollView>
-      )}
 
-      {/* ── MENU TAB (persistent vendor catalog) ── */}
-      {sellerTab === 'menu' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          {/* Menu Filter Bar */}
-          <View style={{ marginBottom: 14 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 8 }}>
-              <Ionicons name="search" size={16} color="#9CA3AF" style={{ marginRight: 8 }} />
-              <TextInput
-                placeholder="Search menu items..."
-                placeholderTextColor="#9CA3AF"
-                value={menuSearchQuery}
-                onChangeText={setMenuSearchQuery}
-                style={{ flex: 1, fontSize: 13, color: '#111827', padding: 0 }}
-              />
-              {menuSearchQuery ? (
-                <TouchableOpacity onPress={() => setMenuSearchQuery('')}>
-                  <Ionicons name="close-circle" size={16} color="#9CA3AF" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {/* Store Filter */}
-              <TouchableOpacity
-                onPress={() => setMenuStoreFilter('all')}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
-                  backgroundColor: menuStoreFilter === 'all' ? SELLER_BRAND : '#F3F4F6',
-                }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: menuStoreFilter === 'all' ? '#FFFFFF' : '#374151' }}>All Stores</Text>
-              </TouchableOpacity>
-              {stores.map(st => (
-                <TouchableOpacity
-                  key={st.id}
-                  onPress={() => setMenuStoreFilter(menuStoreFilter === st.id ? 'all' : st.id)}
-                  style={{
-                    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
-                    backgroundColor: menuStoreFilter === st.id ? SELLER_BRAND : '#F3F4F6',
-                  }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: menuStoreFilter === st.id ? '#FFFFFF' : '#374151' }}>{st.name}</Text>
-                </TouchableOpacity>
-              ))}
-
-              {/* Visibility Filters */}
-              <TouchableOpacity
-                onPress={() => setMenuVisibilityFilter(menuVisibilityFilter === 'visible' ? 'all' : 'visible')}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
-                  backgroundColor: menuVisibilityFilter === 'visible' ? '#10B981' : '#F3F4F6',
-                }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: menuVisibilityFilter === 'visible' ? '#FFFFFF' : '#374151' }}>Visible</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setMenuVisibilityFilter(menuVisibilityFilter === 'hidden' ? 'all' : 'hidden')}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
-                  backgroundColor: menuVisibilityFilter === 'hidden' ? '#EF4444' : '#F3F4F6',
-                }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: menuVisibilityFilter === 'hidden' ? '#FFFFFF' : '#374151' }}>Hidden</Text>
-              </TouchableOpacity>
-
-              {/* Price Sort Filters */}
-              <TouchableOpacity
-                onPress={() => setMenuPriceSort(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? 'default' : 'asc')}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
-                  backgroundColor: menuPriceSort !== 'default' ? '#6366F1' : '#F3F4F6',
-                }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: menuPriceSort !== 'default' ? '#FFFFFF' : '#374151' }}>
-                  {menuPriceSort === 'asc' ? 'Price: Low → High' : menuPriceSort === 'desc' ? 'Price: High → Low' : 'Price Sort'}
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-
-          {(() => {
-            const filtered = sellerMenuItems.filter(item => {
-              if (menuSearchQuery.trim()) {
-                const q = menuSearchQuery.toLowerCase().trim();
-                const matchName = (item.name || '').toLowerCase().includes(q);
-                const matchCat = (item.category || '').toLowerCase().includes(q);
-                if (!matchName && !matchCat) return false;
-              }
-              if (menuStoreFilter !== 'all' && Number(item.store_id) !== Number(menuStoreFilter)) {
-                return false;
-              }
-              if (menuVisibilityFilter === 'visible' && item.is_hidden) return false;
-              if (menuVisibilityFilter === 'hidden' && !item.is_hidden) return false;
-              return true;
-            }).sort((a, b) => {
-              if (menuPriceSort === 'asc') return Number(a.price) - Number(b.price);
-              if (menuPriceSort === 'desc') return Number(b.price) - Number(a.price);
-              return 0;
-            });
-
-            if (filtered.length === 0) {
-              return <SellerEmptyState icon="restaurant-outline" title="No menu items found" subtitle={menuSearchQuery || menuStoreFilter !== 'all' || menuVisibilityFilter !== 'all' ? "Try adjusting your search or filters" : "Add the items your store always has available"} />;
-            }
-            return filtered.map((item) => (
-              <View key={item.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{item.name}</Text>
-                    <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{item.store_name} · {item.category}</Text>
-                  </View>
-                  <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 18 }}>{formatMoney(item.price, currencySymbol)}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                  <View style={{ backgroundColor: item.is_hidden ? '#FEE2E2' : '#D1FAE5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                    <Text style={{ color: item.is_hidden ? '#991B1B' : '#065F46', fontWeight: '700', fontSize: 11 }}>{item.is_hidden ? 'Hidden from customers' : 'Visible on menu'}</Text>
-                  </View>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setEditingMenuItemId(item.id);
-                      const sameNameStores = sellerMenuItems
-                        .filter(m => (m.name || '').toLowerCase() === (item.name || '').toLowerCase())
-                        .map(m => m.store_id);
-                      const selectedStores = Array.from(new Set([item.store_id, ...sameNameStores]));
-                      setMenuItemStoreIds(selectedStores);
-
-                      setMenuItemName(item.name);
-                      setMenuItemDescription(item.description || '');
-                      const known = FOOD_CATEGORIES.includes(item.category);
-                      setMenuItemCategory(known ? item.category : 'Custom');
-                      setMenuItemCustomCategory(known ? '' : (item.category || ''));
-                      setMenuItemPrice(item.price.toString());
-                      setMenuItemImage(item.image || null);
-                      setShowMenuItemModal(true);
-                    }}
-                    style={{ flex: 1, paddingVertical: 8, backgroundColor: '#ECFDF5', borderRadius: 8, alignItems: 'center' }}>
-                    <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleToggleHideMenuItem(item)}
-                    style={{ flex: 1, paddingVertical: 8, backgroundColor: '#F3F4F6', borderRadius: 8, alignItems: 'center' }}>
-                    <Text style={{ color: '#374151', fontWeight: '700', fontSize: 12 }}>{item.is_hidden ? 'Unhide' : 'Hide'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteMenuItem(item.id)}
-                    style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 8, alignItems: 'center' }}>
-                    <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ));
-          })()}
-        </ScrollView>
-      )}
-
-      {/* ── SURPRISE BAGS TAB ── */}
-      {sellerTab === 'bags' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          <SellerCompactSearch
-            placeholder="Search surprise bags..."
-            searchVal={sellerSearch}
-            setSearchVal={setSellerSearch}
-          />
-          {(() => {
-            const filtered = sellerBags.filter(bag => {
-              const q = sellerSearch.toLowerCase().trim();
-              return !q || (bag.store_name || '').toLowerCase().includes(q) || (bag.description || '').toLowerCase().includes(q) || (bag.pickup_time || '').toLowerCase().includes(q);
-            });
-            if (filtered.length === 0) {
-              return <SellerEmptyState icon="bag-handle-outline" title="No surprise bags found" subtitle={sellerSearch ? "Try another search query" : "Create your first surprise bag listing"} />;
-            }
-            return filtered.map((bag) => (
-              <View key={bag.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{bag.store_name}</Text>
-                    <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Pickup: {bag.pickup_time}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    {bag.original_price ? (
-                      <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{formatMoney(bag.original_price, currencySymbol)}</Text>
-                    ) : null}
-                    <Text style={{ color: '#FF5C00', fontWeight: '800', fontSize: 18 }}>{formatMoney(bag.price, currencySymbol)}</Text>
-                  </View>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                  <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                    <Text style={{ color: '#FF5C00', fontWeight: '700', fontSize: 12 }}>{bag.quantity} left</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        let parsedImgs = [];
-                        try {
-                          parsedImgs = bag.images ? (typeof bag.images === 'string' ? JSON.parse(bag.images) : bag.images) : [];
-                        } catch (e) { }
-                        setBagStoreId(bag.store_id);
-                        setBagPrice(bag.price.toString());
-                        setBagOriginalPrice(bag.original_price?.toString() || '');
-                        setBagQuantity(bag.quantity.toString());
-                        setPickupTime(bag.pickup_time);
-                        setBagDescription(bag.description || '');
-                        setBagImages(parsedImgs);
-                        const details = parsePickupTimeDetails(bag.pickup_time);
-                        setPickupDays(details.days);
-                        setPickupFrom(details.from);
-                        setPickupTo(details.to);
-                        setEditingBagId(bag.id);
-                        setActiveTimePicker(null);
-                        setShowBagModal(true);
-                      }}
-                      style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#EEF2FF', borderRadius: 8 }}>
-                      <Text style={{ color: '#4338CA', fontWeight: '700', fontSize: 12 }}>Edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteBag(bag.id)}
-                      style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
-                      <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Delete</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            ));
-          })()}
-        </ScrollView>
-      )}
-
-      {/* ── GRABENGO DEALS TAB ── */}
-      {sellerTab === 'food' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          <SellerCompactSearch
-            placeholder="Search deals..."
-            searchVal={sellerSearch}
-            setSearchVal={setSellerSearch}
-            categoryVal={sellerCategoryFilter}
-            setCategoryVal={setSellerCategoryFilter}
-            categories={FOOD_CATEGORIES}
-          />
-          {(() => {
-            const filtered = sellerFoodItems.filter(item => {
-              const q = sellerSearch.toLowerCase().trim();
-              const matchSearch = !q || (item.name || '').toLowerCase().includes(q) || (item.store_name || '').toLowerCase().includes(q) || (item.category || '').toLowerCase().includes(q);
-              const matchCat = sellerCategoryFilter === 'All' || item.category === sellerCategoryFilter;
-              return matchSearch && matchCat;
-            });
-            if (filtered.length === 0) {
-              return <SellerEmptyState icon="flash-outline" title="No deals found" subtitle={sellerSearch || sellerCategoryFilter !== 'All' ? "Try another search filter" : "Pick a menu item and list it at a discount for a limited time"} />;
-            }
-            return filtered.map((item) => {
-              const notStarted = item.starts_at && new Date(item.starts_at) > new Date();
-              const ended = item.sale_ends_at && new Date(item.sale_ends_at) <= new Date();
-              const isLive = item.is_available && item.quantity > 0 && !notStarted && !ended;
-              return (
-                <View key={item.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{item.name}</Text>
-                      <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{item.store_name} · {item.category}</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      {item.original_price ? (
-                        <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{formatMoney(item.original_price, currencySymbol)}</Text>
-                      ) : null}
-                      <Text style={{ color: '#059669', fontWeight: '800', fontSize: 18 }}>{formatMoney(item.price, currencySymbol)}</Text>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                    <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                      <Text style={{ color: '#059669', fontWeight: '700', fontSize: 11 }}>{item.quantity} left</Text>
-                    </View>
-                    <View style={{ backgroundColor: isLive ? '#D1FAE5' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                      <Text style={{ color: isLive ? '#065F46' : '#991B1B', fontWeight: '700', fontSize: 11 }}>
-                        {ended ? 'Ended' : notStarted ? 'Scheduled' : isLive ? 'Live' : 'Unavailable'}
-                      </Text>
-                    </View>
-                    {item.starts_at && (
-                      <View style={{ backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                        <Text style={{ color: '#374151', fontWeight: '600', fontSize: 11 }}>Starts {formatSaleEnd(item.starts_at)}</Text>
+              {stores.length === 0 ? (
+                <SellerEmptyState icon="storefront-outline" title="No stores yet" subtitle="Tap + to add your first store location" />
+              ) : (stores.map((store) => (
+                <View key={store.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    {store.image ? (
+                      <Image source={{ uri: store.image }} style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0 }} />
+                    ) : (
+                      <View style={{ width: 52, height: 52, borderRadius: 10, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                        <Ionicons name="storefront-outline" size={24} color={SELLER_BRAND} />
                       </View>
                     )}
-                    {item.sale_ends_at && (
-                      <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                        <Text style={{ color: '#FF5C00', fontWeight: '600', fontSize: 11 }}>Ends {formatSaleEnd(item.sale_ends_at)}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setFoodStoreId(item.store_id);
-                        setFoodMenuItemId(item.menu_item_id);
-                        setFoodPrice(item.price.toString());
-                        setFoodQuantity(item.quantity.toString());
-                        setFoodStartsAt(item.starts_at ? new Date(item.starts_at) : null);
-                        setFoodStartPicker(null);
-                        setFoodSaleEndsAt(item.sale_ends_at ? new Date(item.sale_ends_at) : null);
-                        setFoodSalePicker(null);
-                        setEditingFoodId(item.id);
-                        setShowFoodModal(true);
-                      }}
-                      style={{ flex: 1, paddingVertical: 8, backgroundColor: '#ECFDF5', borderRadius: 8, alignItems: 'center' }}>
-                      <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>Edit</Text>
-                    </TouchableOpacity>
-                    {isLive && (
-                      <TouchableOpacity
-                        onPress={() => handleEndSaleEarly(item.id)}
-                        style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FFFFFF', borderRadius: 8, alignItems: 'center' }}>
-                        <Text style={{ color: '#FF5C00', fontWeight: '700', fontSize: 12 }}>End Sale</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      onPress={() => handleDeleteFoodItem(item.id)}
-                      style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 8, alignItems: 'center' }}>
-                      <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Delete</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            });
-          })()}
-        </ScrollView>
-      )}
-
-      {sellerTab === 'staff' && user?.role === 'SellersAdmin' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          <SellerCompactSearch
-            placeholder="Search staff members..."
-            searchVal={sellerSearch}
-            setSearchVal={setSellerSearch}
-          />
-          <TouchableOpacity onPress={() => setShowStaffModal(true)} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND, marginBottom: 16 }]}>
-            <Text style={styles.primaryButtonText}>Add Staff Member</Text>
-          </TouchableOpacity>
-          {(() => {
-            const filtered = staffList.filter(s => {
-              const q = sellerSearch.toLowerCase().trim();
-              return !q || (s.name || '').toLowerCase().includes(q) || (s.email || '').toLowerCase().includes(q);
-            });
-            if (filtered.length === 0) {
-              return <SellerEmptyState icon="people-outline" title="No staff found" subtitle={sellerSearch ? "Try another search query" : "Add team members to help manage your stores"} />;
-            }
-            return filtered.map((staff) => (
-              <View key={String(staff.id)} style={[styles.card, { marginBottom: 12 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
-                    <Ionicons name="person-outline" size={22} color={SELLER_BRAND} />
-                  </View>
-                  <View>
-                    <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{staff.name}</Text>
-                    <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{staff.email}</Text>
-                  </View>
-                </View>
-              </View>
-            ));
-          })()}
-        </ScrollView>
-      )}
-
-      {sellerTab === 'orders' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-            {[
-              { key: 'active', label: 'Active' },
-              { key: 'completed', label: 'Completed' },
-              { key: 'all', label: 'All' },
-            ].map((f) => (
-              <TouchableOpacity
-                key={f.key}
-                onPress={() => setSellerOrderFilter(f.key)}
-                style={{
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: sellerOrderFilter === f.key ? SELLER_BRAND : '#F3F4F6',
-                }}
-              >
-                <Text style={{ fontWeight: '700', fontSize: 12, color: sellerOrderFilter === f.key ? '#FFFFFF' : '#374151' }}>{f.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {(() => {
-            const filteredOrders = sellerOrders.filter((o) => {
-              const settled = ['paid', 'rejected', 'cancelled'].includes(o.status || 'pending');
-              if (sellerOrderFilter === 'active') return !settled;
-              if (sellerOrderFilter === 'completed') return settled;
-              return true;
-            });
-            const grouped = groupOrders(filteredOrders);
-            if (grouped.length === 0) {
-              return (
-                <SellerEmptyState
-                  icon="receipt-outline"
-                  title={sellerOrderFilter === 'active' ? 'No active orders' : 'No orders here'}
-                  subtitle={sellerOrderFilter === 'active' ? 'New customer orders will appear here' : 'Try another filter'}
-                />
-              );
-            }
-            return grouped.map((order) => {
-              const isDelivery = order.fulfillment_type === 'delivery';
-              const status = order.status || 'pending';
-              const isSettled = ['paid', 'rejected', 'cancelled'].includes(status);
-              const showTriad = isDelivery && status === 'pending';
-              const showPaymentActions = !isSettled && !showTriad;
-              const completeLabel = isDelivery ? 'Mark Delivered' : 'Mark Picked Up';
-              const STATUS_BADGES = {
-                pending: { label: isDelivery ? 'AWAITING CONFIRMATION' : 'AWAITING PICKUP', bg: '#FEF3C7', color: '#92400E' },
-                confirmed: { label: 'CONFIRMED', bg: '#DBEAFE', color: '#1D4ED8' },
-                paid: { label: isDelivery ? 'DELIVERED' : 'PICKED UP', bg: '#DCFCE7', color: '#15803D' },
-                rejected: { label: 'REJECTED', bg: '#FEE2E2', color: '#DC2626' },
-                cancelled: { label: 'CANCELLED', bg: '#F3F4F6', color: '#6B7280' },
-              };
-              const statusBadge = STATUS_BADGES[status];
-              return (
-                <View key={String(order.id)} style={[styles.card, { marginBottom: 12 }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDelivery ? '#DBEAFE' : '#F3F4F6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
-                          <Ionicons name={isDelivery ? "bicycle-outline" : "storefront-outline"} size={11} color={isDelivery ? '#1D4ED8' : '#374151'} />
-                          <Text style={{ fontSize: 10, fontWeight: '800', color: isDelivery ? '#1D4ED8' : '#374151' }}>{isDelivery ? 'DELIVERY' : 'PICKUP'}</Text>
+                      <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{store.name}</Text>
+                      <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{store.address}</Text>
+                      {store.category && (
+                        <View style={{ alignSelf: 'flex-start', backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginTop: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: SELLER_BRAND }}>{store.category}</Text>
                         </View>
-                        {statusBadge && (
-                          <View style={{ backgroundColor: statusBadge.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: statusBadge.color }}>{statusBadge.label}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      {store.delivery_enabled && store.delivery_mode !== 'partner' ? (
+                        <>
+                          <Ionicons name="bicycle-outline" size={18} color="#10B981" />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#10B981' }}>Delivery Enabled</Text>
+                        </>
+                      ) : store.delivery_enabled && store.delivery_mode === 'partner' ? (
+                        <>
+                          <Ionicons name="time-outline" size={18} color="#C2410C" />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#9A3412' }}>Partner delivery coming soon</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Ionicons name="close-circle-outline" size={18} color="#6B7280" />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#6B7280' }}>Delivery Disabled</Text>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                    <TouchableOpacity
+                      onPress={() => { setStoreName(store.name); setStoreAddress(store.address); setStoreImage(store.image); setStoreLat(store.lat || 51.5074); setStoreLng(store.lng || -0.1278); setStoreDeliveryEnabled(!!store.delivery_enabled); setStoreDeliveryMode('self'); setStoreDeliveryFeeNote(store.delivery_fee_note || ''); setStoreCategory(store.category || null); setEditingStoreId(store.id); setShowStoreModal(true); }}
+                      style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FFFFFF', borderRadius: 10, alignItems: 'center' }}>
+                      <Text style={{ color: SELLER_BRAND, fontWeight: '700', fontSize: 13 }}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteStore(store.id)}
+                      style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center' }}>
+                      <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )))}
+            </ScrollView>
+          )}
+
+          {/* ── MENU TAB (persistent vendor catalog) ── */}
+          {sellerTab === 'menu' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              {/* Menu Filter Bar */}
+              <View style={{ marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 8 }}>
+                  <Ionicons name="search" size={16} color="#9CA3AF" style={{ marginRight: 8 }} />
+                  <TextInput
+                    placeholder="Search menu items..."
+                    placeholderTextColor="#9CA3AF"
+                    value={menuSearchQuery}
+                    onChangeText={setMenuSearchQuery}
+                    style={{ flex: 1, fontSize: 13, color: '#111827', padding: 0 }}
+                  />
+                  {menuSearchQuery ? (
+                    <TouchableOpacity onPress={() => setMenuSearchQuery('')}>
+                      <Ionicons name="close-circle" size={16} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {/* Store Filter */}
+                  <TouchableOpacity
+                    onPress={() => setMenuStoreFilter('all')}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
+                      backgroundColor: menuStoreFilter === 'all' ? SELLER_BRAND : '#F3F4F6',
+                    }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: menuStoreFilter === 'all' ? '#FFFFFF' : '#374151' }}>All Stores</Text>
+                  </TouchableOpacity>
+                  {stores.map(st => (
+                    <TouchableOpacity
+                      key={st.id}
+                      onPress={() => setMenuStoreFilter(menuStoreFilter === st.id ? 'all' : st.id)}
+                      style={{
+                        paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
+                        backgroundColor: menuStoreFilter === st.id ? SELLER_BRAND : '#F3F4F6',
+                      }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: menuStoreFilter === st.id ? '#FFFFFF' : '#374151' }}>{st.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+
+                  {/* Visibility Filters */}
+                  <TouchableOpacity
+                    onPress={() => setMenuVisibilityFilter(menuVisibilityFilter === 'visible' ? 'all' : 'visible')}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
+                      backgroundColor: menuVisibilityFilter === 'visible' ? '#10B981' : '#F3F4F6',
+                    }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: menuVisibilityFilter === 'visible' ? '#FFFFFF' : '#374151' }}>Visible</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setMenuVisibilityFilter(menuVisibilityFilter === 'hidden' ? 'all' : 'hidden')}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
+                      backgroundColor: menuVisibilityFilter === 'hidden' ? '#EF4444' : '#F3F4F6',
+                    }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: menuVisibilityFilter === 'hidden' ? '#FFFFFF' : '#374151' }}>Hidden</Text>
+                  </TouchableOpacity>
+
+                  {/* Price Sort Filters */}
+                  <TouchableOpacity
+                    onPress={() => setMenuPriceSort(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? 'default' : 'asc')}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
+                      backgroundColor: menuPriceSort !== 'default' ? '#6366F1' : '#F3F4F6',
+                    }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: menuPriceSort !== 'default' ? '#FFFFFF' : '#374151' }}>
+                      {menuPriceSort === 'asc' ? 'Price: Low → High' : menuPriceSort === 'desc' ? 'Price: High → Low' : 'Price Sort'}
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+
+              {(() => {
+                const filtered = sellerMenuItems.filter(item => {
+                  if (menuSearchQuery.trim()) {
+                    const q = menuSearchQuery.toLowerCase().trim();
+                    const matchName = (item.name || '').toLowerCase().includes(q);
+                    const matchCat = (item.category || '').toLowerCase().includes(q);
+                    if (!matchName && !matchCat) return false;
+                  }
+                  if (menuStoreFilter !== 'all' && Number(item.store_id) !== Number(menuStoreFilter)) {
+                    return false;
+                  }
+                  if (menuVisibilityFilter === 'visible' && item.is_hidden) return false;
+                  if (menuVisibilityFilter === 'hidden' && !item.is_hidden) return false;
+                  return true;
+                }).sort((a, b) => {
+                  if (menuPriceSort === 'asc') return Number(a.price) - Number(b.price);
+                  if (menuPriceSort === 'desc') return Number(b.price) - Number(a.price);
+                  return 0;
+                });
+
+                if (filtered.length === 0) {
+                  return <SellerEmptyState icon="restaurant-outline" title="No menu items found" subtitle={menuSearchQuery || menuStoreFilter !== 'all' || menuVisibilityFilter !== 'all' ? "Try adjusting your search or filters" : "Add the items your store always has available"} />;
+                }
+                return filtered.map((item) => (
+                  <View key={item.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{item.name}</Text>
+                        <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{item.store_name} · {item.category}</Text>
+                      </View>
+                      <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 18 }}>{formatMoney(item.price, currencySymbol)}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                      <View style={{ backgroundColor: item.is_hidden ? '#FEE2E2' : '#D1FAE5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                        <Text style={{ color: item.is_hidden ? '#991B1B' : '#065F46', fontWeight: '700', fontSize: 11 }}>{item.is_hidden ? 'Hidden from customers' : 'Visible on menu'}</Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setEditingMenuItemId(item.id);
+                          const sameNameStores = sellerMenuItems
+                            .filter(m => (m.name || '').toLowerCase() === (item.name || '').toLowerCase())
+                            .map(m => m.store_id);
+                          const selectedStores = Array.from(new Set([item.store_id, ...sameNameStores]));
+                          setMenuItemStoreIds(selectedStores);
+
+                          setMenuItemName(item.name);
+                          setMenuItemDescription(item.description || '');
+                          const known = FOOD_CATEGORIES.includes(item.category);
+                          setMenuItemCategory(known ? item.category : 'Custom');
+                          setMenuItemCustomCategory(known ? '' : (item.category || ''));
+                          setMenuItemPrice(item.price.toString());
+                          setMenuItemImage(item.image || null);
+                          setShowMenuItemModal(true);
+                        }}
+                        style={{ flex: 1, paddingVertical: 8, backgroundColor: '#ECFDF5', borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleToggleHideMenuItem(item)}
+                        style={{ flex: 1, paddingVertical: 8, backgroundColor: '#F3F4F6', borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ color: '#374151', fontWeight: '700', fontSize: 12 }}>{item.is_hidden ? 'Unhide' : 'Hide'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteMenuItem(item.id)}
+                        style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ));
+              })()}
+            </ScrollView>
+          )}
+
+          {/* ── SURPRISE BAGS TAB ── */}
+          {sellerTab === 'bags' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              <SellerCompactSearch
+                placeholder="Search surprise bags..."
+                searchVal={sellerSearch}
+                setSearchVal={setSellerSearch}
+              />
+              {(() => {
+                const filtered = sellerBags.filter(bag => {
+                  const q = sellerSearch.toLowerCase().trim();
+                  return !q || (bag.store_name || '').toLowerCase().includes(q) || (bag.description || '').toLowerCase().includes(q) || (bag.pickup_time || '').toLowerCase().includes(q);
+                });
+                if (filtered.length === 0) {
+                  return <SellerEmptyState icon="bag-handle-outline" title="No surprise bags found" subtitle={sellerSearch ? "Try another search query" : "Create your first surprise bag listing"} />;
+                }
+                return filtered.map((bag) => (
+                  <View key={bag.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{bag.store_name}</Text>
+                        <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Pickup: {bag.pickup_time}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        {bag.original_price ? (
+                          <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{formatMoney(bag.original_price, currencySymbol)}</Text>
+                        ) : null}
+                        <Text style={{ color: '#FF5C00', fontWeight: '800', fontSize: 18 }}>{formatMoney(bag.price, currencySymbol)}</Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                      <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+                        <Text style={{ color: '#FF5C00', fontWeight: '700', fontSize: 12 }}>{bag.quantity} left</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            let parsedImgs = [];
+                            try {
+                              parsedImgs = bag.images ? (typeof bag.images === 'string' ? JSON.parse(bag.images) : bag.images) : [];
+                            } catch (e) { }
+                            setBagStoreId(bag.store_id);
+                            setBagPrice(bag.price.toString());
+                            setBagOriginalPrice(bag.original_price?.toString() || '');
+                            setBagQuantity(bag.quantity.toString());
+                            setPickupTime(bag.pickup_time);
+                            setBagDescription(bag.description || '');
+                            setBagImages(parsedImgs);
+                            const details = parsePickupTimeDetails(bag.pickup_time);
+                            setPickupDays(details.days);
+                            setPickupFrom(details.from);
+                            setPickupTo(details.to);
+                            setEditingBagId(bag.id);
+                            setActiveTimePicker(null);
+                            setShowBagModal(true);
+                          }}
+                          style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#EEF2FF', borderRadius: 8 }}>
+                          <Text style={{ color: '#4338CA', fontWeight: '700', fontSize: 12 }}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteBag(bag.id)}
+                          style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
+                          <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ));
+              })()}
+            </ScrollView>
+          )}
+
+          {/* ── GRABENGO DEALS TAB ── */}
+          {sellerTab === 'food' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              <SellerCompactSearch
+                placeholder="Search deals..."
+                searchVal={sellerSearch}
+                setSearchVal={setSellerSearch}
+                categoryVal={sellerCategoryFilter}
+                setCategoryVal={setSellerCategoryFilter}
+                categories={FOOD_CATEGORIES}
+              />
+              {(() => {
+                const filtered = sellerFoodItems.filter(item => {
+                  const q = sellerSearch.toLowerCase().trim();
+                  const matchSearch = !q || (item.name || '').toLowerCase().includes(q) || (item.store_name || '').toLowerCase().includes(q) || (item.category || '').toLowerCase().includes(q);
+                  const matchCat = sellerCategoryFilter === 'All' || item.category === sellerCategoryFilter;
+                  return matchSearch && matchCat;
+                });
+                if (filtered.length === 0) {
+                  return <SellerEmptyState icon="flash-outline" title="No deals found" subtitle={sellerSearch || sellerCategoryFilter !== 'All' ? "Try another search filter" : "Pick a menu item and list it at a discount for a limited time"} />;
+                }
+                return filtered.map((item) => {
+                  const notStarted = item.starts_at && new Date(item.starts_at) > new Date();
+                  const ended = item.sale_ends_at && new Date(item.sale_ends_at) <= new Date();
+                  const isLive = item.is_available && item.quantity > 0 && !notStarted && !ended;
+                  return (
+                    <View key={item.id.toString()} style={[styles.card, { marginBottom: 12 }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{item.name}</Text>
+                          <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{item.store_name} · {item.category}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          {item.original_price ? (
+                            <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 }}>{formatMoney(item.original_price, currencySymbol)}</Text>
+                          ) : null}
+                          <Text style={{ color: '#059669', fontWeight: '800', fontSize: 18 }}>{formatMoney(item.price, currencySymbol)}</Text>
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                        <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                          <Text style={{ color: '#059669', fontWeight: '700', fontSize: 11 }}>{item.quantity} left</Text>
+                        </View>
+                        <View style={{ backgroundColor: isLive ? '#D1FAE5' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                          <Text style={{ color: isLive ? '#065F46' : '#991B1B', fontWeight: '700', fontSize: 11 }}>
+                            {ended ? 'Ended' : notStarted ? 'Scheduled' : isLive ? 'Live' : 'Unavailable'}
+                          </Text>
+                        </View>
+                        {item.starts_at && (
+                          <View style={{ backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                            <Text style={{ color: '#374151', fontWeight: '600', fontSize: 11 }}>Starts {formatSaleEnd(item.starts_at)}</Text>
+                          </View>
+                        )}
+                        {item.sale_ends_at && (
+                          <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                            <Text style={{ color: '#FF5C00', fontWeight: '600', fontSize: 11 }}>Ends {formatSaleEnd(item.sale_ends_at)}</Text>
                           </View>
                         )}
                       </View>
-                      <View style={{ marginTop: 4, marginBottom: 6 }}>
-                        {(order.items || []).map((subItem, idx) => (
-                          <Text key={idx} style={{ fontWeight: '800', fontSize: 14.5, color: '#111827', marginVertical: 2 }}>
-                            • {subItem.quantity}x {subItem.name}
-                          </Text>
-                        ))}
-                      </View>
-                      <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{order.store_name} · Ref #{order.orderIds.join(', ')}</Text>
-                      <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>{order.customer_name || order.customer_email || 'Customer'}</Text>
-                    </View>
-                    <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 17 }}>{formatMoney(order.total, currencySymbol)}</Text>
-                  </View>
-
-                  {isDelivery && (
-                    <View style={{ backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, marginTop: 10 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Deliver To</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827', marginTop: 2 }}>{order.delivery_address || 'No address provided'}</Text>
-                    </View>
-                  )}
-
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                    <Text style={{ color: '#6B7280', fontSize: 12 }}>{order.items.reduce((s, i) => s + i.quantity, 0)} items · {order.payment_method || 'Cash at Pickup'}</Text>
-                    <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{isDelivery ? '' : (order.pickup_time || 'Pickup window TBC')}</Text>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                    {order.customer_phone ? (
-                      <TouchableOpacity
-                        onPress={() => Linking.openURL(`tel:${order.customer_phone}`)}
-                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#F0FDF4', borderRadius: 10 }}
-                      >
-                        <Ionicons name="call-outline" size={14} color="#15803D" />
-                        <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13 }}>Call</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                    <TouchableOpacity
-                      onPress={() => openSellerChat({ store_id: order.store_id, customer_id: order.customer_id, customer_name: order.customer_name || order.customer_email || 'Customer', store_name: order.store_name })}
-                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
-                    >
-                      <Ionicons name="chatbubble-outline" size={14} color="#1D4ED8" />
-                      <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Chat</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {order.fulfillment_type === 'delivery' && order.delivery_lat != null ? (
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                      <TouchableOpacity
-                        onPress={() => openMapDirections(order.delivery_lat, order.delivery_lng, 'Delivery Location')}
-                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
-                      >
-                        <Ionicons name="navigate-outline" size={14} color="#1D4ED8" />
-                        <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Customer Location</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          const url = `https://www.google.com/maps/search/?api=1&query=${order.delivery_lat},${order.delivery_lng}`;
-                          Share.share({ message: `Customer Delivery Location: ${url}` });
-                        }}
-                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
-                      >
-                        <Ionicons name="share-outline" size={16} color="#1D4ED8" />
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-                  {order.delivery_id ? (
-                    <View style={{ marginTop: 8, backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.15)' }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FF5C00', textTransform: 'uppercase' }}>Grabengo Partner Delivery</Text>
-                      <Text style={{ fontSize: 12, color: '#374151', marginTop: 3 }}>
-                        {order.delivery_status === 'awaiting_confirmation' ? 'Confirm the order to notify nearby riders.'
-                          : order.delivery_status === 'pending' ? 'Waiting for a rider to accept…'
-                            : order.delivery_status === 'assigned' ? `Rider ${order.partner_name || ''} is on the way to pick up.`
-                              : order.delivery_status === 'picked_up' ? `Rider ${order.partner_name || ''} has picked up the order.`
-                                : order.delivery_status === 'delivered' ? 'Delivered to the customer.'
-                                  : order.delivery_status === 'failed' ? 'Delivery failed — contact the customer.'
-                                    : order.delivery_status === 'cancelled' ? 'Delivery cancelled.'
-                                      : ''}
-                      </Text>
-                      {order.partner_phone && ['assigned', 'picked_up'].includes(order.delivery_status) ? (
-                        <TouchableOpacity onPress={() => Linking.openURL(`tel:${order.partner_phone}`)} style={{ marginTop: 6 }}>
-                          <Text style={{ fontSize: 12, color: '#FF5C00', fontWeight: '700' }}>Call rider: {order.partner_phone}</Text>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setFoodStoreId(item.store_id);
+                            setFoodMenuItemId(item.menu_item_id);
+                            setFoodPrice(item.price.toString());
+                            setFoodQuantity(item.quantity.toString());
+                            setFoodStartsAt(item.starts_at ? new Date(item.starts_at) : null);
+                            setFoodStartPicker(null);
+                            setFoodSaleEndsAt(item.sale_ends_at ? new Date(item.sale_ends_at) : null);
+                            setFoodSalePicker(null);
+                            setEditingFoodId(item.id);
+                            setShowFoodModal(true);
+                          }}
+                          style={{ flex: 1, paddingVertical: 8, backgroundColor: '#ECFDF5', borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>Edit</Text>
                         </TouchableOpacity>
-                      ) : null}
+                        {isLive && (
+                          <TouchableOpacity
+                            onPress={() => handleEndSaleEarly(item.id)}
+                            style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FFFFFF', borderRadius: 8, alignItems: 'center' }}>
+                            <Text style={{ color: '#FF5C00', fontWeight: '700', fontSize: 12 }}>End Sale</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          onPress={() => handleDeleteFoodItem(item.id)}
+                          style={{ flex: 1, paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  ) : null}
+                  );
+                });
+              })()}
+            </ScrollView>
+          )}
 
-                  {showTriad && (
-                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
-                      <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'confirm')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DCFCE7', borderRadius: 10, alignItems: 'center' }}>
-                        <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 11.5 }}>Confirm</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'convert_to_pickup')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DBEAFE', borderRadius: 10, alignItems: 'center' }}>
-                        <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 11.5 }}>To Pickup</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'reject')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center' }}>
-                        <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 11.5 }}>Reject</Text>
-                      </TouchableOpacity>
+          {sellerTab === 'staff' && user?.role === 'SellersAdmin' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              <SellerCompactSearch
+                placeholder="Search staff members..."
+                searchVal={sellerSearch}
+                setSearchVal={setSellerSearch}
+              />
+              <TouchableOpacity onPress={() => setShowStaffModal(true)} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND, marginBottom: 16 }]}>
+                <Text style={styles.primaryButtonText}>Add Staff Member</Text>
+              </TouchableOpacity>
+              {(() => {
+                const filtered = staffList.filter(s => {
+                  const q = sellerSearch.toLowerCase().trim();
+                  return !q || (s.name || '').toLowerCase().includes(q) || (s.email || '').toLowerCase().includes(q);
+                });
+                if (filtered.length === 0) {
+                  return <SellerEmptyState icon="people-outline" title="No staff found" subtitle={sellerSearch ? "Try another search query" : "Add team members to help manage your stores"} />;
+                }
+                return filtered.map((staff) => (
+                  <View key={String(staff.id)} style={[styles.card, { marginBottom: 12 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+                        <Ionicons name="person-outline" size={22} color={SELLER_BRAND} />
+                      </View>
+                      <View>
+                        <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{staff.name}</Text>
+                        <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{staff.email}</Text>
+                      </View>
                     </View>
-                  )}
-
-                  {showPaymentActions && (
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                      <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'mark_picked_up')} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: SELLER_BRAND, borderRadius: 10 }}>
-                        <Ionicons name={isDelivery ? 'checkmark-done-outline' : 'bag-check-outline'} size={13} color="#fff" />
-                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12.5 }}>{completeLabel}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'cancel')} style={{ paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12.5 }}>Cancel</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              );
-            });
-          })()}
-        </ScrollView>
-      )}
-
-      {sellerTab === 'reviews' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          {sellerReviews.length === 0 ? (
-            <SellerEmptyState icon="star-outline" title="No reviews yet" subtitle="Customer reviews will show here" />
-          ) : (sellerReviews.map((review) => (
-            <View key={String(review.id)} style={[styles.card, { marginBottom: 12 }]}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{review.customer_name || 'Customer'}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="star" size={14} color={SELLER_BRAND} />
-                  <Text style={{ color: SELLER_BRAND, fontWeight: '800' }}>{review.rating}</Text>
-                </View>
-              </View>
-              <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{review.store_name}</Text>
-              {review.comment ? <Text style={{ color: '#374151', fontSize: 14, marginTop: 8, lineHeight: 20 }}>{review.comment}</Text> : null}
-            </View>
-          )))}
-        </ScrollView>
-      )}
-
-      {sellerTab === 'chats' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          {sellerChats.length === 0 ? (
-            <SellerEmptyState icon="chatbubbles-outline" title="No conversations yet" subtitle="Customer chat messages will appear here" />
-          ) : (sellerChats.map((chat) => (
-            <TouchableOpacity key={`${chat.store_id}_${chat.customer_id}`} onPress={() => openSellerChat(chat)} style={[styles.card, { marginBottom: 12 }]}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{chat.customer_name || chat.customer_email}</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{chat.store_name}</Text>
-                  <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 6 }} numberOfLines={2}>{chat.last_message || 'No messages yet'}</Text>
-                </View>
-                {chat.unread_count > 0 && (
-                  <View style={{ backgroundColor: SELLER_BRAND, borderRadius: 12, minWidth: 24, height: 24, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
-                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>{chat.unread_count}</Text>
                   </View>
-                )}
-              </View>
-            </TouchableOpacity>
-          )))}
-        </ScrollView>
-      )}
+                ));
+              })()}
+            </ScrollView>
+          )}
 
-      {sellerTab === 'staff' && user?.role === 'SellersAdmin' && (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-          <TouchableOpacity onPress={() => setShowStaffModal(true)} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND, marginBottom: 16 }]}>
-            <Text style={styles.primaryButtonText}>Add Staff Member</Text>
-          </TouchableOpacity>
-          {staffList.length === 0 ? (
-            <SellerEmptyState icon="people-outline" title="No staff yet" subtitle="Add team members to help manage your stores" />
-          ) : (staffList.map((staff) => (
-            <View key={String(staff.id)} style={[styles.card, { marginBottom: 12 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
-                  <Ionicons name="person-outline" size={22} color={SELLER_BRAND} />
-                </View>
-                <View>
-                  <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{staff.name}</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{staff.email}</Text>
-                </View>
+          {sellerTab === 'orders' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                {[
+                  { key: 'active', label: 'Active' },
+                  { key: 'completed', label: 'Completed' },
+                  { key: 'all', label: 'All' },
+                ].map((f) => (
+                  <TouchableOpacity
+                    key={f.key}
+                    onPress={() => setSellerOrderFilter(f.key)}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: sellerOrderFilter === f.key ? SELLER_BRAND : '#F3F4F6',
+                    }}
+                  >
+                    <Text style={{ fontWeight: '700', fontSize: 12, color: sellerOrderFilter === f.key ? '#FFFFFF' : '#374151' }}>{f.label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            </View>
-          )))}
-        </ScrollView>
-      )}
+              {(() => {
+                const filteredOrders = sellerOrders.filter((o) => {
+                  const settled = ['paid', 'rejected', 'cancelled'].includes(o.status || 'pending');
+                  if (sellerOrderFilter === 'active') return !settled;
+                  if (sellerOrderFilter === 'completed') return settled;
+                  return true;
+                });
+                const grouped = groupOrders(filteredOrders);
+                if (grouped.length === 0) {
+                  return (
+                    <SellerEmptyState
+                      icon="receipt-outline"
+                      title={sellerOrderFilter === 'active' ? 'No active orders' : 'No orders here'}
+                      subtitle={sellerOrderFilter === 'active' ? 'New customer orders will appear here' : 'Try another filter'}
+                    />
+                  );
+                }
+                return grouped.map((order) => {
+                  const isDelivery = order.fulfillment_type === 'delivery';
+                  const status = order.status || 'pending';
+                  const isSettled = ['paid', 'rejected', 'cancelled'].includes(status);
+                  const showTriad = isDelivery && status === 'pending';
+                  const showPaymentActions = !isSettled && !showTriad;
+                  const completeLabel = isDelivery ? 'Mark Delivered' : 'Mark Picked Up';
+                  const STATUS_BADGES = {
+                    pending: { label: isDelivery ? 'AWAITING CONFIRMATION' : 'AWAITING PICKUP', bg: '#FEF3C7', color: '#92400E' },
+                    confirmed: { label: 'CONFIRMED', bg: '#DBEAFE', color: '#1D4ED8' },
+                    paid: { label: isDelivery ? 'DELIVERED' : 'PICKED UP', bg: '#DCFCE7', color: '#15803D' },
+                    rejected: { label: 'REJECTED', bg: '#FEE2E2', color: '#DC2626' },
+                    cancelled: { label: 'CANCELLED', bg: '#F3F4F6', color: '#6B7280' },
+                  };
+                  const statusBadge = STATUS_BADGES[status];
+                  return (
+                    <View key={String(order.id)} style={[styles.card, { marginBottom: 12 }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDelivery ? '#DBEAFE' : '#F3F4F6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
+                              <Ionicons name={isDelivery ? "bicycle-outline" : "storefront-outline"} size={11} color={isDelivery ? '#1D4ED8' : '#374151'} />
+                              <Text style={{ fontSize: 10, fontWeight: '800', color: isDelivery ? '#1D4ED8' : '#374151' }}>{isDelivery ? 'DELIVERY' : 'PICKUP'}</Text>
+                            </View>
+                            {statusBadge && (
+                              <View style={{ backgroundColor: statusBadge.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: statusBadge.color }}>{statusBadge.label}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={{ marginTop: 4, marginBottom: 6 }}>
+                            {(order.items || []).map((subItem, idx) => (
+                              <Text key={idx} style={{ fontWeight: '800', fontSize: 14.5, color: '#111827', marginVertical: 2 }}>
+                                • {subItem.quantity}x {subItem.name}
+                              </Text>
+                            ))}
+                          </View>
+                          <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{order.store_name} · Ref #{order.orderIds.join(', ')}</Text>
+                          <Text style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>{order.customer_name || order.customer_email || 'Customer'}</Text>
+                        </View>
+                        <Text style={{ color: SELLER_BRAND, fontWeight: '800', fontSize: 17 }}>{formatMoney(order.total, currencySymbol)}</Text>
+                      </View>
+
+                      {isDelivery && (
+                        <View style={{ backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, marginTop: 10 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Deliver To</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827', marginTop: 2 }}>{order.delivery_address || 'No address provided'}</Text>
+                        </View>
+                      )}
+
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                        <Text style={{ color: '#6B7280', fontSize: 12 }}>{order.items.reduce((s, i) => s + i.quantity, 0)} items · {order.payment_method || 'Cash at Pickup'}</Text>
+                        <Text style={{ color: '#9CA3AF', fontSize: 11 }}>{isDelivery ? '' : (order.pickup_time || 'Pickup window TBC')}</Text>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                        {order.customer_phone ? (
+                          <TouchableOpacity
+                            onPress={() => Linking.openURL(`tel:${order.customer_phone}`)}
+                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#F0FDF4', borderRadius: 10 }}
+                          >
+                            <Ionicons name="call-outline" size={14} color="#15803D" />
+                            <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13 }}>Call</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        <TouchableOpacity
+                          onPress={() => openSellerChat({ store_id: order.store_id, customer_id: order.customer_id, customer_name: order.customer_name || order.customer_email || 'Customer', store_name: order.store_name })}
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
+                        >
+                          <Ionicons name="chatbubble-outline" size={14} color="#1D4ED8" />
+                          <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Chat</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {order.fulfillment_type === 'delivery' && order.delivery_lat != null ? (
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                          <TouchableOpacity
+                            onPress={() => openMapDirections(order.delivery_lat, order.delivery_lng, 'Delivery Location')}
+                            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
+                          >
+                            <Ionicons name="navigate-outline" size={14} color="#1D4ED8" />
+                            <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>Customer Location</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              const url = `https://www.google.com/maps/search/?api=1&query=${order.delivery_lat},${order.delivery_lng}`;
+                              Share.share({ message: `Customer Delivery Location: ${url}` });
+                            }}
+                            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#EFF6FF', borderRadius: 10 }}
+                          >
+                            <Ionicons name="share-outline" size={16} color="#1D4ED8" />
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
+                      {order.delivery_id ? (
+                        <View style={{ marginTop: 8, backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(255, 92, 0, 0.15)' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#FF5C00', textTransform: 'uppercase' }}>Grabengo Partner Delivery</Text>
+                          <Text style={{ fontSize: 12, color: '#374151', marginTop: 3 }}>
+                            {order.delivery_status === 'awaiting_confirmation' ? 'Confirm the order to notify nearby riders.'
+                              : order.delivery_status === 'pending' ? 'Waiting for a rider to accept…'
+                                : order.delivery_status === 'assigned' ? `Rider ${order.partner_name || ''} is on the way to pick up.`
+                                  : order.delivery_status === 'picked_up' ? `Rider ${order.partner_name || ''} has picked up the order.`
+                                    : order.delivery_status === 'delivered' ? 'Delivered to the customer.'
+                                      : order.delivery_status === 'failed' ? 'Delivery failed — contact the customer.'
+                                        : order.delivery_status === 'cancelled' ? 'Delivery cancelled.'
+                                          : ''}
+                          </Text>
+                          {order.partner_phone && ['assigned', 'picked_up'].includes(order.delivery_status) ? (
+                            <TouchableOpacity onPress={() => Linking.openURL(`tel:${order.partner_phone}`)} style={{ marginTop: 6 }}>
+                              <Text style={{ fontSize: 12, color: '#FF5C00', fontWeight: '700' }}>Call rider: {order.partner_phone}</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      ) : null}
+
+                      {showTriad && (
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                          <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'confirm')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DCFCE7', borderRadius: 10, alignItems: 'center' }}>
+                            <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 11.5 }}>Confirm</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'convert_to_pickup')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#DBEAFE', borderRadius: 10, alignItems: 'center' }}>
+                            <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 11.5 }}>To Pickup</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'reject')} style={{ flex: 1, paddingVertical: 9, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center' }}>
+                            <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 11.5 }}>Reject</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {showPaymentActions && (
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                          <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'mark_picked_up')} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, backgroundColor: SELLER_BRAND, borderRadius: 10 }}>
+                            <Ionicons name={isDelivery ? 'checkmark-done-outline' : 'bag-check-outline'} size={13} color="#fff" />
+                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12.5 }}>{completeLabel}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleOrderAction(order.orderIds, 'cancel')} style={{ paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#FEE2E2', borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12.5 }}>Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                });
+              })()}
+            </ScrollView>
+          )}
+
+          {sellerTab === 'reviews' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              {sellerReviews.length === 0 ? (
+                <SellerEmptyState icon="star-outline" title="No reviews yet" subtitle="Customer reviews will show here" />
+              ) : (sellerReviews.map((review) => (
+                <View key={String(review.id)} style={[styles.card, { marginBottom: 12 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{review.customer_name || 'Customer'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="star" size={14} color={SELLER_BRAND} />
+                      <Text style={{ color: SELLER_BRAND, fontWeight: '800' }}>{review.rating}</Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{review.store_name}</Text>
+                  {review.comment ? <Text style={{ color: '#374151', fontSize: 14, marginTop: 8, lineHeight: 20 }}>{review.comment}</Text> : null}
+                </View>
+              )))}
+            </ScrollView>
+          )}
+
+          {sellerTab === 'chats' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              {sellerChats.length === 0 ? (
+                <SellerEmptyState icon="chatbubbles-outline" title="No conversations yet" subtitle="Customer chat messages will appear here" />
+              ) : (sellerChats.map((chat) => (
+                <TouchableOpacity key={`${chat.store_id}_${chat.customer_id}`} onPress={() => openSellerChat(chat)} style={[styles.card, { marginBottom: 12 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{chat.customer_name || chat.customer_email}</Text>
+                      <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{chat.store_name}</Text>
+                      <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 6 }} numberOfLines={2}>{chat.last_message || 'No messages yet'}</Text>
+                    </View>
+                    {chat.unread_count > 0 && (
+                      <View style={{ backgroundColor: SELLER_BRAND, borderRadius: 12, minWidth: 24, height: 24, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>{chat.unread_count}</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              )))}
+            </ScrollView>
+          )}
+
+          {sellerTab === 'staff' && user?.role === 'SellersAdmin' && (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+              <TouchableOpacity onPress={() => setShowStaffModal(true)} style={[styles.primaryButton, { backgroundColor: SELLER_BRAND, marginBottom: 16 }]}>
+                <Text style={styles.primaryButtonText}>Add Staff Member</Text>
+              </TouchableOpacity>
+              {staffList.length === 0 ? (
+                <SellerEmptyState icon="people-outline" title="No staff yet" subtitle="Add team members to help manage your stores" />
+              ) : (staffList.map((staff) => (
+                <View key={String(staff.id)} style={[styles.card, { marginBottom: 12 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="person-outline" size={22} color={SELLER_BRAND} />
+                    </View>
+                    <View>
+                      <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{staff.name}</Text>
+                      <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{staff.email}</Text>
+                    </View>
+                  </View>
+                </View>
+              )))}
+            </ScrollView>
+          )}
         </>
       )}
 
@@ -9225,57 +9241,59 @@ export default function App() {
         : 'Landing';
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AuthContext.Provider value={authContext}>
-          <LandingBrandsContext.Provider value={landingBrandsContext}>
-            <CartContext.Provider value={cartContext}>
-              <LocationProvider>
-                <ChatProvider>
-                  <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
-                    <Stack.Navigator
-                      screenOptions={{
-                        headerShown: false,
-                        cardStyle: { backgroundColor: '#FFFFFF' },
-                        cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
-                      }}
-                      initialRouteName={initialRouteName}
-                    >
-                      {state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff' ? (
-                        <Stack.Screen name="SellerDashboard" component={SellerDashboardScreen} />
-                      ) : state.user?.role === 'Partner' ? (
-                        <Stack.Screen name="PartnerDashboard" component={PartnerDashboardScreen} />
-                      ) : (
-                        <>
-                          <Stack.Screen name="Landing" component={LandingScreen} />
-                          <Stack.Screen name="Intro" component={IntroScreen} />
-                          <Stack.Screen name="Login" component={LoginScreen} />
-                          <Stack.Screen name="Register" component={RegisterScreen} />
-                          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-                          <Stack.Screen name="ExploreTenants" component={ExploreTenantsScreen} />
-                          <Stack.Screen name="Discover" component={DiscoverScreen} />
-                          <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} />
-                          <Stack.Screen name="Cart" component={CartScreen} />
-                          <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
-                          <Stack.Screen name="Bookings" component={BookingsScreen} />
-                          <Stack.Screen name="Profile" component={ProfileScreen} />
-                          <Stack.Screen name="Splash" component={SplashScreen} />
-                        </>
-                      )}
-                    </Stack.Navigator>
-                  </NavigationContainer>
-                  <GlobalToast />
-                  <GlobalGrabengoAlertModal />
-                  <GlobalChatModal />
-                  <GlobalReceiptModal />
-                  <GlobalProfileModal />
-                </ChatProvider>
-              </LocationProvider>
-            </CartContext.Provider>
-          </LandingBrandsContext.Provider>
-        </AuthContext.Provider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <PostHogProvider apiKey={POSTHOG_API_KEY} options={{ host: POSTHOG_HOST, autocapture: true }}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <AuthContext.Provider value={authContext}>
+            <LandingBrandsContext.Provider value={landingBrandsContext}>
+              <CartContext.Provider value={cartContext}>
+                <LocationProvider>
+                  <ChatProvider>
+                    <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
+                      <Stack.Navigator
+                        screenOptions={{
+                          headerShown: false,
+                          cardStyle: { backgroundColor: '#FFFFFF' },
+                          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+                        }}
+                        initialRouteName={initialRouteName}
+                      >
+                        {state.user?.role === 'SellersAdmin' || state.user?.role === 'SellersStaff' ? (
+                          <Stack.Screen name="SellerDashboard" component={SellerDashboardScreen} />
+                        ) : state.user?.role === 'Partner' ? (
+                          <Stack.Screen name="PartnerDashboard" component={PartnerDashboardScreen} />
+                        ) : (
+                          <>
+                            <Stack.Screen name="Landing" component={LandingScreen} />
+                            <Stack.Screen name="Intro" component={IntroScreen} />
+                            <Stack.Screen name="Login" component={LoginScreen} />
+                            <Stack.Screen name="Register" component={RegisterScreen} />
+                            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+                            <Stack.Screen name="ExploreTenants" component={ExploreTenantsScreen} />
+                            <Stack.Screen name="Discover" component={DiscoverScreen} />
+                            <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} />
+                            <Stack.Screen name="Cart" component={CartScreen} />
+                            <Stack.Screen name="DeliveryAddress" component={DeliveryAddressScreen} />
+                            <Stack.Screen name="Bookings" component={BookingsScreen} />
+                            <Stack.Screen name="Profile" component={ProfileScreen} />
+                            <Stack.Screen name="Splash" component={SplashScreen} />
+                          </>
+                        )}
+                      </Stack.Navigator>
+                    </NavigationContainer>
+                    <GlobalToast />
+                    <GlobalGrabengoAlertModal />
+                    <GlobalChatModal />
+                    <GlobalReceiptModal />
+                    <GlobalProfileModal />
+                  </ChatProvider>
+                </LocationProvider>
+              </CartContext.Provider>
+            </LandingBrandsContext.Provider>
+          </AuthContext.Provider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </PostHogProvider>
   );
 }
 
