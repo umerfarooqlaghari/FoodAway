@@ -148,7 +148,7 @@ async function notifyOnDutyPartners(deliveryRow, storeName) {
     sendToUser(p.id, { type: 'new_delivery_job', delivery_id: deliveryRow.id, store_name: storeName });
     if (p.push_token) {
       sendPushNotification(p.push_token, 'New delivery job', `Pickup from ${storeName} — Rs${deliveryRow.fee} fee`, { type: 'delivery_job', deliveryId: deliveryRow.id })
-        .catch(() => {});
+        .catch(() => { });
     }
   }
 }
@@ -605,19 +605,20 @@ app.post('/api/auth/login', async (req, res) => {
     // Store refresh token
     await db.prepare('UPDATE users SET refresh_token = ? WHERE id = ?').run(refreshToken, user.id);
 
-    // Send login notification email asynchronously
+    // Send welcome back notification email asynchronously
     sendEmail({
       to: user.email,
-      subject: `New Login Alert - ${brandName} 🍩`,
+      subject: `Welcome Back to ${brandName}, ${user.name}! `,
       html: emailSimpleLayout({
-        title: 'New Login Detected',
+        title: `Welcome Back, ${user.name}!`,
         bodyHtml: `
           <p>Hi <strong>${user.name}</strong>,</p>
-          <p>A new login was detected on your ${brandName} account at <strong>${new Date().toLocaleString()}</strong>.</p>
-          <p>If this was you, you can safely ignore this email. Otherwise, please secure your account immediately.</p>`,
+          <p>Welcome back to <strong>${brandName}</strong></p>
+          <p>Let's get you some amazing deals & fresh menus near you!</p>
+          <p style="margin-top: 16px;"><a href="${domainConfig.mainSiteUrl}" style="background-color: #FF5C00; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 20px; font-weight: bold; display: inline-block;">Explore Deals Now</a></p>`,
       }),
-      text: `Hi ${user.name}, A new login was detected on your ${brandName} account at ${new Date().toLocaleString()}.`
-    }).catch(err => console.error('Failed to send login alert email:', err.message));
+      text: `Welcome Back, ${user.name}! Welcome back to ${brandName}. Let's get you some amazing deals waiting near you!`
+    }).catch(err => console.error('Failed to send welcome back email:', err.message));
 
     res.json({ token, refreshToken, user: await formatUserForClient(user) });
   } catch (err) {
@@ -642,7 +643,7 @@ app.post('/api/auth/refresh', async (req, res) => {
   try {
     const decoded = jwt.verify(refreshToken, JWT_SECRET);
     const user = await db.prepare('SELECT * FROM users WHERE id = ? AND refresh_token = ?').get(decoded.id, refreshToken);
-    
+
     if (!user) return res.status(403).json({ error: 'Invalid refresh token' });
 
     const newToken = jwt.sign({ id: user.id, role: user.role, tenant_id: user.tenant_id }, JWT_SECRET, { expiresIn: '1h' });
@@ -666,7 +667,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     // Delete existing OTPs for this email first
     await db.prepare('DELETE FROM otps WHERE email = ?').run(email);
-    
+
     // Save new OTP
     await db.prepare('INSERT INTO otps (email, otp, expires_at) VALUES (?, ?, ?)').run(email, otp, expiresAt);
 
@@ -857,7 +858,7 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
     const updatedUser = await db.prepare('SELECT id, name, email, role, logo, phone, delivery_address FROM users WHERE id = ?').get(req.params.id);
     const signedUser = { ...updatedUser, logo: await getPresignedUrl(updatedUser.logo) };
     res.json({ message: 'User updated successfully', user: signedUser });
-  } catch(err) {
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -937,7 +938,7 @@ app.post('/api/stores', verifyToken, requireRole('stores', 'write'), async (req,
       : (tenant?.logo || null);
     const { deliveryEnabled: deliveryEnabledBool, deliveryMode } = resolveStoreDeliverySettings(req.user, { delivery_enabled, delivery_mode });
     const info = await db.prepare('INSERT INTO stores (tenant_id, name, address, lat, lng, is_active, image, delivery_enabled, delivery_fee_note, category, delivery_mode) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)').run(targetTenantId, name, address, lat, lng, imageUrl, deliveryEnabledBool, delivery_fee_note || null, category, deliveryMode);
-    
+
     // Broadcast email to registered customers about the new store
     broadcastNewStoreEmail({ storeName: name, address });
 
@@ -1011,7 +1012,7 @@ app.post('/api/bags', verifyToken, requireRole('bags', 'write'), async (req, res
       }
     }
     const info = await db.prepare('INSERT INTO surprise_bags (store_id, price, original_price, description, images, quantity, pickup_time) VALUES (?, ?, ?, ?, ?, ?, ?)').run(store_id, price, original_price, description, s3Images, quantity, pickup_time);
-    
+
     // Notify users who have favorited this store
     const store = await db.prepare('SELECT name FROM stores WHERE id = ?').get(store_id);
     if (store) {
@@ -1173,7 +1174,7 @@ app.post('/api/food-items', verifyToken, requireRole('food_items', 'write'), asy
     const info = await db.prepare(
       'INSERT INTO food_items (store_id, name, description, price, original_price, images, quantity, category, sale_ends_at, starts_at, menu_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(resolvedStoreId, resolvedName, resolvedDescription, price, resolvedOriginalPrice || null, s3Images, quantity || 1, normalizedCategory, sale_ends_at || null, starts_at || null, menu_item_id || null);
-    
+
     // Broadcast new food item deal email to customers
     const store = await db.prepare('SELECT name FROM stores WHERE id = ?').get(resolvedStoreId);
     if (store) {
@@ -1608,7 +1609,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     // Send order confirmation email with PDF receipt asynchronously
     const customer = await db.prepare('SELECT email, name, phone FROM users WHERE id = ?').get(req.user.id);
     if (customer && customer.email) {
-      const total     = placedOrders.reduce((sum, o) => sum + (Number(o.price) * (o.quantity || 1)), 0);
+      const total = placedOrders.reduce((sum, o) => sum + (Number(o.price) * (o.quantity || 1)), 0);
       const itemsList = placedOrders.map(o =>
         `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — Rs${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
       ).join('');
@@ -1618,8 +1619,8 @@ app.post('/api/orders', verifyToken, async (req, res) => {
               <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:14px;margin-top:16px;">
                 <p style="margin:0;color:#1d4ed8;font-weight:bold;">🛵 Delivery order</p>
                 <p style="margin:6px 0 0;color:#555;font-size:13px;">${isPartnerDelivery
-                  ? `A Grabengo delivery partner will bring your order once the store confirms it. Your 4-digit delivery PIN is shown in the app under Bookings — give it to the rider on arrival and pay the order total plus the delivery fee (Rs${createdDeliveries.reduce((t, d) => t + Number(d.fee), 0)}) in cash.`
-                  : 'The store will deliver this order directly (not Grabengo) and may call you to confirm. Delivery charges, if any, are set by the store and are not included in the total below — pay them directly to the store.'}</p>
+          ? `A Grabengo delivery partner will bring your order once the store confirms it. Your 4-digit delivery PIN is shown in the app under Bookings — give it to the rider on arrival and pay the order total plus the delivery fee (Rs${createdDeliveries.reduce((t, d) => t + Number(d.fee), 0)}) in cash.`
+          : 'The store will deliver this order directly (not Grabengo) and may call you to confirm. Delivery charges, if any, are set by the store and are not included in the total below — pay them directly to the store.'}</p>
               </div>` : '';
 
       buildReceiptAttachments(receiptGroups, {
@@ -1627,7 +1628,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
         email: customer.email,
         phone: customer.phone || '',
       }).then((attachments) => sendEmail({
-        to:      customer.email,
+        to: customer.email,
         subject: `Your ${brandName} Order Confirmation 🍩`,
         html: `
           <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;">
@@ -1696,7 +1697,7 @@ app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), async (
         SUM(CASE WHEN o.type = 'food' THEN 0 ELSE o.quantity END) as bags_sold,
         SUM(CASE WHEN o.type = 'food' THEN o.quantity ELSE 0 END) as products_sold
       FROM orders o JOIN stores s ON o.store_id = s.id ${queryFilter}`).get(...params);
-    
+
     const dailySales = await db.prepare(`
       SELECT date(o.created_at) as date, SUM(o.price * o.quantity) as revenue, SUM(o.quantity) as bags 
       FROM orders o
@@ -1706,7 +1707,7 @@ app.get('/api/seller/stats', verifyToken, requireRole('stores', 'read'), async (
       ORDER BY date(o.created_at) ASC
       LIMIT 7
     `).all(...params);
-    
+
     res.json({
       totalRevenue: totalRevenueRow.total_revenue || 0,
       bagsSold: totalSoldRow.bags_sold || 0,
@@ -1724,10 +1725,10 @@ app.post('/api/seed', blockInProduction, verifyToken, async (req, res) => {
   try {
     const storeInfo = await db.prepare("INSERT INTO stores (name, address) VALUES ('Green Bakery', '123 Main St')").run();
     await db.prepare("INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (?, 4.99, 5, 'Today, 18:00 - 19:00')").run(storeInfo.lastInsertRowid);
-    
+
     const storeInfo2 = await db.prepare("INSERT INTO stores (name, address) VALUES ('Daily Roast', '456 Oak Ave')").run();
     await db.prepare("INSERT INTO surprise_bags (store_id, price, quantity, pickup_time) VALUES (?, 3.50, 2, 'Today, 15:00 - 16:30')").run(storeInfo2.lastInsertRowid);
-    
+
     res.json({ message: 'Seed data inserted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2163,7 +2164,7 @@ async function notifyDeliveryParties(deliveryId, event) {
     sendToUser(d.customer_id, { type: 'delivery_update', delivery_id: d.id, event, title: msg.title, message: msg.body });
     const customer = await db.prepare('SELECT push_token FROM users WHERE id = ?').get(d.customer_id);
     if (customer?.push_token) {
-      sendPushNotification(customer.push_token, msg.title, msg.body, { type: 'delivery_update', deliveryId: d.id }).catch(() => {});
+      sendPushNotification(customer.push_token, msg.title, msg.body, { type: 'delivery_update', deliveryId: d.id }).catch(() => { });
     }
   }
   if (d.tenant_id) sendToTenantSellers(d.tenant_id, { type: 'delivery_update', delivery_id: d.id, event });
@@ -2589,7 +2590,7 @@ app.delete('/api/superadmin/customers/:id', verifyToken, async (req, res) => {
 
 app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req, res) => {
   if (req.user.role !== 'SuperAdmin') return res.status(403).json({ error: 'Forbidden' });
-  
+
   try {
     const inactiveUsers = await db.prepare(`
       SELECT u.id, u.name, u.email, MAX(o.created_at) AS last_order
@@ -3001,10 +3002,10 @@ const initWebSockets = (httpServer) => {
         if (payload.type === 'register') {
           const { token } = payload;
           if (!token) return ws.close(4001, 'Token required');
-          
+
           try {
             currentUser = jwt.verify(token, JWT_SECRET);
-            
+
             const userKey = `user_${currentUser.id}`;
             addClientConnection(userKey, ws);
             clientKeys.add(userKey);
@@ -3020,7 +3021,7 @@ const initWebSockets = (httpServer) => {
               addClientConnection(sellerKey, ws);
               clientKeys.add(sellerKey);
             }
-            
+
             ws.send(JSON.stringify({ type: 'registered', userId: currentUser.id, role: currentUser.role }));
           } catch (err) {
             return ws.close(4002, 'Invalid token');
@@ -3029,7 +3030,7 @@ const initWebSockets = (httpServer) => {
 
         else if (payload.type === 'message') {
           if (!currentUser) return ws.send(JSON.stringify({ type: 'error', error: 'Unauthenticated connection' }));
-          
+
           const { storeId, customerId, text } = payload;
           if (!storeId || !text) {
             return ws.send(JSON.stringify({ type: 'error', error: 'storeId and text are required' }));
@@ -3177,7 +3178,7 @@ const initWebSockets = (httpServer) => {
           const { storeId, customerId, isTyping } = payload;
           const resolvedCustomerId = currentUser.role === 'Customers' ? currentUser.id : customerId;
           const senderRole = currentUser.role === 'Customers' ? 'Customer' : 'Seller';
-          
+
           const typingPayload = JSON.stringify({
             type: 'typing',
             storeId: Number(storeId),
@@ -3277,7 +3278,7 @@ app.post('/api/contact', async (req, res) => {
             <!-- Message -->
             <h2 style="margin:0 0 12px;color:#ffffff;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Message</h2>
             <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid #FF5C00;border-radius:8px;padding:20px 20px 20px 22px;">
-              <p style="margin:0;color:#d1d5db;font-size:15px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+              <p style="margin:0;color:#d1d5db;font-size:15px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
             </div>
 
             <!-- CTA -->
@@ -3360,10 +3361,10 @@ app.post('/api/contact', async (req, res) => {
           <td style="padding:28px 40px 0;">
             <h2 style="margin:0 0 18px;color:#111827;font-size:15px;font-weight:700;">What happens next?</h2>
             ${[
-              { icon: '📬', title: 'Confirmation received', desc: 'This email confirms we got your message.', done: true },
-              { icon: '👀', title: 'Under review', desc: 'Our team will read your enquiry carefully.', done: false },
-              { icon: '💬', title: 'We\'ll respond', desc: 'Expect a reply within 24–48 business hours.', done: false },
-            ].map(({ icon, title, desc, done }) => `
+      { icon: '📬', title: 'Confirmation received', desc: 'This email confirms we got your message.', done: true },
+      { icon: '👀', title: 'Under review', desc: 'Our team will read your enquiry carefully.', done: false },
+      { icon: '💬', title: 'We\'ll respond', desc: 'Expect a reply within 24–48 business hours.', done: false },
+    ].map(({ icon, title, desc, done }) => `
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
               <tr>
                 <td valign="top" style="width:40px;padding-right:14px;">
@@ -3383,7 +3384,7 @@ app.post('/api/contact', async (req, res) => {
           <td style="padding:28px 40px 0;">
             <p style="margin:0 0 10px;color:#6b7280;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Your message</p>
             <div style="background:#f9fafb;border-left:3px solid #FF5C00;border-radius:4px;padding:16px 18px;">
-              <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+              <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;white-space:pre-wrap;">${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
             </div>
           </td>
         </tr>
@@ -4183,7 +4184,7 @@ app.post('/api/public/checkout/send-otp', async (req, res) => {
     res.json({ message: 'Verification code sent to your email', expiresIn: 300 });
   } catch (err) {
     console.error('[Checkout Send OTP Error]', err);
-    try { await db.prepare('DELETE FROM checkout_pending WHERE email = ?').run((req.body.email || '').trim()); } catch (_) {}
+    try { await db.prepare('DELETE FROM checkout_pending WHERE email = ?').run((req.body.email || '').trim()); } catch (_) { }
     res.status(err.status || 500).json({ error: err.message || 'Failed to send verification code' });
   }
 });
