@@ -49,7 +49,7 @@ const {
   PRODUCT_CATEGORY_GROUPS,
   PRODUCT_CATEGORIES,
 } = require('./productCategories');
-
+//npx -y @posthog/wizard@latest
 // Vendor menu categories are suggestions, not an enforced enum — a vendor picking
 // "add a custom one" must have that name stick, not get silently coerced to "Other".
 function resolveVendorCategory(input) {
