@@ -608,14 +608,13 @@ app.post('/api/auth/login', async (req, res) => {
     // Send welcome back notification email asynchronously
     sendEmail({
       to: user.email,
-      subject: `Welcome Back to ${brandName}, ${user.name}! `,
+      subject: `Welcome Back to ${brandName}, ${user.name}!`,
       html: emailSimpleLayout({
         title: `Welcome Back, ${user.name}!`,
         bodyHtml: `
           <p>Hi <strong>${user.name}</strong>,</p>
-          <p>Welcome back to <strong>${brandName}</strong></p>
-          <p>Let's get you some amazing deals & fresh menus near you!</p>
-          <p style="margin-top: 16px;"><a href="${domainConfig.mainSiteUrl}" style="background-color: #FF5C00; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 20px; font-weight: bold; display: inline-block;">Explore Deals Now</a></p>`,
+          <p>Welcome back to <strong>${brandName}</strong>.</p>
+          <p>Let's get you some amazing deals & fresh menus near you!</p>`,
       }),
       text: `Welcome Back, ${user.name}! Welcome back to ${brandName}. Let's get you some amazing deals waiting near you!`
     }).catch(err => console.error('Failed to send welcome back email:', err.message));
