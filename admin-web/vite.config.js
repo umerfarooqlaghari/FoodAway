@@ -14,6 +14,9 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
+  build: {
+    cssMinify: false,
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',

@@ -326,6 +326,19 @@ function App() {
   const [showFoodModal, setShowFoodModal] = useState(false);
   const [showAppDownloadModal, setShowAppDownloadModal] = useState(false);
 
+  // Catalog Menu Items state (Web)
+  const [sellerMenuItems, setSellerMenuItems] = useState([]);
+  const [editingMenuItem, setEditingMenuItem] = useState(null);
+  const [showMenuItemModal, setShowMenuItemModal] = useState(false);
+  const [menuItemStoreIds, setMenuItemStoreIds] = useState([]);
+  const [menuItemForm, setMenuItemForm] = useState({ name: '', description: '', category: 'Other', price: '', image: null });
+
+  // Web Menu Filters
+  const [webMenuSearch, setWebMenuSearch] = useState('');
+  const [webMenuStoreFilter, setWebMenuStoreFilter] = useState('all');
+  const [webMenuVisibilityFilter, setWebMenuVisibilityFilter] = useState('all');
+  const [webMenuPriceSort, setWebMenuPriceSort] = useState('default');
+
   // Food Items state
   const [foodItems, setFoodItems] = useState([]);
   const [editingFood, setEditingFood] = useState(null);
@@ -353,7 +366,7 @@ function App() {
       if (activeTab === 'stores') {
         setTabLoading(prev => ({ ...prev, stores: true }));
         try {
-          await Promise.all([fetchBags(), fetchStores(), fetchFoodItems()]);
+          await Promise.all([fetchBags(), fetchStores(), fetchFoodItems(), fetchMenuItems()]);
         } finally {
           setTabLoading(prev => ({ ...prev, stores: false }));
         }
@@ -634,6 +647,65 @@ function App() {
       const res = await axios.get(`${API_URL}/food-items`, { headers: { Authorization: `Bearer ${token}` } });
       setFoodItems(res.data);
     } catch (err) { }
+  };
+
+  const fetchMenuItems = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/seller/menu-items`, { headers: { Authorization: `Bearer ${token}` } });
+      setSellerMenuItems(res.data || []);
+    } catch (err) { }
+  };
+
+  const handleSaveMenuItem = async (e) => {
+    e.preventDefault();
+    if (!menuItemStoreIds || menuItemStoreIds.length === 0 || !menuItemForm.name.trim() || !menuItemForm.price) {
+      alert("Please select at least one store and enter a name and price.");
+      return;
+    }
+    try {
+      const payload = {
+        name: menuItemForm.name.trim(),
+        description: menuItemForm.description,
+        category: menuItemForm.category,
+        price: parseFloat(menuItemForm.price),
+        image: menuItemForm.image,
+      };
+
+      await Promise.all(menuItemStoreIds.map(async (stId) => {
+        const existingItem = sellerMenuItems.find(m => m.store_id === stId && m.name.trim().toLowerCase() === menuItemForm.name.trim().toLowerCase());
+        if (existingItem) {
+          await axios.put(`${API_URL}/seller/menu-items/${existingItem.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+        } else {
+          await axios.post(`${API_URL}/seller/menu-items`, { store_id: stId, ...payload }, { headers: { Authorization: `Bearer ${token}` } });
+        }
+      }));
+
+      alert(menuItemStoreIds.length > 1 ? `Menu item saved across ${menuItemStoreIds.length} stores!` : "Menu item saved!");
+      setShowMenuItemModal(false);
+      setEditingMenuItem(null);
+      fetchMenuItems();
+    } catch (err) {
+      alert(err.response?.data?.error || "Could not save menu item.");
+    }
+  };
+
+  const handleToggleMenuItemHide = async (item) => {
+    try {
+      await axios.patch(`${API_URL}/seller/menu-items/${item.id}/hide`, { is_hidden: !item.is_hidden }, { headers: { Authorization: `Bearer ${token}` } });
+      fetchMenuItems();
+    } catch (err) {
+      alert("Could not update menu item visibility");
+    }
+  };
+
+  const handleDeleteMenuItem = async (itemId) => {
+    if (!window.confirm("Are you sure you want to delete this menu item?")) return;
+    try {
+      await axios.delete(`${API_URL}/seller/menu-items/${itemId}`, { headers: { Authorization: `Bearer ${token}` } });
+      fetchMenuItems();
+    } catch (err) {
+      alert("Could not delete menu item");
+    }
   };
 
   const handleCreateFoodItem = async (e) => {
@@ -2062,8 +2134,9 @@ function App() {
             <div className="sub-tab-bar">
               {[
                 { key: 'stores', label: 'Stores', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg> },
+                { key: 'menu', label: 'Menu', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg> },
                 { key: 'bags', label: 'Surprise Bags', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg> },
-                { key: 'food', label: 'Open Food', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 010 8h-1" /><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" /></svg> },
+                { key: 'food', label: 'Grabengo Deals', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 010 8h-1" /><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" /></svg> },
               ].map(t => (
                 <button
                   key={t.key}
@@ -2131,6 +2204,127 @@ function App() {
                               </td>
                             </tr>
                           ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── CATALOG MENU TAB ── */}
+                {storeSubTab === 'menu' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
+                      {/* Web Filter Bar */}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                          type="text"
+                          placeholder="Search menu items..."
+                          value={webMenuSearch}
+                          onChange={e => setWebMenuSearch(e.target.value)}
+                          style={{ padding: '0.45rem 0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.85rem', minWidth: '200px' }}
+                        />
+                        <select
+                          value={webMenuStoreFilter}
+                          onChange={e => setWebMenuStoreFilter(e.target.value)}
+                          style={{ padding: '0.45rem 0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                          <option value="all">All Stores</option>
+                          {stores.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+                        </select>
+                        <select
+                          value={webMenuVisibilityFilter}
+                          onChange={e => setWebMenuVisibilityFilter(e.target.value)}
+                          style={{ padding: '0.45rem 0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                          <option value="all">All Statuses</option>
+                          <option value="visible">Visible</option>
+                          <option value="hidden">Hidden</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setWebMenuPriceSort(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? 'default' : 'asc')}
+                          style={{ padding: '0.45rem 0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: webMenuPriceSort !== 'default' ? 'var(--accent-primary)' : 'white', color: webMenuPriceSort !== 'default' ? 'white' : 'var(--text-primary)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600' }}>
+                          {webMenuPriceSort === 'asc' ? 'Price: Low → High' : webMenuPriceSort === 'desc' ? 'Price: High → Low' : 'Price Sort'}
+                        </button>
+                      </div>
+
+                      <button className="btn-primary" onClick={() => {
+                        setEditingMenuItem(null);
+                        setMenuItemStoreIds(stores.map(s => s.id));
+                        setMenuItemForm({ name: '', description: '', category: 'Other', price: '', image: null });
+                        setShowMenuItemModal(true);
+                      }}>+ Add Menu Item</button>
+                    </div>
+
+                    <div className="glass-card portal-table" style={{ padding: '0' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Item</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Store</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Category</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Price</th>
+                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Status</th>
+                            <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            let list = [...sellerMenuItems];
+                            if (webMenuStoreFilter !== 'all') list = list.filter(m => String(m.store_id) === String(webMenuStoreFilter));
+                            if (webMenuVisibilityFilter === 'visible') list = list.filter(m => !m.is_hidden);
+                            if (webMenuVisibilityFilter === 'hidden') list = list.filter(m => m.is_hidden);
+                            if (webMenuSearch.trim()) {
+                              const q = webMenuSearch.toLowerCase();
+                              list = list.filter(m => m.name.toLowerCase().includes(q) || (m.category && m.category.toLowerCase().includes(q)));
+                            }
+                            if (webMenuPriceSort === 'asc') list.sort((a, b) => a.price - b.price);
+                            if (webMenuPriceSort === 'desc') list.sort((a, b) => b.price - a.price);
+
+                            if (list.length === 0) {
+                              return <tr><td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No menu items found matching filters.</td></tr>;
+                            }
+
+                            return list.map((item, idx) => (
+                              <tr key={item.id} style={{ borderBottom: idx < list.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                                <td style={{ padding: '1rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    {item.image ? (
+                                      <img src={item.image} alt={item.name} style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
+                                    ) : (
+                                      <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>🍽️</div>
+                                    )}
+                                    <div>
+                                      <strong style={{ display: 'block', color: 'var(--text-primary)' }}>{item.name}</strong>
+                                      {item.description ? <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{item.description}</span> : null}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{item.store_name}</td>
+                                <td style={{ padding: '1rem' }}>
+                                  <span style={{ background: '#F3F4F6', color: '#374151', padding: '0.2rem 0.6rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '600' }}>{item.category || 'Other'}</span>
+                                </td>
+                                <td style={{ padding: '1rem', fontWeight: '700', color: 'var(--accent-primary)' }}>{currencySymbol}{parseFloat(item.price).toFixed(2)}</td>
+                                <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                  <button
+                                    onClick={() => handleToggleMenuItemHide(item)}
+                                    style={{ padding: '0.2rem 0.7rem', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700', background: item.is_hidden ? '#FEE2E2' : '#D1FAE5', color: item.is_hidden ? '#991B1B' : '#065F46' }}>
+                                    {item.is_hidden ? 'Hidden' : 'Visible'}
+                                  </button>
+                                </td>
+                                <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                    <button onClick={() => {
+                                      const matchingStores = sellerMenuItems.filter(m => m.name.trim().toLowerCase() === item.name.trim().toLowerCase()).map(m => m.store_id);
+                                      setEditingMenuItem(item);
+                                      setMenuItemStoreIds(matchingStores.length > 0 ? matchingStores : [item.store_id]);
+                                      setMenuItemForm({ name: item.name, description: item.description || '', category: item.category || 'Other', price: item.price, image: item.image });
+                                      setShowMenuItemModal(true);
+                                    }} style={{ padding: '0.4rem 0.9rem', background: '#EEF2FF', color: '#4338CA', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Edit</button>
+                                    <button onClick={() => handleDeleteMenuItem(item.id)} style={{ padding: '0.4rem 0.9rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}>Delete</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ));
+                          })()}
                         </tbody>
                       </table>
                     </div>
@@ -2548,6 +2742,75 @@ function App() {
                         <div style={{ display: 'flex', gap: '1rem' }}>
                           <button type="button" onClick={() => setShowFoodModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
                           <button type="submit" style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none', background: '#059669', color: 'white', cursor: 'pointer', fontWeight: '700' }}>{editingFood ? 'Save Changes' : 'Create Item'}</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── MENU ITEM MODAL (WEB) ── */}
+                {showMenuItemModal && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '1rem' }}>
+                    <div className="glass-card portal-modal" style={{ maxWidth: '540px', width: '100%' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ margin: 0 }}>{editingMenuItem ? 'Edit Menu Item' : 'Add New Menu Item'}</h3>
+                        <button onClick={() => setShowMenuItemModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
+                      </div>
+
+                      <form onSubmit={handleSaveMenuItem}>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '6px' }}>Select Stores * (Multi-Select)</label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {stores.map(st => {
+                              const selected = menuItemStoreIds.includes(st.id);
+                              return (
+                                <button
+                                  type="button"
+                                  key={st.id}
+                                  onClick={() => {
+                                    setMenuItemStoreIds(prev =>
+                                      selected
+                                        ? (prev.length > 1 ? prev.filter(id => id !== st.id) : prev)
+                                        : [...prev, st.id]
+                                    );
+                                  }}
+                                  style={{
+                                    padding: '0.4rem 0.8rem', borderRadius: '20px', border: '1px solid var(--border-color)',
+                                    background: selected ? 'var(--accent-primary)' : 'white',
+                                    color: selected ? 'white' : 'var(--text-primary)',
+                                    cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600'
+                                  }}>
+                                  {selected ? `✓ ${st.name}` : st.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '4px' }}>Item Name *</label>
+                          <input type="text" required value={menuItemForm.name} onChange={e => setMenuItemForm(prev => ({ ...prev, name: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} placeholder="e.g. Classic Beef Burger" />
+                        </div>
+
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '4px' }}>Description</label>
+                          <textarea value={menuItemForm.description} onChange={e => setMenuItemForm(prev => ({ ...prev, description: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} rows={3} placeholder="Ingredients, taste, etc." />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '4px' }}>Category *</label>
+                            <input type="text" value={menuItemForm.category} onChange={e => setMenuItemForm(prev => ({ ...prev, category: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} placeholder="e.g. Burgers, Drinks" />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '4px' }}>Price (PKR) *</label>
+                            <input type="number" step="0.01" required value={menuItemForm.price} onChange={e => setMenuItemForm(prev => ({ ...prev, price: e.target.value }))} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }} placeholder="e.g. 450" />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                          <button type="button" onClick={() => setShowMenuItemModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+                          <button type="submit" style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none', background: 'var(--accent-primary)', color: 'white', cursor: 'pointer', fontWeight: '700' }}>{editingMenuItem ? 'Update Item' : 'Add to Menu'}</button>
                         </div>
                       </form>
                     </div>
