@@ -38,6 +38,23 @@ function devPort() {
   return window.location.port ? `:${window.location.port}` : '';
 }
 
+export function subdomainFromHost(hostStr) {
+  if (!hostStr) return null;
+  const host = String(hostStr).toLowerCase().trim();
+  if (host.endsWith('.localhost')) {
+    return host.replace('.localhost', '').split('.')[0] || null;
+  }
+  if (host === SITE_HOST || host === `www.${SITE_HOST}`) return null;
+  const suffix = `.${SITE_HOST}`;
+  if (host.endsWith(suffix)) {
+    return host.slice(0, -suffix.length).split('.')[0] || null;
+  }
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return null;
+  }
+  return null;
+}
+
 export function getSubdomain() {
   if (subdomainOverride !== undefined) return subdomainOverride;
   if (typeof window === 'undefined') return null;
@@ -56,16 +73,8 @@ export function getSubdomain() {
 
   const host = window.location.hostname.toLowerCase();
 
-  if (host.endsWith('.localhost')) {
-    return host.replace('.localhost', '').split('.')[0] || null;
-  }
-
-  if (host === SITE_HOST || host === `www.${SITE_HOST}`) return null;
-
-  const suffix = `.${SITE_HOST}`;
-  if (host.endsWith(suffix)) {
-    return host.slice(0, -suffix.length).split('.')[0] || null;
-  }
+  const extracted = subdomainFromHost(host);
+  if (extracted) return extracted;
 
   // Legacy dev fallback: localhost?tenant=kfc
   if (host === 'localhost' || host === '127.0.0.1') {
