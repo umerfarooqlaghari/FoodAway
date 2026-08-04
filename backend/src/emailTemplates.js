@@ -1,9 +1,10 @@
-const { brandName, tagline, logoUrl, siteUrl, supportEmail } = require('./config');
+const { brandName, tagline, logoUrl, logoCreamUrl, siteUrl, supportEmail } = require('./config');
 
-function emailLogoBlock({ height = 44, centered = false } = {}) {
+function emailLogoBlock({ height = 44, centered = false, variant = 'default' } = {}) {
   const centerStyle = centered ? 'margin-left:auto;margin-right:auto;' : '';
-  if (logoUrl) {
-    return `<img src="${logoUrl}" alt="${brandName}" height="${height}" style="display:block;${centerStyle}margin-bottom:12px;" onerror="this.style.display='none'" />`;
+  const src = variant === 'cream' && logoCreamUrl ? logoCreamUrl : (logoUrl || logoCreamUrl);
+  if (src) {
+    return `<img src="${src}" alt="${brandName}" height="${height}" style="display:block;${centerStyle}margin-bottom:12px;max-height:${height}px;width:auto;" onerror="this.style.display='none'" />`;
   }
   return `<h1 style="color:#FF5C00;margin:0 0 12px;font-size:26px;font-weight:700;${centered ? 'text-align:center;' : ''}">${brandName}</h1>`;
 }
@@ -11,7 +12,7 @@ function emailLogoBlock({ height = 44, centered = false } = {}) {
 function emailOrangeHeader(subtitle = '') {
   return `
     <div style="background:linear-gradient(135deg,#FF5C00 0%,#E55200 100%);padding:28px 32px;border-radius:8px 8px 0 0;text-align:center;">
-      ${emailLogoBlock({ height: 48, centered: true })}
+      ${emailLogoBlock({ height: 48, centered: true, variant: 'cream' })}
       ${subtitle ? `<p style="color:#ffe0cc;margin:4px 0 0;font-size:13px;">${subtitle}</p>` : ''}
     </div>`;
 }

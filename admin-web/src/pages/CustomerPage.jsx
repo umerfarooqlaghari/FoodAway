@@ -156,6 +156,11 @@ function ItemCard({ item, type, cart, onAdd, onQtyChange }) {
     ? Math.round((1 - item.price / item.original_price) * 100)
     : null;
 
+  const initialStock = Number(item.quantity) || 0;
+  const hasStockLimit = item.quantity != null;
+  const remainingStock = hasStockLimit ? Math.max(0, initialStock - qty) : 9999;
+  const isSoldOut = hasStockLimit && remainingStock === 0;
+
   return (
     <div className="pos-card">
       <div className="pos-card-img">
@@ -178,11 +183,25 @@ function ItemCard({ item, type, cart, onAdd, onQtyChange }) {
         <h3 className="pos-card-name">
           {type === 'bag' ? (item.description || 'Surprise Bag') : item.name}
         </h3>
-        {type === 'bag' && item.pickup_time && (
-          <p className="pos-card-meta">
-            <ClockIcon size={12} color="#aaa" /> {item.pickup_time}
-          </p>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
+          {hasStockLimit && (
+            <span style={{
+              background: remainingStock > 0 ? '#FBE2DC' : '#F1F5F9',
+              color: remainingStock > 0 ? '#E64A33' : '#64748B',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              padding: '2px 8px',
+              borderRadius: '6px'
+            }}>
+              {remainingStock > 0 ? `${remainingStock} left` : 'Sold out'}
+            </span>
+          )}
+          {type === 'bag' && item.pickup_time && (
+            <p className="pos-card-meta" style={{ margin: 0 }}>
+              <ClockIcon size={12} color="#aaa" /> {item.pickup_time}
+            </p>
+          )}
+        </div>
         <div className="pos-card-footer">
           <div className="pos-card-prices">
             <span className="pos-card-price">{CURRENCY}{Number(item.price).toFixed(2)}</span>
@@ -190,16 +209,20 @@ function ItemCard({ item, type, cart, onAdd, onQtyChange }) {
               <span className="pos-card-orig">{CURRENCY}{Number(item.original_price).toFixed(2)}</span>
             )}
           </div>
-          {qty === 0 ? (
-            <button className="pos-add-btn" onClick={() => onAdd(item, type)}>
-              Add to Cart
-            </button>
-          ) : (
+          {qty > 0 ? (
             <div className="pos-qty-ctrl">
               <button onClick={() => onQtyChange(item.id, type, qty - 1)}>−</button>
               <span>{qty}</span>
-              <button onClick={() => onQtyChange(item.id, type, qty + 1)}>+</button>
+              <button onClick={() => onQtyChange(item.id, type, qty + 1)} disabled={remainingStock <= 0} style={remainingStock <= 0 ? { opacity: 0.4, cursor: 'not-allowed' } : {}}>+</button>
             </div>
+          ) : (initialStock === 0) ? (
+            <button className="pos-add-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed', background: '#94A3B8' }}>
+              Sold out
+            </button>
+          ) : (
+            <button className="pos-add-btn" onClick={() => onAdd(item, type)}>
+              Add to Cart
+            </button>
           )}
         </div>
       </div>

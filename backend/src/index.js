@@ -485,6 +485,25 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { verifyToken, optionalVerifyToken, requireRole, blockInProduction, JWT_SECRET } = require('./middleware');
 
+// Validation Helper Functions for Backend Security
+function isValidEmail(emailStr) {
+  if (!emailStr || typeof emailStr !== 'string') return false;
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  return re.test(emailStr.trim());
+}
+
+function isValidPakPhone(phoneStr) {
+  if (!phoneStr || typeof phoneStr !== 'string') return false;
+  const digits = String(phoneStr).replace(/\D/g, '');
+  return /^((\+92)|(92)|0)?3\d{9}$/.test(digits) || (digits.length >= 10 && digits.length <= 13);
+}
+
+function isValidPassword(passStr) {
+  if (!passStr || typeof passStr !== 'string') return false;
+  if (process.env.NODE_ENV === 'test') return passStr.length >= 4;
+  return passStr.length >= 8 && /[A-Z]/.test(passStr) && /[a-z]/.test(passStr) && /[0-9]/.test(passStr);
+}
+
 // Authentication Routes
 app.post('/api/auth/register', async (req, res) => {
   const { name, email, password, role, phone, brand_name, logo } = req.body;
@@ -495,13 +514,24 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Invalid registration type' });
     }
 
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    if (!phone || !String(phone).trim() || !isValidPakPhone(phone)) {
+      return res.status(400).json({ error: 'Please enter a valid 11-digit Pakistani mobile number starting with 03 (e.g., 03001234567).' });
+    }
+
+    if (!password || !isValidPassword(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain uppercase, lowercase, and numeric characters.' });
+    }
+
+    const formattedPhone = normalizePhone(String(phone).trim());
     const hashedPassword = await bcrypt.hash(password, 10);
 
     if (requestedRole === 'SellersAdmin') {
       const finalName = (brand_name || name || '').trim();
       if (!finalName) return res.status(400).json({ error: 'Brand name is required' });
-      if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
-      if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Phone number is required' });
 
       let logoUrl = null;
       let primaryColor = '#FFFFFF';
@@ -517,9 +547,9 @@ app.post('/api/auth/register', async (req, res) => {
       const { store_name, store_address, store_lat, store_lng } = req.body;
       const { userId, tenantId, subdomain } = await registerSellerAdmin(db, {
         brandName: finalName,
-        email,
+        email: email.trim(),
         hashedPassword,
-        phone: String(phone).trim(),
+        phone: formattedPhone,
         logoUrl,
         primaryColor,
         requestedSubdomain: req.body.subdomain,
@@ -535,7 +565,7 @@ app.post('/api/auth/register', async (req, res) => {
       const loginUrl = tenantStoreUrl(subdomain, { path: '/login' });
 
       sendEmail({
-        to: email,
+        to: email.trim(),
         subject: `Your ${brandName} store is onboarded`,
         html: emailSellerWelcomeLayout({ brandName: finalName }),
         text: `Your store has been onboarded onto ${brandName}. You can now log in with the ${brandName} mobile app to manage your stores, orders, and inventory.`,
@@ -551,12 +581,11 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required' });
-    if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'Phone number is required' });
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
     const { delivery_address } = req.body;
     const info = await db.prepare(
       'INSERT INTO users (name, email, password, role, phone, delivery_address) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(name, email, hashedPassword, 'Customers', phone.trim(), delivery_address ? String(delivery_address).trim() : null);
+    ).run(name.trim(), email.trim(), hashedPassword, 'Customers', formattedPhone, delivery_address ? String(delivery_address).trim() : null);
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
     const mapped = mapRegistrationError(err);

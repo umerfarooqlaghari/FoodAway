@@ -13,10 +13,16 @@ const ROOT = path.join(__dirname, '../..');
 
 const ASSETS = [
   {
-    localPath: path.join(ROOT, 'admin-web/public/favicon.png'),
+    localPath: path.join(ROOT, 'mobile-app/assets/images/grabengo-logo.png'),
     s3Key: 'brand/logo.png',
     contentType: 'image/png',
     envKey: 'APP_LOGO_URL',
+  },
+  {
+    localPath: path.join(ROOT, 'mobile-app/assets/images/grabengo-logo-cream.png'),
+    s3Key: 'brand/logo-cream.png',
+    contentType: 'image/png',
+    envKey: 'APP_LOGO_CREAM_URL',
   },
   {
     localPath: path.join(ROOT, 'admin-web/public/groceries_bag.png'),
