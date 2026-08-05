@@ -7,3 +7,6 @@ __pycache__/
 dist/
 build/
 .expo/
+AuthKey.p8
+*.p8
+start-all.sh
