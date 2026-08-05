@@ -32,12 +32,46 @@ import {
   isMainSite,
   isTenantSite,
   mainSiteRegisterUrl,
-  mainSiteUrl,
-  slugifySubdomain,
+  subdomainFromHost,
   shortSubdomainFromName,
   tenantStoreUrl,
-  DEV_TENANT_PARAM,
+  mainSiteUrl,
 } from './host';
+
+const validateEmail = (email) => {
+  if (!email || typeof email !== 'string') return false;
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  return re.test(email.trim());
+};
+
+const validatePakPhone = (phone) => {
+  if (!phone || typeof phone !== 'string') return { valid: false, error: 'Please enter a phone number.' };
+  const cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  const pkRegex = /^((\+92)|(92)|0)?3\d{9}$/;
+  if (!pkRegex.test(cleaned)) {
+    return {
+      valid: false,
+      error: 'Please enter a valid 11-digit Pakistani mobile number starting with 03 (e.g., 03001234567 or +923001234567).'
+    };
+  }
+  let formatted = cleaned;
+  if (formatted.startsWith('0')) {
+    formatted = '+92' + formatted.substring(1);
+  } else if (formatted.startsWith('92')) {
+    formatted = '+' + formatted;
+  } else if (!formatted.startsWith('+92')) {
+    formatted = '+92' + formatted;
+  }
+  return { valid: true, formatted };
+};
+
+const validatePassword = (pass) => {
+  if (!pass || pass.length < 8) return 'Password must be at least 8 characters long.';
+  if (!/[A-Z]/.test(pass)) return 'Password must contain at least one uppercase letter (A-Z).';
+  if (!/[a-z]/.test(pass)) return 'Password must contain at least one lowercase letter (a-z).';
+  if (!/[0-9]/.test(pass)) return 'Password must contain at least one number (0-9).';
+  return null;
+};
 
 // Note: Replace with actual MapBox token in production
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
@@ -192,16 +226,17 @@ function App() {
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
-  const [registerLogo, setRegisterLogo] = useState('');
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
-  const [registerLoading, setRegisterLoading] = useState(false);
-  const [registerError, setRegisterError] = useState('');
-  const [registerComplete, setRegisterComplete] = useState(null);
-  const [registerSubdomainPreview, setRegisterSubdomainPreview] = useState('');
+  const [registerLogo, setRegisterLogo] = useState('');
   const [registerStoreName, setRegisterStoreName] = useState('');
   const [registerStoreAddress, setRegisterStoreAddress] = useState('');
-  const [registerStoreLat, setRegisterStoreLat] = useState(51.5074);
-  const [registerStoreLng, setRegisterStoreLng] = useState(-0.1278);
+  const [registerStoreLat, setRegisterStoreLat] = useState(null);
+  const [registerStoreLng, setRegisterStoreLng] = useState(null);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerError, setRegisterError] = useState('');
+  const [registerFieldErrors, setRegisterFieldErrors] = useState({});
+  const [registerComplete, setRegisterComplete] = useState(null);
+  const [registerSubdomainPreview, setRegisterSubdomainPreview] = useState('');
   const [tenantBranding, setTenantBranding] = useState(null);
   const [storeLinkCopied, setStoreLinkCopied] = useState(false);
 
@@ -542,19 +577,44 @@ function App() {
 
   const handleSellerRegister = async (e) => {
     e.preventDefault();
-    setRegisterLoading(true);
+    const errs = {};
     setRegisterError('');
-    if (!registerBrand.trim() || !registerEmail.trim() || !registerPhone.trim() || !registerPassword) {
-      setRegisterError('Please fill in all required fields.');
-      setRegisterLoading(false);
+    setRegisterFieldErrors({});
+
+    if (!registerBrand.trim()) errs.brand = 'Brand name is required.';
+    if (!registerEmail.trim()) {
+      errs.email = 'Email address is required.';
+    } else if (!validateEmail(registerEmail)) {
+      errs.email = 'Please enter a valid email address (e.g. name@example.com).';
+    }
+
+    if (!registerPhone.trim()) {
+      errs.phone = 'Phone number is required.';
+    } else {
+      const phoneRes = validatePakPhone(registerPhone);
+      if (!phoneRes.valid) {
+        errs.phone = phoneRes.error;
+      }
+    }
+
+    const passErr = validatePassword(registerPassword);
+    if (passErr) {
+      errs.password = passErr;
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setRegisterFieldErrors(errs);
       return;
     }
+
+    setRegisterLoading(true);
+    const phoneRes = validatePakPhone(registerPhone);
     try {
       const res = await axios.post(`${API_URL}/auth/register`, {
         brand_name: registerBrand.trim(),
         email: registerEmail.trim(),
         password: registerPassword,
-        phone: registerPhone.trim(),
+        phone: phoneRes.formatted,
         role: 'SellersAdmin',
         logo: registerLogo || undefined,
         store_name: registerStoreName.trim() || registerBrand.trim(),
@@ -1908,27 +1968,67 @@ function App() {
 
         {registerError && <div style={{ color: '#B91C1C', marginBottom: '1rem', padding: '0.5rem', background: '#FEE2E2', borderRadius: '4px', width: '100%', fontSize: '0.9rem' }}>{registerError}</div>}
 
-        <form onSubmit={handleSellerRegister} style={{ width: '100%', textAlign: 'left' }}>
-          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Name *</label>
-          <input type="text" placeholder="e.g. KFC, Starbucks" value={registerBrand} onChange={e => setRegisterBrand(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '0.5rem' }} required />
+        <form onSubmit={handleSellerRegister} style={{ width: '100%', textAlign: 'left' }} noValidate>
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#374151' }}>
+            Brand Name <span style={{ color: '#EF4444' }}>*</span>
+          </label>
+          <input type="text" placeholder="e.g. KFC, Starbucks" value={registerBrand} onChange={e => { setRegisterBrand(e.target.value); if (registerFieldErrors.brand) setRegisterFieldErrors(prev => ({ ...prev, brand: null })); }} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: registerFieldErrors.brand ? '1.5px solid #EF4444' : '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '0.25rem' }} />
+          {registerFieldErrors.brand && (
+            <p style={{ color: '#EF4444', fontSize: '0.8rem', marginTop: '0.2rem', marginBottom: '0.5rem' }}>{registerFieldErrors.brand}</p>
+          )}
           {registerSubdomainPreview && (
-            <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '1rem' }}>
+            <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '1rem', marginTop: '0.25rem' }}>
               Your store link will be similar to: <strong style={{ color: 'var(--brand-orange)' }}>{tenantStoreUrl(registerSubdomainPreview)}</strong>
             </p>
           )}
 
-          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Email Address *</label>
-          <input type="email" placeholder="admin@brand.com" value={registerEmail} onChange={e => setRegisterEmail(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#374151' }}>
+            Email Address <span style={{ color: '#EF4444' }}>*</span>
+          </label>
+          <input type="email" placeholder="admin@brand.com" value={registerEmail} onChange={e => { setRegisterEmail(e.target.value); if (registerFieldErrors.email) setRegisterFieldErrors(prev => ({ ...prev, email: null })); }} autoComplete="email" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: registerFieldErrors.email ? '1.5px solid #EF4444' : '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '0.25rem' }} />
+          {registerFieldErrors.email && (
+            <p style={{ color: '#EF4444', fontSize: '0.8rem', marginTop: '0.2rem', marginBottom: '0.5rem' }}>{registerFieldErrors.email}</p>
+          )}
 
-          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Phone Number *</label>
-          <input type="tel" placeholder="+44 7700 000000" value={registerPhone} onChange={e => setRegisterPhone(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '1rem' }} required />
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#374151', marginTop: '0.75rem' }}>
+            Phone Number <span style={{ color: '#EF4444' }}>*</span>
+          </label>
+          <input type="tel" placeholder="e.g. 03001234567 or +923001234567" value={registerPhone} onChange={e => { setRegisterPhone(e.target.value); if (registerFieldErrors.phone) setRegisterFieldErrors(prev => ({ ...prev, phone: null })); }} autoComplete="tel" style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: registerFieldErrors.phone ? '1.5px solid #EF4444' : '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827', marginBottom: '0.25rem' }} />
+          {registerFieldErrors.phone ? (
+            <p style={{ color: '#EF4444', fontSize: '0.8rem', marginTop: '0.2rem', marginBottom: '0.5rem' }}>{registerFieldErrors.phone}</p>
+          ) : (
+            <p style={{ fontSize: '0.8rem', color: '#6B7280', marginBottom: '1rem' }}>Enter 11-digit Pakistani mobile number (03xx)</p>
+          )}
 
-          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Password *</label>
-          <div style={{ marginBottom: '1rem', position: 'relative' }}>
-            <input type={showRegisterPassword ? 'text' : 'password'} placeholder="Password" value={registerPassword} onChange={e => setRegisterPassword(e.target.value)} style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }} required />
+          <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#374151', marginTop: '0.75rem' }}>
+            Password <span style={{ color: '#EF4444' }}>*</span>
+          </label>
+          <div style={{ marginBottom: '0.25rem', position: 'relative' }}>
+            <input type={showRegisterPassword ? 'text' : 'password'} placeholder="Password" value={registerPassword} onChange={e => { setRegisterPassword(e.target.value); if (registerFieldErrors.password) setRegisterFieldErrors(prev => ({ ...prev, password: null })); }} autoComplete="new-password" style={{ width: '100%', padding: '0.75rem', paddingRight: '2.75rem', borderRadius: 'var(--radius-md)', border: registerFieldErrors.password ? '1.5px solid #EF4444' : '1px solid #D1D5DB', background: '#F9FAFB', color: '#111827' }} />
             <button type="button" onClick={() => setShowRegisterPassword(!showRegisterPassword)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#4B5563' }}>
               {showRegisterPassword ? 'Hide' : 'Show'}
             </button>
+          </div>
+          {registerFieldErrors.password && (
+            <p style={{ color: '#EF4444', fontSize: '0.8rem', marginTop: '0.2rem', marginBottom: '0.75rem' }}>{registerFieldErrors.password}</p>
+          )}
+
+          <div style={{ background: '#F8FAFC', borderRadius: '8px', padding: '0.75rem', marginBottom: '1.25rem', border: '1px solid #E2E8F0', fontSize: '0.8rem' }}>
+            <div style={{ fontWeight: '700', color: '#475569', marginBottom: '0.25rem' }}>Password must contain:</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <div style={{ color: registerPassword.length >= 8 ? '#10B981' : '#64748B' }}>
+                {registerPassword.length >= 8 ? '✓' : '○'} At least 8 characters
+              </div>
+              <div style={{ color: /[A-Z]/.test(registerPassword) ? '#10B981' : '#64748B' }}>
+                {/[A-Z]/.test(registerPassword) ? '✓' : '○'} At least 1 uppercase letter (A-Z)
+              </div>
+              <div style={{ color: /[a-z]/.test(registerPassword) ? '#10B981' : '#64748B' }}>
+                {/[a-z]/.test(registerPassword) ? '✓' : '○'} At least 1 lowercase letter (a-z)
+              </div>
+              <div style={{ color: /[0-9]/.test(registerPassword) ? '#10B981' : '#64748B' }}>
+                {/[0-9]/.test(registerPassword) ? '✓' : '○'} At least 1 number (0-9)
+              </div>
+            </div>
           </div>
 
           <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: '#6B7280' }}>Brand Logo (optional)</label>

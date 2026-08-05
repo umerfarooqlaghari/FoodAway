@@ -40,8 +40,9 @@ module.exports = {
   supportEmail: process.env.APP_SUPPORT_EMAIL || 'support@grabengo.store',
   fromEmail,
   promoCode: process.env.APP_PROMO_CODE || 'Grabengo20',
-  logoUrl: process.env.APP_LOGO_URL || '',
-  groceriesBagUrl: process.env.APP_GROCERIES_BAG_URL || '',
+  logoUrl: process.env.APP_LOGO_URL || 'https://goodtogo-assets.s3.us-east-1.amazonaws.com/brand/logo.png',
+  logoCreamUrl: process.env.APP_LOGO_CREAM_URL || 'https://goodtogo-assets.s3.us-east-1.amazonaws.com/brand/logo-cream.png',
+  groceriesBagUrl: process.env.APP_GROCERIES_BAG_URL || 'https://goodtogo-assets.s3.us-east-1.amazonaws.com/brand/groceries-bag.png',
   receiptFilename: `${brandName}-Receipt.pdf`,
   tenantStoreUrl,
 };
