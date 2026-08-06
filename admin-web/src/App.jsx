@@ -2065,9 +2065,30 @@ function App() {
             </div>
           )}
 
-          <button type="submit" className="btn-primary" disabled={registerLoading} style={{ width: '100%', background: 'var(--brand-orange)', border: 'none', color: 'white', fontWeight: '700', padding: '0.75rem', borderRadius: 'var(--radius-md)', cursor: registerLoading ? 'not-allowed' : 'pointer', opacity: registerLoading ? 0.75 : 1 }}>
-            {registerLoading ? 'Creating account...' : 'Create Seller Account'}
-          </button>
+          {(() => {
+            const hasActiveRegisterErrors = Object.values(registerFieldErrors).some(err => !!err);
+            const isRegDisabled = registerLoading || hasActiveRegisterErrors;
+            return (
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={isRegDisabled}
+                style={{
+                  width: '100%',
+                  background: isRegDisabled ? '#9CA3AF' : 'var(--brand-orange)',
+                  border: 'none',
+                  color: 'white',
+                  fontWeight: '700',
+                  padding: '0.75rem',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: isRegDisabled ? 'not-allowed' : 'pointer',
+                  opacity: isRegDisabled ? 0.6 : 1
+                }}
+              >
+                {registerLoading ? 'Creating account...' : 'Create Seller Account'}
+              </button>
+            );
+          })()}
 
           <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#6B7280', textAlign: 'center' }}>
             After registration, your store link will be emailed to you. Sign in on your dedicated store portal — not on this page.

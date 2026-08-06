@@ -22,7 +22,7 @@ const { uploadImageToS3, sendEmail, presignImages, getPresignedUrl, streamS3Obje
 const { generateReceiptBuffer } = require('./receipt');
 const { brandName, tagline, supportEmail, siteHost, promoCode, logoUrl, receiptFilename, tenantStoreUrl, delivery: DELIVERY_CFG, customerDeliveryLive } = require('./config');
 const { extractPrimaryColor } = require('./colorExtractor');
-const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout, emailSellerWelcomeLayout } = require('./emailTemplates');
+const { emailLogoBlock, emailOrangeHeader, emailFooter, emailSimpleLayout, emailSellerWelcomeLayout, emailCustomerWelcomeLayout } = require('./emailTemplates');
 const {
   validateSubdomain,
   slugifySubdomain,
@@ -152,7 +152,7 @@ async function notifyOnDutyPartners(deliveryRow, storeName) {
     }
     sendToUser(p.id, { type: 'new_delivery_job', delivery_id: deliveryRow.id, store_name: storeName });
     if (p.push_token) {
-      sendPushNotification(p.push_token, 'New delivery job', `Pickup from ${storeName} — Rs${deliveryRow.fee} fee`, { type: 'delivery_job', deliveryId: deliveryRow.id })
+      sendPushNotification(p.push_token, 'New delivery job', `Pickup from ${storeName} — Rs ${deliveryRow.fee} fee`, { type: 'delivery_job', deliveryId: deliveryRow.id })
         .catch(() => { });
     }
   }
@@ -586,6 +586,14 @@ app.post('/api/auth/register', async (req, res) => {
     const info = await db.prepare(
       'INSERT INTO users (name, email, password, role, phone, delivery_address) VALUES (?, ?, ?, ?, ?, ?)'
     ).run(name.trim(), email.trim(), hashedPassword, 'Customers', formattedPhone, delivery_address ? String(delivery_address).trim() : null);
+
+    sendEmail({
+      to: email.trim(),
+      subject: 'Welcome to Grabengo! 🍃',
+      html: emailCustomerWelcomeLayout({ name: name.trim() }),
+      text: `Hi ${name.trim()}, welcome to Grabengo! Your account is active. Start exploring nearby stores and deals today.`
+    }).catch(err => console.error('Failed to send customer welcome email:', err.message));
+
     res.status(201).json({ id: info.lastInsertRowid, message: 'User registered successfully' });
   } catch (err) {
     const mapped = mapRegistrationError(err);
@@ -1665,7 +1673,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
     if (customer && customer.email) {
       const total = placedOrders.reduce((sum, o) => sum + (Number(o.price) * (o.quantity || 1)), 0);
       const itemsList = placedOrders.map(o =>
-        `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — Rs${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
+        `<li>${o.quantity}x <strong>${o.item_name}</strong> from ${o.store_name} — Rs ${Number(o.price).toFixed(2)} each (Pickup: ${o.pickup_time})</li>`
       ).join('');
       const anyDelivery = placedOrders.some(o => o.fulfillment_type === 'delivery');
       const isPartnerDelivery = createdDeliveries.length > 0;
@@ -1673,7 +1681,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
               <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:14px;margin-top:16px;">
                 <p style="margin:0;color:#1d4ed8;font-weight:bold;">🛵 Delivery order</p>
                 <p style="margin:6px 0 0;color:#555;font-size:13px;">${isPartnerDelivery
-          ? `A Grabengo delivery partner will bring your order once the store confirms it. Your 4-digit delivery PIN is shown in the app under Bookings — give it to the rider on arrival and pay the order total plus the delivery fee (Rs${createdDeliveries.reduce((t, d) => t + Number(d.fee), 0)}) in cash.`
+          ? `A Grabengo delivery partner will bring your order once the store confirms it. Your 4-digit delivery PIN is shown in the app under Bookings — give it to the rider on arrival and pay the order total plus the delivery fee (Rs ${createdDeliveries.reduce((t, d) => t + Number(d.fee), 0)}) in cash.`
           : 'The store will deliver this order directly (not Grabengo) and may call you to confirm. Delivery charges, if any, are set by the store and are not included in the total below — pay them directly to the store.'}</p>
               </div>` : '';
 
@@ -1693,7 +1701,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
               <h3 style="color:#FF5C00;border-bottom:2px solid #FF5C00;padding-bottom:6px;">Order Summary</h3>
               <ul style="color:#333;line-height:1.8;">${itemsList}</ul>
               <p style="font-size:18px;font-weight:bold;color:#1a1a1a;border-top:1px solid #eee;padding-top:12px;">
-                Total: <span style="color:#FF5C00;">Rs${total.toFixed(2)}</span>
+                Total: <span style="color:#FF5C00;">Rs ${total.toFixed(2)}</span>
               </p>
               <div style="background:#fff8f5;border:1px solid #ffe0cc;border-radius:6px;padding:14px;margin-top:16px;">
                 <p style="margin:0;color:#FF5C00;font-weight:bold;">Payment: Cash at Pickup</p>
@@ -1705,7 +1713,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
               ${emailFooter()}
             </div>
           </div>`,
-        text: `Hi ${customer.name}, your ${brandName} order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: Rs${total.toFixed(2)}. Your receipt is attached.`,
+        text: `Hi ${customer.name}, your ${brandName} order is confirmed! Items: ${placedOrders.map(o => `${o.quantity}x ${o.item_name}`).join(', ')}. Total: Rs ${total.toFixed(2)}. Your receipt is attached.`,
         attachments,
       })).catch(err => console.error('Failed to send order confirmation email:', err.message));
     }
@@ -2209,7 +2217,7 @@ async function notifyDeliveryParties(deliveryId, event) {
   if (!d) return;
   const messages = {
     assigned: { title: 'Rider assigned', body: `${d.partner_name || 'A Grabengo partner'} will deliver your order from ${d.store_name}.` },
-    picked_up: { title: 'Order picked up', body: `Your order from ${d.store_name} is on its way. Have your PIN and Rs${Number(d.cod_amount).toFixed(0)} cash ready.` },
+    picked_up: { title: 'Order picked up', body: `Your order from ${d.store_name} is on its way. Have your PIN and Rs ${Number(d.cod_amount).toFixed(0)} cash ready.` },
     delivered: { title: 'Order delivered', body: `Your order from ${d.store_name} was delivered. Enjoy!` },
     failed: { title: 'Delivery problem', body: `We couldn't complete your delivery from ${d.store_name}. The store will contact you.` },
   };
@@ -4081,7 +4089,7 @@ async function sendStoreNewOrderEmail({ storeId, placedOrders, customerName, cus
     const sellers = await db.prepare("SELECT email, name FROM users WHERE tenant_id = ? AND role IN ('SellersAdmin', 'SellersStaff') AND email IS NOT NULL").all(store.tenant_id);
     if (!sellers || sellers.length === 0) return;
 
-    const itemsHtml = placedOrders.map(o => `<li>${o.quantity}x <strong>${o.item_name}</strong> — Rs${(o.price * o.quantity).toFixed(2)}</li>`).join('');
+    const itemsHtml = placedOrders.map(o => `<li>${o.quantity}x <strong>${o.item_name}</strong> — Rs ${(o.price * o.quantity).toFixed(2)}</li>`).join('');
     const total = placedOrders.reduce((sum, o) => sum + (o.price * o.quantity), 0);
 
     for (const seller of sellers) {
@@ -4093,7 +4101,7 @@ async function sendStoreNewOrderEmail({ storeId, placedOrders, customerName, cus
           <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:16px;margin:16px 0;">
             <p style="margin:0 0 8px 0;font-size:14px;color:#64748b;"><strong>Customer:</strong> ${customerName} (${customerPhone || 'No phone'})</p>
             <ul style="margin:0;padding-left:20px;color:#334155;">${itemsHtml}</ul>
-            <p style="margin:12px 0 0 0;font-weight:bold;font-size:16px;color:#0f172a;border-top:1px solid #cbd5e1;padding-top:8px;">Total: Rs${total.toFixed(2)}</p>
+            <p style="margin:12px 0 0 0;font-weight:bold;font-size:16px;color:#0f172a;border-top:1px solid #cbd5e1;padding-top:8px;">Total: Rs ${total.toFixed(2)}</p>
           </div>
           <p>Please log in to your Seller Dashboard to view and accept this order.</p>
         `
@@ -4102,7 +4110,7 @@ async function sendStoreNewOrderEmail({ storeId, placedOrders, customerName, cus
         to: seller.email,
         subject: `New Order Alert - ${store.name} 🛒`,
         html,
-        text: `New Order for ${store.name} from ${customerName}! Total: Rs${total.toFixed(2)}. Open dashboard to accept.`
+        text: `New Order for ${store.name} from ${customerName}! Total: Rs ${total.toFixed(2)}. Open dashboard to accept.`
       }).catch(e => console.error(`Failed to send order alert to ${seller.email}:`, e.message));
     }
   } catch (err) {
@@ -4116,7 +4124,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
     <tr>
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.item_name}</td>
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;text-align:center;">${o.quantity}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">Rs${(o.price * o.quantity).toFixed(2)}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">Rs ${(o.price * o.quantity).toFixed(2)}</td>
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.store_name}</td>
       <td style="padding:10px 14px;border-bottom:1px solid #f0f0f0;">${o.pickup_time}</td>
     </tr>`).join('');
@@ -4169,7 +4177,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
                     <tfoot>
                       <tr style="background:#fdf5ef;">
                         <td colspan="2" style="padding:12px 14px;font-weight:700;color:#1a1a1a;">Total</td>
-                        <td colspan="3" style="padding:12px 14px;font-weight:700;color:#ff6b35;font-size:16px;">Rs${total.toFixed(2)}</td>
+                        <td colspan="3" style="padding:12px 14px;font-weight:700;color:#ff6b35;font-size:16px;">Rs ${total.toFixed(2)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -4194,7 +4202,7 @@ async function sendCheckoutConfirmationEmail({ name, email, phone, placedOrders 
         </table>
       </body>
       </html>`,
-      text: `Hi ${name}, your ${brandName} order is confirmed! Total: Rs${total.toFixed(2)}. Order refs: #${placedOrders.map(o => o.id).join(', #')}. Payment: cash at pickup. Your receipt is attached.`
+      text: `Hi ${name}, your ${brandName} order is confirmed! Total: Rs ${total.toFixed(2)}. Order refs: #${placedOrders.map(o => o.id).join(', #')}. Payment: cash at pickup. Your receipt is attached.`
     });
   } catch (emailErr) {
     console.error('[Checkout Confirm] Order confirmed but receipt email failed:', emailErr);

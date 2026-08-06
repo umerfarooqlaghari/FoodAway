@@ -5,7 +5,7 @@ const ORANGE = '#FF5C00';
 const DARK   = '#1a1a1a';
 const GREY   = '#555555';
 const LIGHT  = '#f5f5f5';
-const CURRENCY = 'Rs';
+const CURRENCY = 'Rs ';
 
 /**
  * Generates a PDF receipt buffer.
@@ -79,42 +79,47 @@ function generateReceiptBuffer(orders, customer = {}, branding = {}) {
     y += 14;
     doc.rect(50, y, innerWidth, 24).fill(LIGHT);
 
-    const col = { item: 50, store: 220, qty: 350, price: 400, total: 460, pickup: 510 };
+    const col = { item: 50, store: 180, qty: 295, price: 335, total: 395, pickup: 455 };
     doc.fillColor(ORANGE).font('Helvetica-Bold').fontSize(9);
-    doc.text('ITEM',         col.item,  y + 8);
-    doc.text('STORE',        col.store, y + 8);
-    doc.text('QTY',          col.qty,   y + 8, { width: 40, align: 'center' });
-    doc.text('UNIT',         col.price, y + 8, { width: 50, align: 'right' });
-    doc.text('TOTAL',        col.total, y + 8, { width: 50, align: 'right' });
-    doc.text('PICKUP',       col.pickup, y + 8, { width: 80 });
+    doc.text('ITEM',         col.item,  y + 8, { width: 120 });
+    doc.text('STORE',        col.store, y + 8, { width: 105 });
+    doc.text('QTY',          col.qty,   y + 8, { width: 35, align: 'center' });
+    doc.text('UNIT',         col.price, y + 8, { width: 55, align: 'right' });
+    doc.text('TOTAL',        col.total, y + 8, { width: 55, align: 'right' });
+    doc.text('PICKUP SCHEDULE', col.pickup, y + 8, { width: 90 });
 
     // ── Table rows ────────────────────────────────────────────────────────────
     y += 24;
     doc.font('Helvetica').fontSize(9).fillColor(DARK);
 
     orders.forEach((o, idx) => {
-      if (idx % 2 === 0) {
-        doc.rect(50, y, innerWidth, 22).fill('#fafafa');
-      }
       const itemName  = o.item_name  || (o.type === 'bag' ? 'Surprise Bag' : 'Food Item');
       const storeName = o.store_name || '';
       const qty       = o.quantity || 1;
       const unitPrice = Number(o.price);
       const lineTotal = unitPrice * qty;
-      const pickup    = o.pickup_time || 'Opening hours';
+      const pickup    = (o.pickup_time && o.pickup_time !== 'N/A') ? o.pickup_time : (o.store_pickup_window || 'Everyday 10:00 AM - 10:00 PM');
+
+      const nameHeight = doc.heightOfString(itemName, { width: 120 });
+      const storeHeight = doc.heightOfString(storeName, { width: 105 });
+      const rowHeight = Math.max(26, Math.max(nameHeight, storeHeight) + 10);
+
+      if (idx % 2 === 0) {
+        doc.rect(50, y, innerWidth, rowHeight).fill('#fafafa');
+      }
 
       doc.fillColor(DARK);
-      doc.text(itemName,                            col.item,  y + 7, { width: 165, lineBreak: false });
-      doc.text(storeName,                           col.store, y + 7, { width: 125, lineBreak: false });
-      doc.text(String(qty),                         col.qty,   y + 7, { width: 40,  align: 'center', lineBreak: false });
-      doc.text(`${CURRENCY}${unitPrice.toFixed(2)}`,col.price, y + 7, { width: 50,  align: 'right',  lineBreak: false });
-      doc.text(`${CURRENCY}${lineTotal.toFixed(2)}`,col.total, y + 7, { width: 50,  align: 'right',  lineBreak: false });
-      doc.text(pickup,                              col.pickup,y + 7, { width: 82,  lineBreak: false });
+      doc.text(itemName,                            col.item,  y + 6, { width: 120 });
+      doc.text(storeName,                           col.store, y + 6, { width: 105 });
+      doc.text(String(qty),                         col.qty,   y + 6, { width: 35,  align: 'center' });
+      doc.text(`${CURRENCY}${unitPrice.toFixed(2)}`,col.price, y + 6, { width: 55,  align: 'right' });
+      doc.text(`${CURRENCY}${lineTotal.toFixed(2)}`,col.total, y + 6, { width: 55,  align: 'right' });
+      doc.text(pickup,                              col.pickup,y + 6, { width: 90 });
 
       // Row bottom border
-      doc.moveTo(50, y + 22).lineTo(pageWidth - 50, y + 22)
+      doc.moveTo(50, y + rowHeight).lineTo(pageWidth - 50, y + rowHeight)
          .strokeColor('#eeeeee').lineWidth(0.5).stroke();
-      y += 22;
+      y += rowHeight;
     });
 
     // ── Total band ────────────────────────────────────────────────────────────

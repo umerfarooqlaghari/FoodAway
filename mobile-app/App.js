@@ -683,13 +683,15 @@ async function prefetchLandingBrands() {
 }
 
 const APP_CURRENCY_CODE = 'PKR';
-const APP_CURRENCY_SYMBOL = 'Rs';
+const APP_CURRENCY_SYMBOL = 'Rs ';
 
 function formatMoney(amount, symbol = APP_CURRENCY_SYMBOL) {
   const n = Number(amount);
   const safe = Number.isFinite(n) ? n : 0;
-  if (Math.abs(safe - Math.round(safe)) < 0.001) return `${symbol}${Math.round(safe).toLocaleString('en-PK')}`;
-  return `${symbol}${safe.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const rawSym = String(symbol || '').trim();
+  const sym = rawSym ? `${rawSym} ` : '';
+  if (Math.abs(safe - Math.round(safe)) < 0.001) return `${sym}${Math.round(safe).toLocaleString('en-PK')}`;
+  return `${sym}${safe.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function ChatProvider({ children }) {
@@ -1044,6 +1046,46 @@ function GlobalProfileModal() {
       token={token}
       customMessage={profileModalMessage}
     />
+  );
+function GlobalLogoutModal() {
+  const { logoutModalVisible, setLogoutModalVisible, logout } = useContext(AuthContext);
+  if (!logoutModalVisible) return null;
+  return (
+    <Modal visible={true} transparent animationType="fade" onRequestClose={() => setLogoutModalVisible(false)}>
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+        activeOpacity={1}
+        onPress={() => setLogoutModalVisible(false)}
+      >
+        <TouchableWithoutFeedback>
+          <View style={{ width: '100%', maxWidth: 340, backgroundColor: 'white', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <Ionicons name="log-out" size={28} color="#EF4444" />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 8 }}>
+              Log Out of Grabengo?
+            </Text>
+            <Text style={{ fontSize: 13.5, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
+              Are you sure you want to log out of your account? You will need to sign in again to place orders.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+              <TouchableOpacity
+                onPress={() => setLogoutModalVisible(false)}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 14, backgroundColor: '#F1F5F9', alignItems: 'center' }}
+              >
+                <Text style={{ fontWeight: '700', color: '#475569', fontSize: 14 }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setLogoutModalVisible(false); logout(true); }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 14, backgroundColor: '#EF4444', alignItems: 'center' }}
+              >
+                <Text style={{ fontWeight: '700', color: 'white', fontSize: 14 }}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </TouchableOpacity>
+    </Modal>
   );
 }
 
@@ -2380,8 +2422,12 @@ function RegisterScreen({ navigation }) {
       return true;
     }
     if (step === 2) {
-      if (accountType === 'customer' && !name.trim()) {
-        errs.name = 'Please enter your full name.';
+      if (accountType === 'customer') {
+        if (!name.trim()) {
+          errs.name = 'Please enter your full name.';
+        } else if (/[0-9]/.test(name)) {
+          errs.name = 'Full name cannot contain numeric digits.';
+        }
       }
       if (accountType === 'seller' && !brandName.trim()) {
         errs.brandName = 'Please enter your brand name.';
@@ -2563,7 +2609,15 @@ function RegisterScreen({ navigation }) {
                   placeholder="e.g. Sabeera Khan"
                   placeholderTextColor="#94a3b8"
                   value={name}
-                  onChangeText={(val) => { setName(val); if (errors.name) setErrors(prev => ({ ...prev, name: null })); }}
+                  onChangeText={(val) => {
+                    const sanitized = val.replace(/[0-9]/g, '');
+                    setName(sanitized);
+                    if (val !== sanitized) {
+                      setErrors(prev => ({ ...prev, name: 'Full name cannot contain numeric digits.' }));
+                    } else if (errors.name) {
+                      setErrors(prev => ({ ...prev, name: null }));
+                    }
+                  }}
                   editable={!loading}
                   textContentType="name"
                 />
@@ -2767,15 +2821,28 @@ function RegisterScreen({ navigation }) {
           </>
         )}
 
-        <TouchableOpacity style={[styles.primaryButton, loading && { opacity: 0.7 }]} onPress={handleNext} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.primaryButtonText}>
-              {step < totalSteps ? 'Continue' : accountType === 'seller' ? 'Create seller account' : 'Create account'}
-            </Text>
-          )}
-        </TouchableOpacity>
+        {(() => {
+          const hasActiveErrors = Object.values(errors).some(err => !!err);
+          const isButtonDisabled = loading || hasActiveErrors;
+          return (
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                isButtonDisabled && { opacity: 0.5, backgroundColor: '#9CA3AF' }
+              ]}
+              onPress={handleNext}
+              disabled={isButtonDisabled}
+            >
+              {loading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {step < totalSteps ? 'Continue' : accountType === 'seller' ? 'Create seller account' : 'Create account'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          );
+        })()}
 
         <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ marginTop: 20 }} disabled={loading}>
           <Text style={{ color: '#6B7280', textAlign: 'center', fontSize: 15 }}>
@@ -4345,10 +4412,12 @@ function DiscoverScreen({ navigation, route }) {
   };
 
   const handleSaveProfile = async () => {
-    if (!editName.trim()) return Alert.alert("Error", "Name cannot be empty.");
+    const trimmedName = editName.trim();
+    if (!trimmedName) return Alert.alert("Error", "Please enter your full name.");
+    if (/[0-9]/.test(trimmedName)) return Alert.alert("Error", "Full name cannot contain numeric digits.");
     setSavingProfile(true);
     try {
-      const payload = { name: editName };
+      const payload = { name: trimmedName };
       if (editAvatar) payload.logo = editAvatar;
       const response = await axios.put(`${API_URL}/users/${user.id}`, payload, {
         headers: { Authorization: `Bearer ${token}` }
@@ -5246,7 +5315,7 @@ function DiscoverScreen({ navigation, route }) {
                   style={styles.input}
                   placeholder="Enter your name"
                   value={editName}
-                  onChangeText={setEditName}
+                  onChangeText={(val) => setEditName(val.replace(/[0-9]/g, ''))}
                 />
 
                 <TouchableOpacity
@@ -9479,6 +9548,7 @@ export default function App() {
   const [deliveryInfo, setDeliveryInfo] = useState(DEFAULT_DELIVERY_INFO);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [profileModalMessage, setProfileModalMessage] = useState(null);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Currency is fixed to PKR for all users (Pakistan market).
   const currencyCode = APP_CURRENCY_CODE;
@@ -9670,14 +9740,7 @@ export default function App() {
         if (skipConfirm) {
           await performLogout();
         } else {
-          Alert.alert(
-            'Log Out',
-            'Are you sure you want to log out of your account?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Log Out', style: 'destructive', onPress: performLogout }
-            ]
-          );
+          setLogoutModalVisible(true);
         }
       },
       updateUser: async (updatedUser) => {
@@ -9692,6 +9755,8 @@ export default function App() {
       currencySymbol,
       profileModalVisible,
       profileModalMessage,
+      logoutModalVisible,
+      setLogoutModalVisible,
       openProfile: (msg) => {
         setProfileModalMessage(msg || null);
         setProfileModalVisible(true);
@@ -9701,7 +9766,7 @@ export default function App() {
         setProfileModalMessage(null);
       },
     }),
-    [state, profileModalVisible, profileModalMessage]
+    [state, profileModalVisible, profileModalMessage, logoutModalVisible]
   );
 
   const landingBrandsContext = React.useMemo(
@@ -9772,6 +9837,7 @@ export default function App() {
                       <GlobalChatModal />
                       <GlobalReceiptModal />
                       <GlobalProfileModal />
+                      <GlobalLogoutModal />
                     </PostHogProvider>
                   </NavigationContainer>
                 </ChatProvider>

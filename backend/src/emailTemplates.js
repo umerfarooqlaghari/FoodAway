@@ -46,11 +46,23 @@ function emailSellerWelcomeLayout({ brandName: storeName }) {
   });
 }
 
+function emailCustomerWelcomeLayout({ name }) {
+  return emailSimpleLayout({
+    title: 'Welcome to Grabengo!',
+    bodyHtml: `
+      <p>Hi <strong>${name}</strong>,</p>
+      <p>Welcome to <strong>${brandName}</strong>! Your account has been successfully created.</p>
+      <p>Start exploring nearby stores, saving surplus food, and ordering delicious meals & surprise bags today.</p>
+      <p style="font-size:14px;color:#666;margin-top:20px;">If you have any questions, reach out to us at <a href="mailto:${supportEmail}" style="color:#FF5C00;">${supportEmail}</a>.</p>`,
+  });
+}
+
 module.exports = {
   emailLogoBlock,
   emailOrangeHeader,
   emailFooter,
   emailSimpleLayout,
   emailSellerWelcomeLayout,
+  emailCustomerWelcomeLayout,
   supportEmail,
 };
