@@ -1047,6 +1047,8 @@ function GlobalProfileModal() {
       customMessage={profileModalMessage}
     />
   );
+}
+
 function GlobalLogoutModal() {
   const { logoutModalVisible, setLogoutModalVisible, logout } = useContext(AuthContext);
   if (!logoutModalVisible) return null;
