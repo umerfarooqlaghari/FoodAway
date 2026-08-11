@@ -2686,26 +2686,8 @@ app.post('/api/superadmin/trigger-inactivity-reminders', verifyToken, async (req
     for (const customer of inactiveUsers) {
       sendToUser(customer.id, {
         type: 'inactivity_reminder',
-        message: `We miss you, ${customer.name}! 🍩 Save 20% on your next surplus rescue bag with code ${promoCode}.`
+        message: `We miss you, ${customer.name}! 🍃 Check out new surplus rescue bags and fresh meals near you today.`
       });
-
-      // Send email using AWS SES
-      try {
-        await sendEmail({
-          to: customer.email,
-          subject: `We miss you, ${customer.name}! 🍩`,
-          html: emailSimpleLayout({
-            title: 'We Miss You!',
-            bodyHtml: `
-              <p>Hi ${customer.name},</p>
-              <p>We miss you! Save 20% on your next surplus rescue bag with code <strong>${promoCode}</strong>.</p>
-              <p>Help us reduce food waste and save delicious treats today!</p>`,
-          }),
-          text: `Hi ${customer.name}, We miss you! Save 20% on your next surplus rescue bag with code ${promoCode}.`
-        });
-      } catch (emailErr) {
-        console.error(`Failed to send inactivity email to ${customer.email}:`, emailErr.message);
-      }
 
       notified.push({
         id: customer.id,

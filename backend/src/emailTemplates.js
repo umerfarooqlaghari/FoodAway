@@ -2,11 +2,12 @@ const { brandName, tagline, logoUrl, logoCreamUrl, siteUrl, supportEmail } = req
 
 function emailLogoBlock({ height = 44, centered = false, variant = 'default' } = {}) {
   const centerStyle = centered ? 'margin-left:auto;margin-right:auto;' : '';
-  const src = variant === 'cream' && logoCreamUrl ? logoCreamUrl : (logoUrl || logoCreamUrl);
-  if (src) {
-    return `<img src="${src}" alt="${brandName}" height="${height}" style="display:block;${centerStyle}margin-bottom:12px;max-height:${height}px;width:auto;" onerror="this.style.display='none'" />`;
-  }
-  return `<h1 style="color:#FF5C00;margin:0 0 12px;font-size:26px;font-weight:700;${centered ? 'text-align:center;' : ''}">${brandName}</h1>`;
+  const textColor = variant === 'cream' ? '#FFFFFF' : '#FF5C00';
+  return `<div style="display:inline-block;${centerStyle}margin-bottom:10px;text-align:${centered ? 'center' : 'left'};">
+    <span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:28px;font-weight:900;color:${textColor};letter-spacing:-0.5px;text-decoration:none;">
+      ${brandName} <span style="font-size:24px;vertical-align:middle;">🍃</span>
+    </span>
+  </div>`;
 }
 
 function emailOrangeHeader(subtitle = '') {
