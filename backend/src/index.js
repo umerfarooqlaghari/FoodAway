@@ -904,7 +904,7 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
   try {
     if (name) {
       if (/[0-9!@#$%^&*()_+=\[\]{};:"\\|,.<>\/?]/.test(name)) {
-        return res.status(400).json({ error: 'Full name cannot contain digits or special characters.' });
+        return res.status(400).json({ error: 'Name cannot contain digits or special characters.' });
       }
     }
     if (email) {
