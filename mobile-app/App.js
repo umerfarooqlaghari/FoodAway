@@ -20,6 +20,13 @@ let hapticsModule = null;
 let printModule = null;
 let sharingModule = null;
 
+function isValidEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  const normalized = email.trim();
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+  return emailRegex.test(normalized);
+}
+
 function getImagePickerModule() {
   if (!imagePickerModule) imagePickerModule = require('expo-image-picker');
   return imagePickerModule;
@@ -380,12 +387,6 @@ function promptSignIn(message) {
 
 function authHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-function validateEmail(email) {
-  if (!email || typeof email !== 'string') return false;
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-  return re.test(email.trim());
 }
 
 function validatePakPhone(phone) {
@@ -2255,7 +2256,7 @@ function LoginScreen({ navigation, route }) {
     const errs = {};
     if (!email.trim()) {
       errs.email = 'Email address is required.';
-    } else if (!validateEmail(email)) {
+    } else if (!isValidEmail(email)) {
       errs.email = 'Please enter a valid email address.';
     }
     if (!password) {
@@ -2272,7 +2273,11 @@ function LoginScreen({ navigation, route }) {
       login(response.data.token, response.data.user);
       navigation.reset({ index: 0, routes: [{ name: 'ExploreTenants' }] });
     } catch (error) {
-      setErrors({ general: error.response?.data?.error || 'Login failed. Please check your credentials.' });
+      if (!error.response) {
+        setErrors({ general: 'We are experiencing some problems. Can you please try again in a few minutes?' });
+      } else {
+        setErrors({ general: error.response.data?.error || 'Login failed. Please check your credentials.' });
+      }
     } finally {
       setLoading(false);
     }
@@ -2427,8 +2432,8 @@ function RegisterScreen({ navigation }) {
       if (accountType === 'customer') {
         if (!name.trim()) {
           errs.name = 'Please enter your full name.';
-        } else if (/[0-9]/.test(name)) {
-          errs.name = 'Full name cannot contain numeric digits.';
+        } else if (/[0-9!@#$%^&*()_+=\[\]{};:"\\|,.<>\/?]/.test(name)) {
+          errs.name = 'Name cannot contain digits or special characters.';
         }
       }
       if (accountType === 'seller' && !brandName.trim()) {
@@ -2436,7 +2441,7 @@ function RegisterScreen({ navigation }) {
       }
       if (!email.trim()) {
         errs.email = 'Please enter your email address.';
-      } else if (!validateEmail(email)) {
+      } else if (!isValidEmail(email)) {
         errs.email = 'Please enter a valid email address (e.g. name@example.com).';
       }
       if (!phone.trim()) {
@@ -2504,7 +2509,11 @@ function RegisterScreen({ navigation }) {
         );
       }
     } catch (error) {
-      setErrors({ general: error.response?.data?.error || 'Registration failed. Please check your details.' });
+      if (!error.response) {
+        setErrors({ general: 'We are experiencing some problems. Can you please try again in a few minutes?' });
+      } else {
+        setErrors({ general: error.response.data?.error || 'Registration failed. Please check your details.' });
+      }
     } finally {
       setLoading(false);
     }
@@ -2516,7 +2525,7 @@ function RegisterScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <LinearGradient colors={['#FF5C00', '#E55200']} style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24 }}>
         <TouchableOpacity
-          onPress={() => (step > 1 ? setStep(step - 1) : navigation.goBack())}
+          onPress={() => { setErrors({}); if (step > 1) setStep(step - 1); else navigation.goBack(); }}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}
         >
           <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
@@ -2591,8 +2600,8 @@ function RegisterScreen({ navigation }) {
                   <Ionicons name="storefront-outline" size={24} color={accountType === 'seller' ? '#FFFFFF' : '#64748B'} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '800', fontSize: 17, color: '#111827' }}>Business / Seller</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 4, lineHeight: 18 }}>List your everyday menu and surplus deals, manage stores, and reach new customers.</Text>
+                  <Text style={{ fontWeight: '800', fontSize: 17, color: '#111827' }}>Seller / Merchant</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 4, lineHeight: 18 }}>Onboard your restaurant, sell surprise bags, and track orders.</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -2612,11 +2621,12 @@ function RegisterScreen({ navigation }) {
                   placeholderTextColor="#94a3b8"
                   value={name}
                   onChangeText={(val) => {
-                    const sanitized = val.replace(/[0-9]/g, '');
-                    setName(sanitized);
-                    if (val !== sanitized) {
-                      setErrors(prev => ({ ...prev, name: 'Full name cannot contain numeric digits.' }));
-                    } else if (errors.name) {
+                    setName(val);
+                    if (!val.trim()) {
+                      if (errors.name) setErrors(prev => ({ ...prev, name: null }));
+                    } else if (/[0-9!@#$%^&*()_+=\[\]{};:"\\|,.<>\/?]/.test(val)) {
+                      setErrors(prev => ({ ...prev, name: 'Name cannot contain digits or special characters.' }));
+                    } else {
                       setErrors(prev => ({ ...prev, name: null }));
                     }
                   }}
@@ -2670,7 +2680,7 @@ function RegisterScreen({ navigation }) {
                 placeholder="e.g. name@example.com"
                 placeholderTextColor="#94a3b8"
                 value={email}
-                onChangeText={(val) => { setEmail(val); if (errors.email) setErrors(prev => ({ ...prev, email: null })); }}
+                onChangeText={(val) => { setEmail(val); setErrors(prev => ({ ...prev, email: null, general: null })); }}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -3031,7 +3041,7 @@ function CustomerProfileSheet({ visible, onClose, user, logout, updateUser, toke
     setSheetError('');
     if (!editName.trim()) return setSheetError('Please enter your name.');
     if (!editEmail.trim()) return setSheetError('Please enter your email.');
-    if (!validateEmail(editEmail)) return setSheetError('Please enter a valid email address.');
+    if (!isValidEmail(editEmail)) return setSheetError('Please enter a valid email address.');
     if (!editPhone.trim()) return setSheetError('Please enter your phone number.');
     const phoneRes = validatePakPhone(editPhone);
     if (!phoneRes.valid) return setSheetError(phoneRes.error);
@@ -3075,8 +3085,12 @@ function CustomerProfileSheet({ visible, onClose, user, logout, updateUser, toke
                 headers: { Authorization: `Bearer ${token}` },
               });
               onClose();
-              logout();
-              Alert.alert('Account deleted', 'Your Grabengo account has been permanently deleted.');
+              await logout(true);
+              Alert.alert(
+                'Account Deleted',
+                'Your Grabengo account has been permanently deleted.',
+                [{ text: 'OK', onPress: () => { if (navigationRef.isReady()) navigationRef.navigate('ExploreTenants'); } }]
+              );
             } catch (e) {
               Alert.alert('Could not delete account', e.response?.data?.error || 'Please try again.');
             } finally {
@@ -3297,10 +3311,13 @@ function ExploreTenantsScreen({ navigation }) {
     { key: 'All', label: 'All', icon: 'apps-outline' },
     ...STORE_CATEGORIES,
   ];
+  const [filterFeedback, setFilterFeedback] = useState(null);
+
   const handleCustomDistanceChange = (val) => {
     setCustomDistanceValue(val);
     if (!val.trim()) {
       setMaxDistance(null);
+      setCustomDistanceMode(false);
     }
   };
 
@@ -3309,13 +3326,17 @@ function ExploreTenantsScreen({ navigation }) {
     if (!trimmed) {
       setMaxDistance(null);
       setCustomDistanceMode(false);
+      setFilterFeedback(null);
       return;
     }
     const n = parseFloat(trimmed);
     if (!isNaN(n) && n > 0) {
       setMaxDistance(n);
+      setFilterFeedback(`Filter applied: Within ${n} km`);
+      setTimeout(() => setFilterFeedback(null), 3000);
     } else {
       setMaxDistance(null);
+      setFilterFeedback(null);
     }
   };
 
@@ -3432,11 +3453,17 @@ function ExploreTenantsScreen({ navigation }) {
                     onPress={() => setCustomDistanceMode(!customDistanceMode)}
                     style={{
                       paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginRight: 6,
-                      backgroundColor: customDistanceMode ? '#111827' : '#F3F4F6',
+                      backgroundColor: (customDistanceMode || (maxDistance !== null && maxDistance !== 5 && maxDistance !== 10)) ? '#111827' : '#F3F4F6',
                     }}>
-                    <Text style={{ fontWeight: '700', fontSize: 11, color: customDistanceMode ? '#fff' : '#4B5563' }}>Custom</Text>
+                    <Text style={{ fontWeight: '700', fontSize: 11, color: (customDistanceMode || (maxDistance !== null && maxDistance !== 5 && maxDistance !== 10)) ? '#fff' : '#4B5563' }}>Custom</Text>
                   </TouchableOpacity>
                 </ScrollView>
+                {filterFeedback && (
+                  <View style={{ backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#065F46' }}>{filterFeedback}</Text>
+                  </View>
+                )}
                 {customDistanceMode && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 10, paddingHorizontal: 12 }}>
@@ -3449,7 +3476,7 @@ function ExploreTenantsScreen({ navigation }) {
                         style={{ flex: 1, paddingVertical: 6, fontSize: 12, color: '#111827' }}
                       />
                       {customDistanceValue ? (
-                        <TouchableOpacity onPress={() => { handleCustomDistanceChange(''); setMaxDistance(null); }}>
+                        <TouchableOpacity onPress={() => { handleCustomDistanceChange(''); setMaxDistance(null); setCustomDistanceMode(false); }}>
                           <Ionicons name="close-circle" size={16} color="#9CA3AF" />
                         </TouchableOpacity>
                       ) : null}
@@ -3618,22 +3645,45 @@ function ProfileScreen({ navigation }) {
     }
   }, [user?.name, user?.email, user?.phone]);
 
+  const isModified = (
+    editName.trim() !== (user?.name || '').trim() ||
+    editEmail.trim() !== (user?.email || '').trim() ||
+    editPhone.trim() !== (user?.phone || '').trim()
+  );
+
   const handleSave = async () => {
     if (!user?.id) return;
-    if (!editName.trim()) return Alert.alert('Required', 'Please enter your name.');
-    if (!editEmail.trim()) return Alert.alert('Required', 'Please enter your email.');
-    if (!editPhone.trim()) return Alert.alert('Required', 'Please enter your phone number.');
+    const trimmedName = editName.trim();
+    const trimmedEmail = editEmail.trim();
+    const trimmedPhone = editPhone.trim();
+
+    if (!trimmedName) return Alert.alert('Required', 'Please enter your name.');
+    if (/[0-9!@#$%^&*()_+=\[\]{};:"\\|,.<>\/?]/.test(trimmedName)) {
+      return Alert.alert('Invalid Name', 'Name cannot contain digits or special characters.');
+    }
+
+    if (!trimmedEmail) return Alert.alert('Required', 'Please enter your email address.');
+    if (!isValidEmail(trimmedEmail)) {
+      return Alert.alert('Invalid Email', 'Please enter a valid email address (e.g. name@example.com).');
+    }
+
+    if (!trimmedPhone) return Alert.alert('Required', 'Please enter your phone number.');
+    const phoneRes = validatePakPhone(trimmedPhone);
+    if (!phoneRes.valid) {
+      return Alert.alert('Invalid Phone Number', phoneRes.error);
+    }
+
     setSaving(true);
     try {
       await axios.put(`${API_URL}/users/${user.id}`, {
-        name: editName.trim(),
-        email: editEmail.trim(),
-        phone: editPhone.trim(),
+        name: trimmedName,
+        email: trimmedEmail,
+        phone: phoneRes.formatted,
       }, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      await updateUser({ name: editName.trim(), email: editEmail.trim(), phone: editPhone.trim() });
-      Alert.alert('Saved', 'Profile updated.');
+      await updateUser({ name: trimmedName, email: trimmedEmail, phone: phoneRes.formatted });
+      Alert.alert('Saved', 'Profile updated successfully.');
     } catch (e) {
       Alert.alert('Error', e.response?.data?.error || 'Could not save profile.');
     } finally {
@@ -3661,8 +3711,12 @@ function ProfileScreen({ navigation }) {
                 data: { password: deletePassword },
                 headers: { Authorization: `Bearer ${token}` },
               });
-              logout();
-              Alert.alert('Account deleted', 'Your Grabengo account has been permanently deleted.');
+              await logout(true);
+              Alert.alert(
+                'Account Deleted',
+                'Your Grabengo account has been permanently deleted.',
+                [{ text: 'OK', onPress: () => navigation.navigate('ExploreTenants') }]
+              );
             } catch (e) {
               Alert.alert('Could not delete account', e.response?.data?.error || 'Please try again.');
             } finally {
@@ -3746,7 +3800,11 @@ function ProfileScreen({ navigation }) {
               keyboardType="phone-pad"
             />
 
-            <TouchableOpacity style={[styles.primaryButton, { marginTop: 20 }]} onPress={handleSave} disabled={saving || deleting}>
+            <TouchableOpacity
+              style={[styles.primaryButton, { marginTop: 20, opacity: (!isModified || saving || deleting) ? 0.5 : 1 }]}
+              onPress={handleSave}
+              disabled={!isModified || saving || deleting}
+            >
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Changes</Text>}
             </TouchableOpacity>
           </View>
@@ -3804,9 +3862,15 @@ const SharedBottomNav = ({ navigation, activeTab, cartTotalCount }) => {
   const isProfile = activeTab === 'Profile';
   const isCart = activeTab === 'Cart';
   return (
-    <View style={[styles.bottomNavContainer, { bottom: Math.max(insets.bottom, 16) }]}>
+    <View pointerEvents="auto" style={[styles.bottomNavContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <BlurView intensity={95} tint="light" style={StyleSheet.absoluteFill} />
+      <View style={{
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(229, 231, 235, 0.6)',
+      }} />
       <View style={styles.bottomNav}>
-        <BlurView intensity={90} tint="light" style={StyleSheet.absoluteFill} />
         <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => !isHome && navigation.navigate('ExploreTenants')}>
           <View style={{ backgroundColor: isHome ? '#FF5C00' : 'transparent', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
             <Ionicons name={isHome ? "home" : "home-outline"} size={isHome ? 20 : 24} color={isHome ? "white" : "#9CA3AF"} />
@@ -4416,7 +4480,7 @@ function DiscoverScreen({ navigation, route }) {
   const handleSaveProfile = async () => {
     const trimmedName = editName.trim();
     if (!trimmedName) return Alert.alert("Error", "Please enter your full name.");
-    if (/[0-9]/.test(trimmedName)) return Alert.alert("Error", "Full name cannot contain numeric digits.");
+    if (/[0-9]/.test(trimmedName)) return Alert.alert("Error", "Name cannot contain numeric digits.");
     setSavingProfile(true);
     try {
       const payload = { name: trimmedName };
@@ -5816,7 +5880,7 @@ function StoreDetailsScreen({ navigation, route }) {
 
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 10 }}>
                 <Ionicons name="location" size={16} color="#64748B" style={{ marginTop: 2 }} />
-                <Text style={{ fontSize: 13.5, color: '#64748B', marginLeft: 6, fontWeight: '500', flex: 1, lineHeight: 20 }} numberOfLines={2}>
+                <Text style={{ fontSize: 13.5, color: '#64748B', marginLeft: 6, fontWeight: '500', flex: 1, lineHeight: 20 }}>
                   {store.address || 'Local Street'}
                 </Text>
               </View>
@@ -9954,7 +10018,7 @@ const styles = StyleSheet.create({
   gridPriceText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
   gridNavBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
 
-  bottomNavContainer: { position: 'absolute', bottom: 20, left: 20, right: 20, alignItems: 'center' },
+  bottomNavContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 10, paddingHorizontal: 16, overflow: 'hidden' },
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.alphadevs.mobileapp",
-      "buildNumber": "36",
+      "buildNumber": "38",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -26,7 +26,7 @@
     },
     "android": {
       "package": "com.grabengo.app",
-      "versionCode": 36,
+      "versionCode": 38,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBLxu-iMnH8KQnlVvjPKpXEu-aakSohOLo"
