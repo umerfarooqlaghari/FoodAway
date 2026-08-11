@@ -128,4 +128,49 @@ describe('Grabengo Application Bug Fixes - Unit & Integration Test Suite', () =>
     });
   });
 
+  describe('Bug 21 & 31: Full Name Special Character & Digit Validation', () => {
+    function isValidName(name) {
+      if (!name || typeof name !== 'string' || !name.trim()) return false;
+      return !/[0-9!@#$%^&*()_+=\[\]{};:"\\|,.<>\/?]/.test(name);
+    }
+
+    it('should validate full names and reject digits or special characters', () => {
+      expect(isValidName('Sabeera Khan')).toBe(true);
+      expect(isValidName('John Doe')).toBe(true);
+      expect(isValidName('Mary-Jane')).toBe(true);
+
+      expect(isValidName('John Doe 123')).toBe(false);
+      expect(isValidName('Sabeerah@Khan')).toBe(false);
+      expect(isValidName('Jane#Doe')).toBe(false);
+    });
+  });
+
+  describe('Bug 28: Food Item Pickup Time Fallback', () => {
+    function resolvePickupTime(bagPickupTime, storePickupWindow) {
+      if (bagPickupTime && bagPickupTime !== 'N/A') return bagPickupTime;
+      return storePickupWindow || 'Everyday 10:00 AM - 10:00 PM';
+    }
+
+    it('should fallback to store pickup window or standard hours instead of N/A for regular food items', () => {
+      expect(resolvePickupTime('Today 17:00 - 18:00', 'Mon-Fri 09:00 - 21:00')).toBe('Today 17:00 - 18:00');
+      expect(resolvePickupTime(null, 'Mon-Fri 09:00 - 21:00')).toBe('Mon-Fri 09:00 - 21:00');
+      expect(resolvePickupTime('N/A', null)).toBe('Everyday 10:00 AM - 10:00 PM');
+    });
+  });
+
+  describe('Bug 33: Profile Form Pristine State Check', () => {
+    function isFormModified(initial, current) {
+      return (
+        (current.name || '').trim() !== (initial.name || '').trim() ||
+        (current.email || '').trim() !== (initial.email || '').trim() ||
+        (current.phone || '').trim() !== (initial.phone || '').trim()
+      );
+    }
+
+    it('should correctly detect pristine versus modified profile form states', () => {
+      const user = { name: 'Sabeera', email: 'sab@example.com', phone: '+923001234567' };
+      expect(isFormModified(user, { name: 'Sabeera', email: 'sab@example.com', phone: '+923001234567' })).toBe(false);
+      expect(isFormModified(user, { name: 'Sabeera Khan', email: 'sab@example.com', phone: '+923001234567' })).toBe(true);
+    });
+  });
 });

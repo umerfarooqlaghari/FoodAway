@@ -163,7 +163,7 @@ async function fetchOrderForNotification(orderId) {
     SELECT o.id, o.type, o.quantity, o.price, o.payment_method, o.created_at,
            s.name as store_name, s.tenant_id,
            u.name as customer_name,
-           COALESCE(b.pickup_time, 'N/A') as pickup_time,
+           COALESCE(b.pickup_time, 'Everyday 10:00 AM - 10:00 PM') as pickup_time,
            COALESCE(b.description, f.name) as item_name
     FROM orders o
     JOIN stores s ON o.store_id = s.id
@@ -647,19 +647,22 @@ app.post('/api/auth/login', async (req, res) => {
     // Store refresh token
     await db.prepare('UPDATE users SET refresh_token = ? WHERE id = ?').run(refreshToken, user.id);
 
-    // Send welcome back notification email asynchronously
-    sendEmail({
-      to: user.email,
-      subject: `Welcome Back to ${brandName}, ${user.name}!`,
-      html: emailSimpleLayout({
-        title: `Welcome Back, ${user.name}!`,
-        bodyHtml: `
-          <p>Hi <strong>${user.name}</strong>,</p>
-          <p>Welcome back to <strong>${brandName}</strong>.</p>
-          <p>Let's get you some amazing deals & fresh menus near you!</p>`,
-      }),
-      text: `Welcome Back, ${user.name}! Welcome back to ${brandName}. Let's get you some amazing deals waiting near you!`
-    }).catch(err => console.error('Failed to send welcome back email:', err.message));
+    // Send welcome back notification email asynchronously (only if account wasn't just created during registration)
+    const isJustCreated = user.created_at && (Date.now() - new Date(user.created_at).getTime() < 120000);
+    if (!isJustCreated) {
+      sendEmail({
+        to: user.email,
+        subject: `Welcome Back to ${brandName}, ${user.name}!`,
+        html: emailSimpleLayout({
+          title: `Welcome Back, ${user.name}!`,
+          bodyHtml: `
+            <p>Hi <strong>${user.name}</strong>,</p>
+            <p>Welcome back to <strong>${brandName}</strong>.</p>
+            <p>Let's get you some amazing deals & fresh menus near you!</p>`,
+        }),
+        text: `Welcome Back, ${user.name}! Welcome back to ${brandName}. Let's get you some amazing deals waiting near you!`
+      }).catch(err => console.error('Failed to send welcome back email:', err.message));
+    }
 
     // Capture backend login event
     try {
@@ -899,12 +902,28 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
   }
   const { logo, name, phone, delivery_address, email } = req.body;
   try {
+    if (name) {
+      if (/[0-9!@#$%^&*()_+=\[\]{};:"\\|,.<>\/?]/.test(name)) {
+        return res.status(400).json({ error: 'Full name cannot contain digits or special characters.' });
+      }
+    }
     if (email) {
-      const existing = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, req.params.id);
+      if (!validateEmail(email)) {
+        return res.status(400).json({ error: 'Please enter a valid email address (e.g. name@example.com).' });
+      }
+      const existing = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.trim(), req.params.id);
       if (existing) return res.status(400).json({ error: 'Email is already in use' });
     }
+    let formattedPhone = phone;
+    if (phone) {
+      const phoneRes = validatePakPhone(phone);
+      if (!phoneRes.valid) {
+        return res.status(400).json({ error: phoneRes.error });
+      }
+      formattedPhone = phoneRes.formatted;
+    }
     const logoUrl = logo ? await uploadImageToS3(logo) : logo;
-    await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name), phone = COALESCE(?, phone), delivery_address = COALESCE(?, delivery_address), email = COALESCE(?, email) WHERE id = ?').run(logoUrl, name, phone, delivery_address, email, req.params.id);
+    await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name), phone = COALESCE(?, phone), delivery_address = COALESCE(?, delivery_address), email = COALESCE(?, email) WHERE id = ?').run(logoUrl, name ? name.trim() : null, formattedPhone ? formattedPhone.trim() : null, delivery_address ? delivery_address.trim() : null, email ? email.trim() : null, req.params.id);
     const updatedUser = await db.prepare('SELECT id, name, email, role, logo, phone, delivery_address FROM users WHERE id = ?').get(req.params.id);
     const signedUser = { ...updatedUser, logo: await getPresignedUrl(updatedUser.logo) };
     res.json({ message: 'User updated successfully', user: signedUser });
@@ -1618,7 +1637,7 @@ app.post('/api/orders', verifyToken, async (req, res) => {
                s.name as store_name, s.tenant_id,
                t.name as tenant_name,
                u.name as customer_name,
-               COALESCE(b.pickup_time, 'N/A') as pickup_time,
+               COALESCE(b.pickup_time, 'Everyday 10:00 AM - 10:00 PM') as pickup_time,
                COALESCE(b.description, f.name) as item_name
         FROM orders o
         JOIN stores s ON o.store_id = s.id
@@ -1873,7 +1892,7 @@ app.get('/api/seller/orders', verifyToken, async (req, res) => {
              COALESCE(o.delivery_phone, u.phone) as customer_phone,
              u.name as customer_name, u.email as customer_email,
              s.name as store_name, s.delivery_mode, s.lat AS store_lat, s.lng AS store_lng,
-             COALESCE(b.pickup_time, 'N/A') as pickup_time,
+             COALESCE(b.pickup_time, 'Everyday 10:00 AM - 10:00 PM') as pickup_time,
              COALESCE(b.description, f.name) as item_name,
              d.status AS delivery_status, d.fee AS delivery_fee, d.cod_amount AS delivery_cod,
              p.name AS partner_name, p.phone AS partner_phone
