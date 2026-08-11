@@ -908,7 +908,7 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
       }
     }
     if (email) {
-      if (!validateEmail(email)) {
+      if (!isValidEmail(email)) {
         return res.status(400).json({ error: 'Please enter a valid email address (e.g. name@example.com).' });
       }
       const existing = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.trim(), req.params.id);
@@ -916,11 +916,10 @@ app.put('/api/users/:id', verifyToken, async (req, res) => {
     }
     let formattedPhone = phone;
     if (phone) {
-      const phoneRes = validatePakPhone(phone);
-      if (!phoneRes.valid) {
-        return res.status(400).json({ error: phoneRes.error });
+      if (!isValidPakPhone(phone)) {
+        return res.status(400).json({ error: 'Please enter a valid 11-digit Pakistani mobile number starting with 03 (e.g., 03001234567).' });
       }
-      formattedPhone = phoneRes.formatted;
+      formattedPhone = normalizePhone(String(phone).trim());
     }
     const logoUrl = logo ? await uploadImageToS3(logo) : logo;
     await db.prepare('UPDATE users SET logo = COALESCE(?, logo), name = COALESCE(?, name), phone = COALESCE(?, phone), delivery_address = COALESCE(?, delivery_address), email = COALESCE(?, email) WHERE id = ?').run(logoUrl, name ? name.trim() : null, formattedPhone ? formattedPhone.trim() : null, delivery_address ? delivery_address.trim() : null, email ? email.trim() : null, req.params.id);
